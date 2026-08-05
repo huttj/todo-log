@@ -1,8 +1,11 @@
 // Chat history: past capture sessions (newest first) and a replay page.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTrashCan } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
+  del,
   type SessionSummary,
   type CaptureSession,
   type Message,
@@ -35,11 +38,21 @@ export function Sessions(props: {
   const [projects, setProjects] = useState<Project[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const load = () => {
     api<SessionSummary[]>("/sessions").then(setSessions).catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
     api<Project[]>("/projects").then(setProjects).catch(() => {});
-  }, [props.refreshKey]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [props.refreshKey]);
+
+  async function deleteSession(id: number) {
+    if (!window.confirm("Delete this chat? Journal logs stay, but the audio and transcript are gone for good.")) {
+      return;
+    }
+    await del(`/sessions/${id}`).catch(() => {});
+    load();
+  }
 
   useEffect(() => {
     props.onFocus(null);
@@ -78,6 +91,16 @@ export function Sessions(props: {
                   </span>
                   {label && <span className="attachment">{label}</span>}
                   <span className="count">{s.message_count} msg</span>
+                  <button
+                    className="link trash"
+                    title="Delete chat"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void deleteSession(s.id);
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faTrashCan} />
+                  </button>
                 </div>
                 {s.first_text && <p className="snippet">{s.first_text.slice(0, 140)}</p>}
               </div>
@@ -97,6 +120,7 @@ export function SessionView(props: {
   const [data, setData] = useState<{ session: CaptureSession; messages: Message[] } | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     api<{ session: CaptureSession; messages: Message[] }>(`/sessions/${sessionId}`)
@@ -128,7 +152,26 @@ export function SessionView(props: {
           <Link className="back" to="/sessions">
             ‹ Chats
           </Link>
-          <div className="page-meta">{label && <span className="attachment">{label}</span>}</div>
+          <div className="page-meta">
+            {label && <span className="attachment">{label}</span>}
+            <button
+              className="link trash"
+              title="Delete chat"
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    "Delete this chat? Journal logs stay, but the audio and transcript are gone for good.",
+                  )
+                ) {
+                  return;
+                }
+                await del(`/sessions/${sessionId}`).catch(() => {});
+                navigate("/sessions");
+              }}
+            >
+              <FontAwesomeIcon icon={faTrashCan} />
+            </button>
+          </div>
         </div>
       </div>
 

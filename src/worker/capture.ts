@@ -58,6 +58,48 @@ capture.get("/sessions/:id", async (c) => {
   return c.json({ session, messages });
 });
 
+// Delete a chat: messages, audio, and its events links go; journal logs stay
+// (their message link is severed, so quote audio is gone too).
+capture.delete("/sessions/:id", async (c) => {
+  const user = c.get("user");
+  const session = await getSession(c.env, user.id, Number(c.req.param("id")));
+  if (!session) return c.json({ error: "not found" }, 404);
+
+  const messages = await sessionMessages(c.env, session.id);
+  const messageIds = messages.map((m) => m.id);
+  if (messageIds.length > 0) {
+    const ph = messageIds.map(() => "?").join(",");
+    const segs = await c.env.DB.prepare(
+      `SELECT id, r2_key FROM audio_segments WHERE message_id IN (${ph})`,
+    )
+      .bind(...messageIds)
+      .all<{ id: number; r2_key: string }>();
+    for (const seg of segs.results) {
+      await c.env.MEDIA.delete(seg.r2_key).catch(() => {});
+    }
+    await c.env.DB.prepare(`DELETE FROM audio_segments WHERE message_id IN (${ph})`)
+      .bind(...messageIds)
+      .run();
+    await c.env.DB.prepare(`UPDATE logs SET message_id = NULL WHERE message_id IN (${ph})`)
+      .bind(...messageIds)
+      .run();
+    await c.env.DB.prepare(
+      `UPDATE events SET message_id = NULL WHERE message_id IN (${ph})`,
+    )
+      .bind(...messageIds)
+      .run();
+  }
+  await c.env.DB.prepare(`UPDATE events SET session_id = NULL WHERE session_id = ?`)
+    .bind(session.id)
+    .run();
+  await c.env.DB.prepare(`UPDATE corrections SET session_id = NULL WHERE session_id = ?`)
+    .bind(session.id)
+    .run();
+  await c.env.DB.prepare(`DELETE FROM messages WHERE session_id = ?`).bind(session.id).run();
+  await c.env.DB.prepare(`DELETE FROM sessions WHERE id = ?`).bind(session.id).run();
+  return c.json({ ok: true });
+});
+
 capture.post("/sessions/:id/done", async (c) => {
   const session = await getSession(c.env, c.get("user").id, Number(c.req.param("id")));
   if (!session) return c.json({ error: "not found" }, 404);

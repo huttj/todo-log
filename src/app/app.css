@@ -112,6 +112,15 @@ nav a.active svg {
   margin-left: auto;
 }
 
+.trash {
+  color: #b3261e;
+  opacity: 0.55;
+}
+
+.trash:hover {
+  opacity: 1;
+}
+
 .session-row .snippet {
   font-size: 0.9rem;
   color: #444;
