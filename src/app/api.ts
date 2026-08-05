@@ -90,6 +90,12 @@ export interface CaptureSession {
   ended_at: number | null;
 }
 
+export interface SessionSummary extends CaptureSession {
+  started_at: number;
+  message_count: number;
+  first_text: string | null;
+}
+
 export interface Message {
   id: number;
   session_id: number;

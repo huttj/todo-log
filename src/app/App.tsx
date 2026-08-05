@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faLayerGroup,
+  faBookOpen,
+  faCalendarDays,
+  faComments,
+} from "@fortawesome/free-solid-svg-icons";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -7,6 +14,7 @@ import TodoView from "./views/TodoView";
 import Logs from "./views/Logs";
 import LogView from "./views/LogView";
 import ActionView from "./views/ActionView";
+import { Sessions, SessionView } from "./views/Sessions";
 import Calendar from "./views/Calendar";
 import Capture, { type CaptureContext } from "./Capture";
 import { TALK_EVENT } from "./talk";
@@ -106,14 +114,29 @@ export default function App() {
           <Link to="/">Todo Log</Link>
         </h1>
         <nav>
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-            Projects
+          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")} title="Projects">
+            <FontAwesomeIcon icon={faLayerGroup} />
+            <span className="nav-label">Projects</span>
           </NavLink>
-          <NavLink to="/logs" className={({ isActive }) => (isActive ? "active" : "")}>
-            Logs
+          <NavLink to="/logs" className={({ isActive }) => (isActive ? "active" : "")} title="Logs">
+            <FontAwesomeIcon icon={faBookOpen} />
+            <span className="nav-label">Logs</span>
           </NavLink>
-          <NavLink to="/calendar" className={({ isActive }) => (isActive ? "active" : "")}>
-            Calendar
+          <NavLink
+            to="/calendar"
+            className={({ isActive }) => (isActive ? "active" : "")}
+            title="Calendar"
+          >
+            <FontAwesomeIcon icon={faCalendarDays} />
+            <span className="nav-label">Calendar</span>
+          </NavLink>
+          <NavLink
+            to="/sessions"
+            className={({ isActive }) => (isActive ? "active" : "")}
+            title="Chats"
+          >
+            <FontAwesomeIcon icon={faComments} />
+            <span className="nav-label">Chats</span>
           </NavLink>
         </nav>
       </header>
@@ -126,6 +149,8 @@ export default function App() {
           <Route path="/logs" element={<Logs {...viewProps} />} />
           <Route path="/logs/:id" element={<LogView {...viewProps} />} />
           <Route path="/actions/:id" element={<ActionView {...viewProps} />} />
+          <Route path="/sessions" element={<Sessions {...viewProps} />} />
+          <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
           <Route path="/calendar" element={<Calendar {...viewProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

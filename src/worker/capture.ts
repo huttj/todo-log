@@ -35,6 +35,22 @@ capture.post("/sessions", async (c) => {
   return c.json(session);
 });
 
+// Session history: past conversations, newest first (empty ones skipped).
+capture.get("/sessions", async (c) => {
+  const r = await c.env.DB.prepare(
+    `SELECT s.*,
+       (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count,
+       (SELECT m.text FROM messages m WHERE m.session_id = s.id AND m.role = 'user' AND m.text IS NOT NULL
+        ORDER BY m.id LIMIT 1) AS first_text
+     FROM sessions s
+     WHERE s.user_id = ?
+     ORDER BY s.id DESC LIMIT 50`,
+  )
+    .bind(c.get("user").id)
+    .all();
+  return c.json(r.results.filter((s) => (s.message_count as number) > 0));
+});
+
 capture.get("/sessions/:id", async (c) => {
   const session = await getSession(c.env, c.get("user").id, Number(c.req.param("id")));
   if (!session) return c.json({ error: "not found" }, 404);

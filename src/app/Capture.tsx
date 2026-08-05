@@ -352,9 +352,6 @@ export default function Capture(props: {
         updateEntry(item.userEntryId, (e) => ({ ...e, text: item.text, transcribing: false }));
       }
 
-      // The turn is about to reach the agent — now the dots may show.
-      updateEntry(item.assistantEntryId, (e) => ({ ...e, pending: false }));
-
       const res = await fetch(`/api/messages/${msgId}/send`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -393,7 +390,10 @@ export default function Capture(props: {
             | { type: "error"; error: string };
           switch (evt.type) {
             case "text":
+              // Transcript is final and in front of the model — now the
+              // agent's dots may show.
               updateEntry(item.userEntryId, (e) => ({ ...e, text: evt.text, transcribing: false }));
+              updateEntry(item.assistantEntryId, (e) => ({ ...e, pending: false }));
               break;
             case "iteration":
               // Reset visible reply text per iteration; thinking accumulates
@@ -556,6 +556,19 @@ export default function Capture(props: {
             return (
               <div key={entry.id} className={`bubble ${entry.role}`}>
                 {entry.live && entry.thinking && <p className="thinking">{entry.thinking}</p>}
+                {entry.role === "assistant" && !entry.live && entry.thinking && (
+                  <>
+                    <button
+                      className="link thinking-toggle"
+                      onClick={() =>
+                        updateEntry(entry.id, (e) => ({ ...e, showThinking: !e.showThinking }))
+                      }
+                    >
+                      {entry.showThinking ? "hide thoughts" : "thoughts"}
+                    </button>
+                    {entry.showThinking && <p className="thinking expanded">{entry.thinking}</p>}
+                  </>
+                )}
                 {entry.text ? <p>{entry.text}</p> : entry.live ? <TypingDots /> : null}
                 {entry.role === "user" && entry.transcribing && (
                   <span className="transcribing-note">
@@ -573,19 +586,6 @@ export default function Capture(props: {
                       </li>
                     ))}
                   </ul>
-                )}
-                {entry.role === "assistant" && !entry.live && entry.thinking && (
-                  <>
-                    <button
-                      className="link thinking-toggle"
-                      onClick={() =>
-                        updateEntry(entry.id, (e) => ({ ...e, showThinking: !e.showThinking }))
-                      }
-                    >
-                      {entry.showThinking ? "hide thoughts" : "thoughts"}
-                    </button>
-                    {entry.showThinking && <p className="thinking">{entry.thinking}</p>}
-                  </>
                 )}
               </div>
             );
