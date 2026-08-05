@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local dev (`npm run dev`). Production uses
+# `wrangler secret put <NAME>` for each of these.
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+SESSION_SECRET=any-long-random-string-for-local

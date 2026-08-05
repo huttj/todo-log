@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "todolog",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "todolo.gg", "custom_domain": true },
+    { "pattern": "www.todolo.gg", "custom_domain": true }
+  ],
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "todolog",
+      "database_id": "__D1_DATABASE_ID__"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "__R2_BUCKET_NAME__"
+    }
+  ],
+  "ai": { "binding": "AI" },
+  "triggers": {
+    // Sweep: heal untranscribed segments, distill pending corrections.
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "TIMEZONE": "America/Los_Angeles",
+    "ALLOWLIST_EMAILS": "beta@todolo.gg"
+  }
+  // Secrets (wrangler secret put / .dev.vars):
+  //   ANTHROPIC_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET
+}
