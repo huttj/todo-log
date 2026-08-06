@@ -66,9 +66,7 @@ export default function ProjectsHome(props: {
       )}
 
       <section className="inbox-section">
-        <h2>
-          <span className="inbox-label">Inbox</span>
-        </h2>
+        <h2>Inbox</h2>
         {inbox.length === 0 && <p className="empty">Nothing here — unfiled todos land in the inbox.</p>}
         {inbox.map((t) => (
           <TodoRow key={t.id} todo={t} onChanged={load} />
