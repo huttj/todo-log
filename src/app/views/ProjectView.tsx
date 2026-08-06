@@ -65,16 +65,19 @@ export default function ProjectView(props: {
       </div>
       {project.description && <p className="description">{project.description}</p>}
 
-      {visible.length === 0 && <p className="empty">No todos yet — tap Talk to add some.</p>}
-      {visible.map((t) => (
-        <TodoRow key={t.id} todo={t} onChanged={load} />
-      ))}
-      {own.some(isClosed) && (
-        <label className="show-closed">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
-          show all closed
-        </label>
-      )}
+      <section>
+        <h2>Todos</h2>
+        {visible.length === 0 && <p className="empty">No todos yet — tap Talk to add some.</p>}
+        {visible.map((t) => (
+          <TodoRow key={t.id} todo={t} onChanged={load} />
+        ))}
+        {own.some(isClosed) && (
+          <label className="show-closed">
+            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+            show all closed
+          </label>
+        )}
+      </section>
 
       <section>
         <h2>Project log</h2>

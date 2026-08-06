@@ -2,7 +2,7 @@
 // utterance transcript, and quotes with audio sliced to the quoted moment.
 // Shared by the Logs page, project pages, and todo pages.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -28,6 +28,7 @@ export default function LogCard(props: {
   const { log } = props;
   const [showQuotes, setShowQuotes] = useState(false);
   const [showFull, setShowFull] = useState(false);
+  const navigate = useNavigate();
   const quotes: Quote[] = useMemo(() => {
     try {
       return log.quotes_json ? (JSON.parse(log.quotes_json) as Quote[]) : [];
@@ -68,7 +69,15 @@ export default function LogCard(props: {
           <FontAwesomeIcon icon={faArrowsRotate} />
         </button>
       </div>
-      <p>{log.summary}</p>
+      <p
+        className="log-summary"
+        onClick={(e) => {
+          e.stopPropagation();
+          navigate(`/logs/${log.id}`);
+        }}
+      >
+        {log.summary}
+      </p>
       {showFull && <FullTranscript logId={log.id} />}
       {(quotes.length > 0 || log.message_id) && (
         <div className="log-toggles">
