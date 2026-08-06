@@ -18,6 +18,7 @@ import LogView from "./views/LogView";
 import ActionView from "./views/ActionView";
 import { Sessions, SessionView } from "./views/Sessions";
 import Calendar from "./views/Calendar";
+import Landing from "./views/Landing";
 import Capture, { type CaptureContext } from "./Capture";
 import { TALK_EVENT } from "./talk";
 
@@ -105,7 +106,7 @@ export default function App() {
   }, []);
 
   if (auth === "loading") return <Splash text="Loading…" />;
-  if (auth === "signed-out") return <SignIn />;
+  if (auth === "signed-out") return <Landing />;
   if (auth === "waitlist") return <Waitlist email={me?.email ?? ""} />;
 
   const viewProps = { refreshKey, onFocus: setFocus };
@@ -198,18 +199,6 @@ function Splash(props: { text: string }) {
     <div className="splash">
       <h1>Todo Log</h1>
       <p>{props.text}</p>
-    </div>
-  );
-}
-
-function SignIn() {
-  return (
-    <div className="splash">
-      <h1>Todo Log</h1>
-      <p>A todo list that doubles as a journal — see and reflect on the journey as you go.</p>
-      <a className="google-btn" href="/api/auth/google">
-        Sign in with Google
-      </a>
     </div>
   );
 }
