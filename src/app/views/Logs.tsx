@@ -96,8 +96,8 @@ export default function Logs(props: {
               }}
             />
             {day && (
-              <button className="link" onClick={() => setDay(null)}>
-                show recent
+              <button className="link clear-day" title="Back to recent" onClick={() => setDay(null)}>
+                ✕
               </button>
             )}
           </div>

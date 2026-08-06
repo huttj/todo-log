@@ -148,6 +148,20 @@ function FullTranscript(props: { logId: number }) {
     setCurrent({ seg: -1, word: -1 });
   };
 
+  // Pause keeps the player and position; toggling resumes where it left off.
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (playing && audio) {
+      audio.pause();
+      setPlaying(false);
+    } else if (audio) {
+      setPlaying(true);
+      void audio.play().catch(stop);
+    } else {
+      playSegment(0);
+    }
+  };
+
   const playSegment = (segIdx: number, at = 0) => {
     if (!segs || segIdx >= segs.length) {
       stop();
@@ -186,7 +200,7 @@ function FullTranscript(props: { logId: number }) {
   return (
     <div className="segment-transcript full combined" onClick={(e) => e.stopPropagation()}>
       <div className="player-bar">
-        <button className="play-btn" onClick={() => (playing ? stop() : playSegment(0))}>
+        <button className="play-btn" onClick={togglePlay}>
           {playing ? "⏸" : "▶"}
         </button>
         <button className="speed-btn" onClick={cycleSpeed} title="Playback speed">

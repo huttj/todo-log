@@ -1159,6 +1159,26 @@ blockquote audio {
   white-space: nowrap;
 }
 
+/* Fixed footprint so ▶/⏸ (different glyph widths) don't shift the bar. */
+.play-btn {
+  width: 2.6rem;
+  text-align: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.speed-btn {
+  width: 3.2rem;
+  text-align: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.clear-day {
+  color: #999;
+  font-size: 0.85rem;
+}
+
 .play-btn:hover,
 .speed-btn:hover {
   background: #d5d1c4;
