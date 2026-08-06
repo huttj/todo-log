@@ -46,11 +46,13 @@ capture.post("/sessions", async (c) => {
   return c.json(session);
 });
 
-// Session history: past conversations, newest first (empty ones skipped).
+// Session history: past conversations, newest first. Only SENT messages count
+// (text stays NULL until send) — opening the dock or recording without sending
+// creates a session + message that shouldn't surface as an empty chat.
 capture.get("/sessions", async (c) => {
   const r = await c.env.DB.prepare(
     `SELECT s.*,
-       (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count,
+       (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND m.text IS NOT NULL) AS message_count,
        (SELECT m.text FROM messages m WHERE m.session_id = s.id AND m.role = 'user' AND m.text IS NOT NULL
         ORDER BY m.id LIMIT 1) AS first_text
      FROM sessions s
