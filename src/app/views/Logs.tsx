@@ -79,28 +79,28 @@ export default function Logs(props: {
       <div className="day-nav">
         <button onClick={() => step(-1)}>‹</button>
         <div className="day-center">
-          {day ? (
-            <>
-              <h2 onClick={() => setDay(null)}>
-                {day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-              </h2>
+          <h2 onClick={() => setDay(null)}>
+            {day
+              ? day.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
+              : "Recent"}
+          </h2>
+          <div className="day-sub">
+            <input
+              type="date"
+              className="date-pick"
+              value={day ? toDateInput(day) : ""}
+              onChange={(e) => {
+                if (!e.target.value) return setDay(null);
+                const [y, m, d] = e.target.value.split("-").map(Number);
+                setDay(new Date(y, m - 1, d));
+              }}
+            />
+            {day && (
               <button className="link" onClick={() => setDay(null)}>
                 show recent
               </button>
-            </>
-          ) : (
-            <h2>Recent</h2>
-          )}
-          <input
-            type="date"
-            className="date-pick"
-            value={day ? toDateInput(day) : ""}
-            onChange={(e) => {
-              if (!e.target.value) return setDay(null);
-              const [y, m, d] = e.target.value.split("-").map(Number);
-              setDay(new Date(y, m - 1, d));
-            }}
-          />
+            )}
+          </div>
         </div>
         <button onClick={() => step(1)} disabled={!day && true}>
           ›
