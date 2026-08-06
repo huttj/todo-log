@@ -1159,17 +1159,27 @@ blockquote audio {
   white-space: nowrap;
 }
 
-/* Fixed footprint so ▶/⏸ (different glyph widths) don't shift the bar. */
+/* Fixed footprint (width AND height) so ▶/⏸ glyph metrics never shift the
+ * bar or the text below by even a pixel. */
+.play-btn,
+.speed-btn {
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1;
+}
+
 .play-btn {
   width: 2.6rem;
-  text-align: center;
   padding-left: 0;
   padding-right: 0;
 }
 
 .speed-btn {
   width: 3.2rem;
-  text-align: center;
   padding-left: 0;
   padding-right: 0;
 }

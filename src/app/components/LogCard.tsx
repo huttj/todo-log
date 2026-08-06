@@ -124,6 +124,7 @@ function FullTranscript(props: { logId: number }) {
   const [current, setCurrent] = useState<{ seg: number; word: number }>({ seg: -1, word: -1 });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speedRef = useRef(1);
+  const tickerRef = useRef<number | null>(null);
   // One pre-buffered player per segment — rolling to the next is instant
   // instead of stalling on a fresh fetch+decode.
   const playersRef = useRef<HTMLAudioElement[]>([]);
@@ -153,6 +154,8 @@ function FullTranscript(props: { logId: number }) {
   }, [props.logId]);
 
   const stop = () => {
+    if (tickerRef.current) window.clearInterval(tickerRef.current);
+    tickerRef.current = null;
     audioRef.current?.pause();
     audioRef.current = null;
     setPlaying(false);
@@ -173,12 +176,20 @@ function FullTranscript(props: { logId: number }) {
     }
   };
 
-  const playSegment = (segIdx: number, at = 0) => {
+  const playSegment = (segIdx: number, at = 0, opts: { overlapPrev?: boolean } = {}) => {
     if (!segs || segIdx >= segs.length) {
       stop();
       return;
     }
-    audioRef.current?.pause();
+    if (tickerRef.current) window.clearInterval(tickerRef.current);
+    const prev = audioRef.current;
+    if (prev) {
+      prev.ontimeupdate = null;
+      prev.onended = null;
+      // On an early roll the previous tail keeps playing out under the next
+      // segment's start — that overlap is what kills the audible gap.
+      if (!opts.overlapPrev) prev.pause();
+    }
     const audio = playersRef.current[segIdx] ?? new Audio(`/api/audio/${segs[segIdx].id}`);
     audioRef.current = audio;
     audio.playbackRate = speedRef.current;
@@ -189,8 +200,26 @@ function FullTranscript(props: { logId: number }) {
       const t = audio.currentTime;
       setCurrent({ seg: segIdx, word: words.findIndex((w) => t >= w.start && t < w.end + 0.15) });
     };
-    // Seamless roll into the next segment.
-    audio.onended = () => playSegment(segIdx + 1);
+    // Early roll: start the next segment ~80ms before this one ends
+    // (timeupdate is too coarse, so poll finely while playing).
+    let rolled = false;
+    const roll = () => {
+      if (rolled) return;
+      rolled = true;
+      playSegment(segIdx + 1, 0, { overlapPrev: true });
+    };
+    const hasNext = segIdx + 1 < segs.length;
+    if (hasNext) {
+      tickerRef.current = window.setInterval(() => {
+        if (audio.paused || rolled) return;
+        const remaining = (audio.duration - audio.currentTime) / (audio.playbackRate || 1);
+        if (Number.isFinite(remaining) && remaining <= 0.08) roll();
+      }, 30);
+    }
+    audio.onended = () => {
+      if (hasNext) roll();
+      else stop();
+    };
     setPlaying(true);
     setCurrent({ seg: segIdx, word: -1 });
     void audio.play().catch(stop);
