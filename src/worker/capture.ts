@@ -9,6 +9,7 @@ import {
   createSession,
   getSession,
   sessionMessages,
+  sessionEvents,
   getOwnedMessage,
   messageSegments,
   getOwnedSegment,
@@ -25,6 +26,16 @@ capture.use("*", requireEnabled);
 
 capture.post("/sessions", async (c) => {
   const body = await c.req.json<{ context_type?: string; context_id?: number }>().catch(() => ({}) as Record<string, never>);
+  // A past chat as context is stored in its own column — the context_type
+  // CHECK predates it and can't be widened in place on remote D1.
+  if (body.context_type === "session" && body.context_id) {
+    const session = await createSession(c.env, c.get("user").id, {
+      type: null,
+      id: null,
+      aboutSessionId: body.context_id,
+    });
+    return c.json(session);
+  }
   const type = ["project", "todo", "action", "log"].includes(body.context_type ?? "")
     ? (body.context_type as string)
     : null;
@@ -55,7 +66,8 @@ capture.get("/sessions/:id", async (c) => {
   const session = await getSession(c.env, c.get("user").id, Number(c.req.param("id")));
   if (!session) return c.json({ error: "not found" }, 404);
   const messages = await sessionMessages(c.env, session.id);
-  return c.json({ session, messages });
+  const events = await sessionEvents(c.env, session.id);
+  return c.json({ session, messages, events });
 });
 
 // Delete a chat: messages, audio, and its events links go; journal logs stay
@@ -226,6 +238,7 @@ capture.post("/messages/:id/send", async (c) => {
           session_id: session.id,
           role: "assistant",
           text: result.reply,
+          thinking: result.thinking || null,
           created_at: now(),
         });
         await emit({ type: "done", reply: result.reply, feed: result.feed });

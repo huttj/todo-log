@@ -58,6 +58,7 @@ export interface Quote {
 
 export interface EventRecord {
   id: number;
+  message_id?: number | null;
   entity_type: string;
   entity_id: number;
   kind: string;
@@ -87,6 +88,7 @@ export interface CaptureSession {
   id: number;
   context_type: string | null;
   context_id: number | null;
+  about_session_id?: number | null;
   ended_at: number | null;
 }
 
@@ -101,6 +103,7 @@ export interface Message {
   session_id: number;
   role: "user" | "assistant";
   text: string | null;
+  thinking?: string | null;
 }
 
 export interface Segment {

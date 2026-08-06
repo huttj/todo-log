@@ -20,6 +20,7 @@ import {
   insertRow,
   updateRow,
   getEntity,
+  getSession,
   listProjects,
   listTodos,
   listTodosForProject,
@@ -116,7 +117,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "create_todo",
     description:
-      "Create a todo. `outcome` is what done looks like; `details` holds constraints, fears, dependencies.",
+      "Create a todo. `outcome` is what done looks like; `details` holds constraints, fears, dependencies. `project_id` is optional — standalone todos are normal; never skip creating a stated task just because no project fits.",
     input_schema: {
       type: "object",
       properties: {
@@ -613,8 +614,10 @@ How you behave:
 - NEVER claim an action you didn't take. The reply may only reference changes actually made through tool calls this turn — if you logged something but created no todo, don't say you created a todo.
 - Quotes: preserve 0-3 verbatim sentences worth keeping exactly (feelings, decisions, doubts). Summary is a compact paraphrase in the user's voice, third person omitted.
 - Use existing IDs from the context. Create a project only when clearly new. Link impromptu things to todos/projects when the connection is obvious; otherwise leave unlinked.
+- A todo does NOT need a project. When the user states something they intend or need to do and no existing project fits, create the todo with no project_id — never skip the todo for lack of a project, and never invent a project just to hold it. A log alone is not enough for a stated task.
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
-- If the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and end your reply with ONE short clarifying question ("Which project is this for — X or Y?"). When the user answers, re-file it with update_log. Asking when you're unsure is always allowed — one brief question beats a wrong guess.
+- Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND end your reply with ONE short clarifying question; their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
+- Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask ("Which project is this for — X or Y?"). When the user answers, re-file it with update_log.
 - When the user reports having DONE something concrete (worked on it, made the call, finished it), record it as an action: impromptu, status done, started_at/ended_at resolved from time cues (or roughly now, with a plausible duration). Link it to its todo/project and attach the log to that action — actions are what show up on the calendar.
 - After recording a done action, if the user hasn't said how it went, end your reply with ONE brief reflective question (what happened / how did it feel / was it worthwhile?). Their answer becomes a reflection log attached to that action. Never more than one question per turn, and drop it if they clearly don't want to reflect.
 - When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create todos or actions, re-file or split the log, fix the summary — don't limit yourself to re-attaching.
@@ -656,6 +659,23 @@ function contextBlock(data: {
 }
 
 async function describeContextEntity(env: Env, session: SessionRow, userId: number): Promise<string> {
+  // A past chat as context: the user opened Talk from that chat's replay page,
+  // so this conversation is ABOUT that one — include its transcript and feed.
+  if (session.about_session_id) {
+    const prior = await getSession(env, userId, session.about_session_id);
+    if (!prior) return "";
+    const msgs = await sessionMessages(env, prior.id);
+    let transcript = msgs
+      .filter((m) => m.text)
+      .map((m) => `${m.role === "user" ? "User" : "You"}: ${m.text}`)
+      .join("\n");
+    if (transcript.length > 6000) transcript = `…${transcript.slice(-6000)}`;
+    const feed = (await recentSessionEvents(env, prior.id))
+      .map((e) => `- ${e.kind} ${e.entity_type} #${e.entity_id}`)
+      .join("\n");
+    const when = new Date(prior.started_at * 1000).toISOString();
+    return `A past chat between you and the user (${when}). The user wants to talk ABOUT this conversation — discuss it, correct what came out of it, or build on it:\n${transcript || "(empty)"}${feed ? `\nChanges made during that chat:\n${feed}` : ""}`;
+  }
   if (!session.context_type || !session.context_id) return "";
   const type = session.context_type;
   const entity = await getEntity<Record<string, unknown>>(env, type, userId, session.context_id);
@@ -689,6 +709,8 @@ async function describeContextEntity(env: Env, session: SessionRow, userId: numb
 export interface TurnResult {
   reply: string;
   feed: ChangeFeedItem[];
+  /** Accumulated (summarized) thinking across all iterations, for replay. */
+  thinking: string;
 }
 
 /** Live progress events emitted while the turn runs, for SSE streaming. */
@@ -746,8 +768,10 @@ export async function runTurn(
   const state: TurnState = { env, user, session, messageId, feed: [], createdLogIds: [], onEvent };
 
   let reply = "";
+  let thinking = "";
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     onEvent?.({ type: "iteration" });
+    if (thinking && !thinking.endsWith("\n\n")) thinking += "\n\n";
     const stream = client.messages.stream({
       model: AGENT_MODEL,
       max_tokens: 8192,
@@ -761,6 +785,7 @@ export async function runTurn(
         if (event.delta.type === "text_delta") {
           onEvent?.({ type: "delta", text: event.delta.text });
         } else if (event.delta.type === "thinking_delta" && event.delta.thinking) {
+          thinking += event.delta.thinking;
           onEvent?.({ type: "thinking", text: event.delta.thinking });
         }
       }
@@ -813,5 +838,5 @@ export async function runTurn(
       .run();
   }
 
-  return { reply: reply || "Noted.", feed: state.feed };
+  return { reply: reply || "Noted.", feed: state.feed, thinking: thinking.trim() };
 }

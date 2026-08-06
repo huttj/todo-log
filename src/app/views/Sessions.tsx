@@ -11,14 +11,17 @@ import {
   type Message,
   type Todo,
   type Project,
+  type EventRecord,
 } from "../api";
+import EventFeed from "../components/EventFeed";
 import type { CaptureContext } from "../Capture";
 
 function contextLabel(
-  s: { context_type: string | null; context_id: number | null },
+  s: { context_type: string | null; context_id: number | null; about_session_id?: number | null },
   todos: Todo[],
   projects: Project[],
 ): string | null {
+  if (s.about_session_id) return `about chat #${s.about_session_id}`;
   if (!s.context_type || !s.context_id) return null;
   if (s.context_type === "todo") {
     return `todo: ${todos.find((t) => t.id === s.context_id)?.title ?? `#${s.context_id}`}`;
@@ -117,33 +120,58 @@ export function SessionView(props: {
   onFocus: (ctx: CaptureContext | null) => void;
 }) {
   const sessionId = Number(useParams().id);
-  const [data, setData] = useState<{ session: CaptureSession; messages: Message[] } | null>(null);
+  const [data, setData] = useState<{
+    session: CaptureSession & { started_at?: number };
+    messages: Message[];
+    events?: EventRecord[];
+  } | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [openThoughts, setOpenThoughts] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
 
   useEffect(() => {
-    api<{ session: CaptureSession; messages: Message[] }>(`/sessions/${sessionId}`)
+    api<{ session: CaptureSession; messages: Message[]; events: EventRecord[] }>(`/sessions/${sessionId}`)
       .then(setData)
       .catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
     api<Project[]>("/projects").then(setProjects).catch(() => {});
   }, [props.refreshKey, sessionId]);
 
+  // Talk from a replay page talks ABOUT this chat, not where the chat happened.
   useEffect(() => {
-    const s = data?.session;
-    if (s?.context_type && s.context_id && (s.context_type === "todo" || s.context_type === "project" || s.context_type === "action" || s.context_type === "log")) {
-      props.onFocus({
-        type: s.context_type,
-        id: s.context_id,
-        label: contextLabel(s, todos, projects) ?? `${s.context_type} #${s.context_id}`,
-      });
-    }
+    if (!data) return;
+    const when = data.session.started_at
+      ? new Date(data.session.started_at * 1000).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : `#${sessionId}`;
+    props.onFocus({ type: "session", id: sessionId, label: when });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.session.id, todos, projects]);
+  }, [data?.session.id]);
 
   if (!data) return <p className="empty">Loading…</p>;
   const label = contextLabel(data.session, todos, projects);
+
+  // Events hang off the user message that triggered the turn; show them under
+  // the assistant reply that follows it, like the live overlay does.
+  const feedByUserMsg = new Map<number, EventRecord[]>();
+  for (const e of data.events ?? []) {
+    if (e.message_id == null) continue;
+    (feedByUserMsg.get(e.message_id) ?? feedByUserMsg.set(e.message_id, []).get(e.message_id)!).push(e);
+  }
+  let lastUserMsgId: number | null = null;
+
+  const toggleThoughts = (id: number) =>
+    setOpenThoughts((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <div className="tasks session-page">
@@ -182,11 +210,28 @@ export function SessionView(props: {
       <div className="chat replay">
         {data.messages
           .filter((m) => m.text)
-          .map((m) => (
-            <div key={m.id} className={`bubble ${m.role}`}>
-              <p>{m.text}</p>
-            </div>
-          ))}
+          .map((m) => {
+            if (m.role === "user") lastUserMsgId = m.id;
+            const feed = m.role === "assistant" && lastUserMsgId != null
+              ? feedByUserMsg.get(lastUserMsgId)
+              : undefined;
+            return (
+              <div key={m.id} className={`bubble ${m.role}`}>
+                {m.role === "assistant" && m.thinking && (
+                  <>
+                    <button className="link thinking-toggle" onClick={() => toggleThoughts(m.id)}>
+                      {openThoughts.has(m.id) ? "hide thoughts" : "thoughts"}
+                    </button>
+                    {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
+                  </>
+                )}
+                <p>{m.text}</p>
+                {feed && feed.length > 0 && (
+                  <EventFeed events={feed} todos={todos} projects={projects} />
+                )}
+              </div>
+            );
+          })}
       </div>
     </div>
   );

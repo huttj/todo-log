@@ -92,6 +92,8 @@ export interface SessionRow {
   user_id: number;
   context_type: EntityType | null;
   context_id: number | null;
+  /** Set when the context is a past chat ("talk about this conversation"). */
+  about_session_id: number | null;
   started_at: number;
   ended_at: number | null;
 }
@@ -101,6 +103,8 @@ export interface MessageRow {
   session_id: number;
   role: "user" | "assistant";
   text: string | null;
+  /** Assistant only: the model's (summarized) thinking for this turn. */
+  thinking: string | null;
   created_at: number;
 }
 

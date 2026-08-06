@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, type Log, type Todo, type Project, type EventRecord } from "../api";
 import LogCard from "../components/LogCard";
+import EventFeed from "../components/EventFeed";
 import type { CaptureContext } from "../Capture";
 
 export default function LogView(props: {
@@ -72,63 +73,9 @@ export default function LogView(props: {
         {events === null && <p className="empty">Loading…</p>}
         {events?.length === 0 && <p className="empty">No recorded actions.</p>}
         {events && events.length > 0 && (
-          <ul className="feed page-feed">
-            {events.map((e) => (
-              <li key={e.id} className={e.undone ? "undone" : ""}>
-                <span>
-                  {e.kind.replace("_", " ")} {e.entity_type}{" "}
-                  <Link to={entityRoute(e)} className="entity-link">
-                    {entityName(e, todos, projects)}
-                  </Link>
-                  {payloadDetail(e)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <EventFeed events={events} todos={todos} projects={projects} className="page-feed" />
         )}
       </section>
     </div>
   );
-}
-
-function entityRoute(e: EventRecord): string {
-  switch (e.entity_type) {
-    case "todo":
-      return `/todos/${e.entity_id}`;
-    case "project":
-      return `/projects/${e.entity_id}`;
-    case "action":
-      return `/actions/${e.entity_id}`;
-    case "log":
-      return `/logs/${e.entity_id}`;
-    default:
-      return "/";
-  }
-}
-
-function entityName(e: EventRecord, todos: Todo[], projects: Project[]): string {
-  if (e.entity_type === "todo") {
-    return todos.find((t) => t.id === e.entity_id)?.title ?? `#${e.entity_id}`;
-  }
-  if (e.entity_type === "project") {
-    return projects.find((p) => p.id === e.entity_id)?.name ?? `#${e.entity_id}`;
-  }
-  return `#${e.entity_id}`;
-}
-
-function payloadDetail(e: EventRecord): string {
-  try {
-    const payload = e.payload_json
-      ? (JSON.parse(e.payload_json) as { before?: Record<string, unknown>; after?: Record<string, unknown> })
-      : null;
-    if (payload?.before && payload?.after && "status" in payload.after) {
-      return `: ${String(payload.before.status)} → ${String(payload.after.status)}`;
-    }
-    if (payload?.after) {
-      return ` (${Object.keys(payload.after).join(", ")})`;
-    }
-  } catch {
-    // no payload detail
-  }
-  return "";
 }

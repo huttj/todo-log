@@ -17,7 +17,7 @@ const MAX_SEGMENT_MS = 25_000;
 const DRAFT_KEY = "todolog.draft";
 
 export interface CaptureContext {
-  type: "project" | "todo" | "action" | "log";
+  type: "project" | "todo" | "action" | "log" | "session";
   id: number;
   label: string;
 }
@@ -533,7 +533,7 @@ export default function Capture(props: {
         <span className="context-chip">
           {ctx ? (
             <>
-              {ctx.type}: <strong>{ctx.label}</strong>
+              {ctx.type === "session" ? "chat" : ctx.type}: <strong>{ctx.label}</strong>
             </>
           ) : (
             "General"

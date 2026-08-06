@@ -258,12 +258,13 @@ export async function listLogs(
 export async function createSession(
   env: Env,
   userId: number,
-  context: { type: string | null; id: number | null },
+  context: { type: string | null; id: number | null; aboutSessionId?: number | null },
 ): Promise<SessionRow> {
   return insertRow<SessionRow>(env, "sessions", {
     user_id: userId,
     context_type: context.type,
     context_id: context.id,
+    about_session_id: context.aboutSessionId ?? null,
     started_at: now(),
   });
 }
@@ -378,6 +379,14 @@ export async function getEvent(env: Env, userId: number, id: number): Promise<Ev
   return env.DB.prepare(`SELECT * FROM events WHERE id = ? AND user_id = ?`)
     .bind(id, userId)
     .first<EventRow>();
+}
+
+/** Every event in a session, oldest first — the replay page's change feed. */
+export async function sessionEvents(env: Env, sessionId: number): Promise<EventRow[]> {
+  const r = await env.DB.prepare(`SELECT * FROM events WHERE session_id = ? ORDER BY id`)
+    .bind(sessionId)
+    .all<EventRow>();
+  return r.results;
 }
 
 export async function recentSessionEvents(env: Env, sessionId: number): Promise<EventRow[]> {
