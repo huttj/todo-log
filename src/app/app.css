@@ -477,7 +477,6 @@ select {
 }
 
 .todo-row {
-  border-bottom: 1px solid #eee;
   padding: 0.6rem 0;
 }
 
@@ -1235,8 +1234,6 @@ blockquote audio {
   align-items: flex-start;
   gap: 0.9rem;
   margin: 0.9rem 0 1.2rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid #eceae4;
 }
 
 .page-nav {
