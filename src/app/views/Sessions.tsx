@@ -153,7 +153,6 @@ export function SessionView(props: {
             ‹ Chats
           </Link>
           <div className="page-meta">
-            {label && <span className="attachment">{label}</span>}
             <button
               className="link trash"
               title="Delete chat"
@@ -173,6 +172,11 @@ export function SessionView(props: {
             </button>
           </div>
         </div>
+        {label && (
+          <p className="page-title context-title">
+            <span className="attachment">{label}</span>
+          </p>
+        )}
       </div>
 
       <div className="chat replay">
