@@ -124,6 +124,9 @@ function FullTranscript(props: { logId: number }) {
   const [current, setCurrent] = useState<{ seg: number; word: number }>({ seg: -1, word: -1 });
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speedRef = useRef(1);
+  // One pre-buffered player per segment — rolling to the next is instant
+  // instead of stalling on a fresh fetch+decode.
+  const playersRef = useRef<HTMLAudioElement[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -132,12 +135,20 @@ function FullTranscript(props: { logId: number }) {
         const details = await Promise.all(
           data.segments.map((s) => api<SegmentDetail>(`/segments/${s.id}`)),
         );
-        if (alive) setSegs(details);
+        if (!alive) return;
+        playersRef.current = details.map((s) => {
+          const a = new Audio(`/api/audio/${s.id}`);
+          a.preload = "auto";
+          return a;
+        });
+        setSegs(details);
       })
       .catch(() => {});
     return () => {
       alive = false;
       audioRef.current?.pause();
+      for (const a of playersRef.current) a.pause();
+      playersRef.current = [];
     };
   }, [props.logId]);
 
@@ -168,7 +179,7 @@ function FullTranscript(props: { logId: number }) {
       return;
     }
     audioRef.current?.pause();
-    const audio = new Audio(`/api/audio/${segs[segIdx].id}`);
+    const audio = playersRef.current[segIdx] ?? new Audio(`/api/audio/${segs[segIdx].id}`);
     audioRef.current = audio;
     audio.playbackRate = speedRef.current;
     audio.currentTime = at;

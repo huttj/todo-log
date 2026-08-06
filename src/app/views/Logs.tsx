@@ -95,11 +95,14 @@ export default function Logs(props: {
                 setDay(new Date(y, m - 1, d));
               }}
             />
-            {day && (
-              <button className="link clear-day" title="Back to recent" onClick={() => setDay(null)}>
-                ✕
-              </button>
-            )}
+            <button
+              className="link clear-day"
+              title="Back to recent"
+              onClick={() => setDay(null)}
+              style={{ visibility: day ? "visible" : "hidden" }}
+            >
+              ✕
+            </button>
           </div>
         </div>
         <button onClick={() => step(1)} disabled={!day && true}>
