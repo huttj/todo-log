@@ -4,9 +4,8 @@ import { api, type Project, type Todo } from "../api";
 import TodoRow from "../components/TodoRow";
 import type { CaptureContext } from "../Capture";
 
-const DAY_MS = 86400 * 1000;
 const isClosed = (t: Todo) => t.status === "done" || t.status === "abandoned";
-const defaultVisible = (t: Todo) => !isClosed(t) || t.updated_at * 1000 > Date.now() - DAY_MS;
+const defaultVisible = (t: Todo) => !isClosed(t);
 
 export default function ProjectsHome(props: {
   refreshKey: number;

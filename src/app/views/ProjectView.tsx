@@ -5,7 +5,6 @@ import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
 
-const DAY_MS = 86400 * 1000;
 const isClosed = (t: Todo) => t.status === "done" || t.status === "abandoned";
 
 export default function ProjectView(props: {
@@ -36,9 +35,7 @@ export default function ProjectView(props: {
   if (!project) return <p className="empty">{projects.length ? "Project not found." : "Loading…"}</p>;
 
   const own = todos.filter((t) => t.project_id === projectId);
-  const visible = own.filter(
-    (t) => showClosed || !isClosed(t) || t.updated_at * 1000 > Date.now() - DAY_MS,
-  );
+  const visible = own.filter((t) => showClosed || !isClosed(t));
   const todoTitle = new Map(own.map((t) => [t.id, t.title]));
 
   return (
