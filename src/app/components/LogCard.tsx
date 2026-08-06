@@ -200,8 +200,9 @@ function FullTranscript(props: { logId: number }) {
       const t = audio.currentTime;
       setCurrent({ seg: segIdx, word: words.findIndex((w) => t >= w.start && t < w.end + 0.15) });
     };
-    // Early roll: start the next segment ~80ms before this one ends
-    // (timeupdate is too coarse, so poll finely while playing).
+    // Early roll: start the next segment before this one ends, with enough
+    // lead to swallow play()'s own startup latency (timeupdate is too
+    // coarse, so poll finely while playing).
     let rolled = false;
     const roll = () => {
       if (rolled) return;
@@ -213,8 +214,8 @@ function FullTranscript(props: { logId: number }) {
       tickerRef.current = window.setInterval(() => {
         if (audio.paused || rolled) return;
         const remaining = (audio.duration - audio.currentTime) / (audio.playbackRate || 1);
-        if (Number.isFinite(remaining) && remaining <= 0.08) roll();
-      }, 30);
+        if (Number.isFinite(remaining) && remaining <= 0.18) roll();
+      }, 20);
     }
     audio.onended = () => {
       if (hasNext) roll();
