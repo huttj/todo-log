@@ -227,13 +227,22 @@ export async function listActions(
 export async function listLogs(
   env: Env,
   userId: number,
-  filter: { todoId?: number; actionId?: number; projectId?: number; limit?: number },
+  filter: {
+    todoId?: number;
+    actionId?: number;
+    projectId?: number;
+    from?: number;
+    to?: number;
+    limit?: number;
+  },
 ): Promise<LogRow[]> {
   const conds = ["user_id = ?"];
   const binds: unknown[] = [userId];
   if (filter.todoId) (conds.push("todo_id = ?"), binds.push(filter.todoId));
   if (filter.actionId) (conds.push("action_id = ?"), binds.push(filter.actionId));
   if (filter.projectId) (conds.push("project_id = ?"), binds.push(filter.projectId));
+  if (filter.from) (conds.push("occurred_at >= ?"), binds.push(filter.from));
+  if (filter.to) (conds.push("occurred_at < ?"), binds.push(filter.to));
   const r = await env.DB.prepare(
     `SELECT * FROM logs WHERE ${conds.join(" AND ")} ORDER BY occurred_at DESC LIMIT ?`,
   )

@@ -6,7 +6,9 @@ import {
   faBookOpen,
   faCalendarDays,
   faComments,
+  faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
+import Search from "./components/Search";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -30,6 +32,7 @@ export default function App() {
   const [captureAutoStart, setCaptureAutoStart] = useState(false);
   const [captureKey, setCaptureKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // Components anywhere can request the Talk dock with a specific context
   // (e.g. a log card's reprocess button).
@@ -138,6 +141,9 @@ export default function App() {
             <FontAwesomeIcon icon={faComments} />
             <span className="nav-label">Chats</span>
           </NavLink>
+          <button className="nav-search" title="Search" onClick={() => setSearchOpen(true)}>
+            <FontAwesomeIcon icon={faMagnifyingGlass} />
+          </button>
         </nav>
       </header>
 
@@ -171,6 +177,8 @@ export default function App() {
           </button>
         </footer>
       )}
+
+      {searchOpen && <Search onClose={() => setSearchOpen(false)} />}
 
       {captureOpen && (
         <Capture

@@ -12,6 +12,7 @@ import {
   listTodos,
   listActions,
   listLogs,
+  searchAll,
   insertEvent,
   getEvent,
   ENTITY_TABLES,
@@ -142,9 +143,18 @@ crud.get("/logs", async (c) => {
       todoId: q.todo_id ? Number(q.todo_id) : undefined,
       actionId: q.action_id ? Number(q.action_id) : undefined,
       projectId: q.project_id ? Number(q.project_id) : undefined,
+      from: q.from ? Number(q.from) : undefined,
+      to: q.to ? Number(q.to) : undefined,
       limit: q.limit ? Math.min(Number(q.limit), 200) : undefined,
     }),
   );
+});
+
+// Omni search across projects, todos, and logs.
+crud.get("/search", async (c) => {
+  const q = c.req.query("q")?.trim();
+  if (!q) return c.json({ projects: [], todos: [], logs: [] });
+  return c.json(await searchAll(c.env, c.get("user").id, q));
 });
 
 // -- Generic PATCH / undo ---------------------------------------------------
