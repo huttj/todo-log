@@ -241,6 +241,7 @@ capture.post("/messages/:id/send", async (c) => {
           role: "assistant",
           text: result.reply,
           thinking: result.thinking || null,
+          reply_to: message.id,
           created_at: now(),
         });
         await emit({ type: "done", reply: result.reply, feed: result.feed });

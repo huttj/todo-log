@@ -284,6 +284,36 @@ export async function sessionMessages(env: Env, sessionId: number): Promise<Mess
   return r.results;
 }
 
+/** Conversation order for a session's messages. Id order lies: a user message
+ * row is created when recording starts, so with queued sends the next
+ * utterance's row can predate the previous turn's reply. Pair each assistant
+ * reply behind its user message via reply_to; pre-reply_to rows fall back to
+ * zipping one orphan reply per sent user message. */
+export function conversationOrder(messages: MessageRow[]): MessageRow[] {
+  const byReply = new Map<number, MessageRow[]>();
+  const orphans: MessageRow[] = [];
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    if (m.reply_to) {
+      const arr = byReply.get(m.reply_to) ?? [];
+      arr.push(m);
+      byReply.set(m.reply_to, arr);
+    } else {
+      orphans.push(m);
+    }
+  }
+  const out: MessageRow[] = [];
+  for (const m of messages) {
+    if (m.role !== "user") continue;
+    out.push(m);
+    const replies = byReply.get(m.id);
+    if (replies) out.push(...replies);
+    else if (m.text && orphans.length) out.push(orphans.shift()!);
+  }
+  out.push(...orphans);
+  return out;
+}
+
 /** Message with an ownership check via its session. */
 export async function getOwnedMessage(
   env: Env,

@@ -33,6 +33,7 @@ import {
   getLearnings,
   recentSessionEvents,
   sessionMessages,
+  conversationOrder,
   messageSegments,
 } from "./db";
 
@@ -666,7 +667,7 @@ async function describeContextEntity(env: Env, session: SessionRow, userId: numb
   if (session.about_session_id) {
     const prior = await getSession(env, userId, session.about_session_id);
     if (!prior) return "";
-    const msgs = await sessionMessages(env, prior.id);
+    const msgs = conversationOrder(await sessionMessages(env, prior.id));
     let transcript = msgs
       .filter((m) => m.text)
       .map((m) => `${m.role === "user" ? "User" : "You"}: ${m.text}`)
@@ -761,7 +762,7 @@ export async function runTurn(
     });
 
   const messages: Anthropic.MessageParam[] = [
-    ...priorMessages
+    ...conversationOrder(priorMessages)
       .filter((m) => m.id !== messageId && m.text)
       .map((m) => ({ role: m.role, content: m.text as string })),
     { role: "user" as const, content: userText },

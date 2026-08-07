@@ -32,6 +32,18 @@ function contextLabel(
   return `${s.context_type} #${s.context_id}`;
 }
 
+/** Route the context pill links to (the entity — or chat — this session is about). */
+function contextRoute(s: {
+  context_type: string | null;
+  context_id: number | null;
+  about_session_id?: number | null;
+}): string | null {
+  if (s.about_session_id) return `/sessions/${s.about_session_id}`;
+  if (!s.context_type || !s.context_id) return null;
+  const base = { todo: "todos", project: "projects", action: "actions", log: "logs" }[s.context_type];
+  return base ? `/${base}/${s.context_id}` : null;
+}
+
 export function Sessions(props: {
   refreshKey: number;
   onFocus: (ctx: CaptureContext | null) => void;
@@ -157,13 +169,35 @@ export function SessionView(props: {
   const label = contextLabel(data.session, todos, projects);
 
   // Events hang off the user message that triggered the turn; show them under
-  // the assistant reply that follows it, like the live overlay does.
+  // the assistant reply that answers it, like the live overlay does.
   const feedByUserMsg = new Map<number, EventRecord[]>();
   for (const e of data.events ?? []) {
     if (e.message_id == null) continue;
     (feedByUserMsg.get(e.message_id) ?? feedByUserMsg.set(e.message_id, []).get(e.message_id)!).push(e);
   }
-  let lastUserMsgId: number | null = null;
+
+  // Conversation order. Id order lies: a user message row is created when
+  // recording starts, so with queued sends the next utterance's row can
+  // predate the previous turn's reply. Pair replies behind their user message
+  // via reply_to; older rows without it zip one orphan reply per user message.
+  const byReply = new Map<number, Message[]>();
+  const orphans: Message[] = [];
+  for (const m of data.messages) {
+    if (m.role !== "assistant" || !m.text) continue;
+    if (m.reply_to) {
+      (byReply.get(m.reply_to) ?? byReply.set(m.reply_to, []).get(m.reply_to)!).push(m);
+    } else {
+      orphans.push(m);
+    }
+  }
+  const ordered: { msg: Message; userMsgId?: number }[] = [];
+  for (const m of data.messages) {
+    if (m.role !== "user" || !m.text) continue;
+    ordered.push({ msg: m });
+    const replies = byReply.get(m.id) ?? (orphans.length ? [orphans.shift()!] : []);
+    for (const a of replies) ordered.push({ msg: a, userMsgId: m.id });
+  }
+  for (const a of orphans) ordered.push({ msg: a });
 
   const toggleThoughts = (id: number) =>
     setOpenThoughts((s) => {
@@ -202,36 +236,40 @@ export function SessionView(props: {
         </div>
         {label && (
           <p className="page-title context-title">
-            <span className="attachment">{label}</span>
+            {(() => {
+              const to = contextRoute(data.session);
+              return to ? (
+                <Link className="attachment" to={to}>
+                  {label}
+                </Link>
+              ) : (
+                <span className="attachment">{label}</span>
+              );
+            })()}
           </p>
         )}
       </div>
 
       <div className="chat replay">
-        {data.messages
-          .filter((m) => m.text)
-          .map((m) => {
-            if (m.role === "user") lastUserMsgId = m.id;
-            const feed = m.role === "assistant" && lastUserMsgId != null
-              ? feedByUserMsg.get(lastUserMsgId)
-              : undefined;
-            return (
-              <div key={m.id} className={`bubble ${m.role}`}>
-                {m.role === "assistant" && m.thinking && (
-                  <>
-                    <button className="link thinking-toggle" onClick={() => toggleThoughts(m.id)}>
-                      {openThoughts.has(m.id) ? "hide thoughts" : "thoughts"}
-                    </button>
-                    {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
-                  </>
-                )}
-                <p>{m.text}</p>
-                {feed && feed.length > 0 && (
-                  <EventFeed events={feed} todos={todos} projects={projects} />
-                )}
-              </div>
-            );
-          })}
+        {ordered.map(({ msg: m, userMsgId }) => {
+          const feed = userMsgId != null ? feedByUserMsg.get(userMsgId) : undefined;
+          return (
+            <div key={m.id} className={`bubble ${m.role}`}>
+              {m.role === "assistant" && m.thinking && (
+                <>
+                  <button className="link thinking-toggle" onClick={() => toggleThoughts(m.id)}>
+                    {openThoughts.has(m.id) ? "hide thoughts" : "thoughts"}
+                  </button>
+                  {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
+                </>
+              )}
+              <p>{m.text}</p>
+              {feed && feed.length > 0 && (
+                <EventFeed events={feed} todos={todos} projects={projects} />
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

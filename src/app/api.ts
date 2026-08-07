@@ -104,6 +104,7 @@ export interface Message {
   role: "user" | "assistant";
   text: string | null;
   thinking?: string | null;
+  reply_to?: number | null;
 }
 
 export interface Segment {

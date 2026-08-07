@@ -105,6 +105,8 @@ export interface MessageRow {
   text: string | null;
   /** Assistant only: the model's (summarized) thinking for this turn. */
   thinking: string | null;
+  /** Assistant only: id of the user message this reply answers. */
+  reply_to: number | null;
   created_at: number;
 }
 
