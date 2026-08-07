@@ -1485,6 +1485,25 @@ blockquote audio {
   margin-right: 0.25rem;
 }
 
+/* -- problem statement -- */
+.problem {
+  border-top: 1px solid #eceae4;
+  padding: 2.5rem 0;
+  text-align: center;
+}
+
+.problem h3 {
+  font-size: 1.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.problem p {
+  max-width: 36rem;
+  margin: 0 auto;
+  color: #555;
+  line-height: 1.6;
+}
+
 /* -- walkthrough -- */
 .walkthrough {
   display: grid;

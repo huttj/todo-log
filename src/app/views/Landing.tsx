@@ -1,6 +1,8 @@
-// Public landing page for signed-out visitors: what the app does, stylized
-// mockups (CSS-drawn, no real user data), and a beta signup form that posts
-// to the public /prospects endpoint.
+// Public landing page for signed-out visitors. Positioning: the invisible
+// half of getting things done — tasks stall on unprocessed uncertainty and
+// emotion, not laziness. Two pillars: (1) talk through what's making it hard,
+// (2) a long-running feedback loop on your own efforts. Mockups are CSS-drawn
+// (no real user data); the beta form posts to the public /prospects endpoint.
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faPlay } from "@fortawesome/free-solid-svg-icons";
@@ -17,11 +19,11 @@ export default function Landing() {
       </header>
 
       <section className="hero">
-        <h2>The todo list that keeps the story.</h2>
+        <h2>For everything between “to&nbsp;do” and “done.”</h2>
         <p>
-          Just talk — about what you need to do, what you're in the middle of, how it's going.
-          Todo Log turns it into todos, actions, and a journal of the journey. No forms, no
-          friction, nothing lost.
+          Tasks don't stall because you're lazy. They stall on uncertainty, doubts, and decisions
+          you haven't talked yourself through. Todo Log is a to-do list you can talk to — it files
+          the plan, catches the feelings, and learns with you as you go.
         </p>
         <div className="hero-cta">
           <a className="google-btn" href="#beta">
@@ -31,58 +33,83 @@ export default function Landing() {
         <CaptureMockup />
       </section>
 
+      <section className="problem">
+        <h3>The invisible half of getting things done</h3>
+        <p>
+          Every task carries a second task nobody writes down: <em>figure out what's actually in
+          the way</em>. When that half gets ignored, things sit untouched for weeks — until you
+          finally push through on sheer willpower. Todo Log gives the second half somewhere to go,
+          so the first half stops requiring a Herculean effort.
+        </p>
+      </section>
+
+      <section className="showcase">
+        <div className="showcase-row">
+          <JournalMockup />
+          <div className="showcase-copy">
+            <h3>Talk through the hard part</h3>
+            <p>
+              Stuck is information. Rant about what's making something difficult and it's captured
+              — the fears, the open questions, the missing pieces land on the task itself, and the
+              gaps fill in over time. Most blockers start dissolving the moment they're said out
+              loud.
+            </p>
+          </div>
+        </div>
+        <div className="showcase-row reverse">
+          <ReflectionMockup />
+          <div className="showcase-copy">
+            <h3>Learn from every attempt</h3>
+            <p>
+              While you work, you're generating feedback — what worked, what turned out to be a
+              dumb idea, which efforts actually paid off. Todo Log asks how it went, keeps your
+              reflections next to the work they're about, and builds a long-running feedback loop
+              on your own judgment. A to-do list that makes you smarter about what to do next.
+            </p>
+          </div>
+        </div>
+        <div className="showcase-row">
+          <ProjectsMockup />
+          <div className="showcase-copy">
+            <h3>Underneath: a real system, maintained for you</h3>
+            <p>
+              Projects, todos, actions on a calendar, a journal in your exact words — all filed
+              immediately by an agent you correct just by talking. Every change is shown in a
+              feed, and every change is undoable. No filing, no gardening, no productivity-system
+              maintenance.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="walkthrough">
         <div className="step">
           <span className="step-num">1</span>
           <div>
             <h3>Talk it out</h3>
             <p>
-              Hold the mic and ramble like you would to a coworker. Everything transcribes as you
-              go — pause, wander, correct yourself. Typing works too.
+              Hold the mic and ramble like you would to a coworker — what you need to do, what
+              you're avoiding, how it's going. Typing works too.
             </p>
           </div>
         </div>
         <div className="step">
           <span className="step-num">2</span>
           <div>
-            <h3>It's filed before you're done talking</h3>
+            <h3>It's filed before you're done</h3>
             <p>
-              An agent creates the todos, schedules the actions, and journals the rest — applied
-              immediately, every change shown in a feed, every change undoable. Got something
-              wrong? Just say so; it fixes the record and learns your preferences.
+              Todos created, actions logged, feelings journaled — and one good question back when
+              it helps: what's blocking you, or how did it go?
             </p>
           </div>
         </div>
         <div className="step">
           <span className="step-num">3</span>
           <div>
-            <h3>The journey stays</h3>
+            <h3>It compounds</h3>
             <p>
-              Months later you don't just see what got done — you see how it went. Your exact
-              words are kept as quotes that play back the original audio, moment for moment.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="showcase">
-        <div className="showcase-row">
-          <ProjectsMockup />
-          <div className="showcase-copy">
-            <h3>Projects, todos, and an inbox</h3>
-            <p>
-              Work groups itself under projects; loose tasks land in the inbox. Statuses follow
-              reality — when you say you started, it's in progress.
-            </p>
-          </div>
-        </div>
-        <div className="showcase-row reverse">
-          <JournalMockup />
-          <div className="showcase-copy">
-            <h3>A journal that writes itself</h3>
-            <p>
-              Every rant becomes a log attached to the thing it's about, with the sentences worth
-              keeping preserved verbatim — tap one to hear yourself say it.
+              Months later you don't just see what got done — you see what it cost, what it
+              taught you, and you can press play and hear yourself figure it out.
             </p>
           </div>
         </div>
@@ -107,20 +134,22 @@ function CaptureMockup() {
     <div className="mock mock-capture" aria-hidden="true">
       <div className="mock-chip">General</div>
       <div className="mock-bubble user">
-        I have to pack for the trip today — key things are the birthday card, the Lego set I got,
-        clothes, my vitamins… jeez, all the little stuff I'd forget. Bathroom stuff. Snacks too,
-        I've got protein bars.
+        I keep putting off calling the contractor. Honestly I think I'm nervous the quote comes
+        back huge and the whole kitchen plan falls apart… and then what was the point of all the
+        drawings.
       </div>
       <div className="mock-bubble assistant">
-        <p>Packing todo created with everything you listed — card, Lego set, clothes, vitamins,
-        bathroom stuff, snacks.</p>
+        <p>
+          Filed — the worry lives on the task now, not just in your head. What would make the
+          call feel doable?
+        </p>
         <ul className="mock-feed">
           <li>
-            <span>Created todo “Pack for the trip” (in_progress)</span>
+            <span>Created todo “Call the contractor” (idea)</span>
             <em>undo</em>
           </li>
           <li>
-            <span>Logged: ran through the packing list</span>
+            <span>Logged reflection: nervous the quote sinks the plan</span>
             <em>undo</em>
           </li>
         </ul>
@@ -135,11 +164,56 @@ function CaptureMockup() {
   );
 }
 
+function JournalMockup() {
+  return (
+    <div className="mock mock-journal" aria-hidden="true">
+      <div className="mock-log">
+        <div className="mock-log-head">
+          <span>Todo · Call the contractor</span>
+          <span className="mock-tag">details</span>
+        </div>
+        <p>
+          Blocked on: fear the quote blows the budget. Missing: rough number for cabinets;
+          whether phased work is possible.
+        </p>
+        <div className="mock-quote">
+          <span className="mock-play">
+            <FontAwesomeIcon icon={faPlay} />
+          </span>
+          “If it's over 30k I need a plan B, not a meltdown. Maybe I just ask for a ballpark
+          first.”
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReflectionMockup() {
+  return (
+    <div className="mock mock-journal" aria-hidden="true">
+      <div className="mock-log">
+        <div className="mock-log-head">
+          <span>Tue, May 12</span>
+          <span className="mock-tag">reflection</span>
+        </div>
+        <p>Wrapped the first month of the newsletter experiment.</p>
+        <div className="mock-quote">
+          <span className="mock-play">
+            <FontAwesomeIcon icon={faPlay} />
+          </span>
+          “The writing is fun but the growth just isn't there. I don't think this is the lever —
+          glad I know that after four weeks, not a year.”
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProjectsMockup() {
   return (
     <div className="mock mock-projects" aria-hidden="true">
       <div className="mock-card">
-        <strong>Plant the garden</strong>
+        <strong>Kitchen renovation</strong>
         <div className="mock-meta">
           <span className="mock-tag">bounded</span>
           <span>3 open</span>
@@ -155,33 +229,12 @@ function ProjectsMockup() {
       <div className="mock-inbox">
         <h4>Inbox</h4>
         <div className="mock-todo">
-          <span>Pack for the trip</span>
-          <span className="mock-status">in progress</span>
-        </div>
-        <div className="mock-todo">
-          <span>Call the dentist</span>
+          <span>Call the contractor</span>
           <span className="mock-status">idea</span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function JournalMockup() {
-  return (
-    <div className="mock mock-journal" aria-hidden="true">
-      <div className="mock-log">
-        <div className="mock-log-head">
-          <span>Tue, May 12</span>
-          <span className="mock-tag">reflection</span>
-        </div>
-        <p>Seedlings finally in the ground after two false starts with the weather.</p>
-        <div className="mock-quote">
-          <span className="mock-play">
-            <FontAwesomeIcon icon={faPlay} />
-          </span>
-          “Honestly I thought I'd hate this part, but being outside all morning was the best I've
-          felt all week.”
+        <div className="mock-todo">
+          <span>Pack for the trip</span>
+          <span className="mock-status">in progress</span>
         </div>
       </div>
     </div>
@@ -220,7 +273,10 @@ function BetaForm() {
   return (
     <section id="beta" className="beta">
       <h3>Sign up for the beta</h3>
-      <p>Todo Log is in private beta. Leave your email and we'll let you in as spots open.</p>
+      <p>
+        Todo Log is in private beta. If you've got a project that keeps stalling — or a graveyard
+        of abandoned to-do apps — you're exactly who this is for.
+      </p>
       <form onSubmit={submit}>
         <input
           type="email"
@@ -231,7 +287,7 @@ function BetaForm() {
         />
         <input placeholder="Your name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
         <textarea
-          placeholder="What would you use it for? (optional)"
+          placeholder="What keeps stalling for you? (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
