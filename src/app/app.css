@@ -172,7 +172,7 @@ nav a.active svg {
   font: inherit;
 }
 
-.search-hit:hover {
+.search-hit.active {
   background: #edece6;
 }
 

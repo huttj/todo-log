@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Todo Log mark: a checkmark over a voice-memo waveform -->
+  <rect width="64" height="64" rx="14" fill="#1a1a1a"/>
+  <path d="M17 27 L27 37 L47 15" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g stroke="#fff" stroke-width="4.5" stroke-linecap="round" opacity="0.9">
+    <line x1="16" y1="47" x2="16" y2="53"/>
+    <line x1="24" y1="44" x2="24" y2="56"/>
+    <line x1="32" y1="46" x2="32" y2="54"/>
+    <line x1="40" y1="42" x2="40" y2="58"/>
+    <line x1="48" y1="46" x2="48" y2="54"/>
+  </g>
+</svg>

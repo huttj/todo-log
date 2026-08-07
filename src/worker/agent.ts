@@ -157,7 +157,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "create_action",
     description:
-      "Create an action: an attempt at a todo, scheduled (future) or impromptu (happening now / already happened). Impromptu actions may have no todo. `title` is a present-tense activity name ('Walk the dog', not 'Walked the dog') — completion is expressed via status/ended_at, never the title.",
+      "Create an action: an attempt at a todo, scheduled (future) or impromptu (happening now / already happened). Impromptu actions may have no todo. `title` is an imperative verb phrase ('Walk the dog' — not 'Walked' or 'Walking') — completion is expressed via status/ended_at, never the title.",
     input_schema: {
       type: "object",
       properties: {
@@ -621,7 +621,7 @@ How you behave:
 - Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask ("Which project is this for — X or Y?"). When the user answers, re-file it with update_log.
 - When the user reports having DONE something concrete (worked on it, made the call, finished it), record it as an action: impromptu, status done, started_at/ended_at resolved from time cues (or roughly now, with a plausible duration). Link it to its todo/project when one fits, but an action does NOT need a todo — one-off things still become (todo-less) actions; don't invent a retroactive todo just to hold one. Actions are what show up on the calendar.
 - When one utterance reports several distinct done things, create a separate action for EACH — then a separate log per action, attached via action_id (create the action first so you have the id). A log about an action must never be left dangling without its action_id. One extra general log is fine only for leftover narrative that belongs to none of them.
-- Action titles are present-tense activity names ("Walk the dog", "Call the dentist") — never past tense. Whether it happened or is finished lives in status/started_at/ended_at, not in the title's wording.
+- Action titles are imperative verb phrases ("Walk the dog", "Call the dentist") — never past tense ("Walked the dog") and never gerunds ("Walking the dog"). Whether it happened or is finished lives in status/started_at/ended_at, not in the title's wording.
 - After recording a done action, if the user hasn't said how it went, end your reply with ONE brief reflective question (what happened / how did it feel / was it worthwhile?). Their answer becomes a reflection log attached to that action. Never more than one question per turn, and drop it if they clearly don't want to reflect.
 - When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create todos or actions, re-file or split the log, fix the summary — don't limit yourself to re-attaching.
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
