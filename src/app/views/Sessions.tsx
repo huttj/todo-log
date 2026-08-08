@@ -1,8 +1,8 @@
 // Chat history: past capture sessions (newest first) and a replay page.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faPlay, faStop } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   del,
@@ -12,6 +12,7 @@ import {
   type Todo,
   type Project,
   type EventRecord,
+  type Segment,
 } from "../api";
 import EventFeed from "../components/EventFeed";
 import type { CaptureContext } from "../Capture";
@@ -140,7 +141,51 @@ export function SessionView(props: {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [openThoughts, setOpenThoughts] = useState<Set<number>>(new Set());
+  // Playback of a user message's audio: one shared player, segments chained.
+  const [playingMsg, setPlayingMsg] = useState<number | null>(null);
+  const [noAudio, setNoAudio] = useState<Set<number>>(new Set());
+  const playerRef = useRef<HTMLAudioElement | null>(null);
   const navigate = useNavigate();
+
+  const stopPlayback = () => {
+    playerRef.current?.pause();
+    playerRef.current = null;
+    setPlayingMsg(null);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => stopPlayback, []);
+
+  async function togglePlay(msgId: number) {
+    if (playingMsg === msgId) {
+      stopPlayback();
+      return;
+    }
+    stopPlayback();
+    let segments: Segment[] = [];
+    try {
+      segments = (await api<{ segments: Segment[] }>(`/messages/${msgId}`)).segments;
+    } catch {
+      /* fall through to no-audio marking */
+    }
+    if (segments.length === 0) {
+      setNoAudio((s) => new Set(s).add(msgId));
+      return;
+    }
+    setPlayingMsg(msgId);
+    const queue = [...segments].sort((a, b) => a.seq - b.seq);
+    const playNext = () => {
+      const seg = queue.shift();
+      if (!seg) {
+        setPlayingMsg((cur) => (cur === msgId ? null : cur));
+        return;
+      }
+      const player = new Audio(`/api/audio/${seg.id}`);
+      playerRef.current = player;
+      player.onended = playNext;
+      void player.play().catch(() => setPlayingMsg((cur) => (cur === msgId ? null : cur)));
+    };
+    playNext();
+  }
 
   useEffect(() => {
     api<{ session: CaptureSession; messages: Message[]; events: EventRecord[] }>(`/sessions/${sessionId}`)
@@ -264,6 +309,17 @@ export function SessionView(props: {
                 </>
               )}
               <p>{m.text}</p>
+              {m.role === "user" && (
+                <button
+                  className="msg-play"
+                  title={noAudio.has(m.id) ? "No audio for this message" : "Play the recording"}
+                  disabled={noAudio.has(m.id)}
+                  onClick={() => void togglePlay(m.id)}
+                >
+                  <FontAwesomeIcon icon={playingMsg === m.id ? faStop : faPlay} />
+                  {noAudio.has(m.id) ? " no audio" : ""}
+                </button>
+              )}
               {feed && feed.length > 0 && (
                 <EventFeed events={feed} todos={todos} projects={projects} />
               )}

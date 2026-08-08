@@ -30,6 +30,7 @@ export interface UserRow {
   name: string | null;
   enabled: number;
   timezone: string | null;
+  last_checkin_at: number | null;
   created_at: number;
 }
 
@@ -67,6 +68,8 @@ export interface ActionRow {
   started_at: number | null;
   ended_at: number | null;
   status: ActionStatus;
+  /** 1 = day-level schedule; scheduled_start is local midnight of the day. */
+  all_day: number;
   gcal_event_id: string | null;
   created_at: number;
   updated_at: number;
@@ -94,8 +97,29 @@ export interface SessionRow {
   context_id: number | null;
   /** Set when the context is a past chat ("talk about this conversation"). */
   about_session_id: number | null;
+  /** 'plan' = day-planning session (planning prompt addendum). */
+  mode: string | null;
   started_at: number;
   ended_at: number | null;
+}
+
+export interface NotificationRow {
+  id: number;
+  user_id: number;
+  slot: string;
+  title: string;
+  body: string | null;
+  read: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AgentMemoryRow {
+  id: number;
+  user_id: number;
+  key: string;
+  content: string;
+  updated_at: number;
 }
 
 export interface MessageRow {

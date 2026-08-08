@@ -31,6 +31,11 @@ import {
   insertEvent,
   fileCorrection,
   getLearnings,
+  setNotification,
+  clearNotification,
+  listNotifications,
+  saveMemory,
+  listMemories,
   recentSessionEvents,
   sessionMessages,
   conversationOrder,
@@ -75,6 +80,17 @@ function nowInZone(tz: string): { iso: string; pretty: string } {
 function parseWhen(v: unknown): number | null {
   if (v == null) return null;
   const ms = Date.parse(String(v));
+  return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
+}
+
+/** Epoch of local midnight for a YYYY-MM-DD in the given timezone. Uses the
+ * zone's current UTC offset — DST edges within a day of the boundary are an
+ * acceptable error for day-level scheduling. */
+function dayStartInZone(tz: string, date: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const { iso } = nowInZone(tz);
+  const offset = iso.slice(19); // "+HH:MM" tail of the ISO timestamp
+  const ms = Date.parse(`${date}T00:00:00${offset}`);
   return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
 }
 
@@ -164,6 +180,11 @@ const TOOLS: Anthropic.Tool[] = [
         todo_id: ID,
         project_id: ID,
         title: { type: ["string", "null"], description: "Defaults to the todo's title" },
+        scheduled_date: {
+          type: ["string", "null"],
+          description:
+            "YYYY-MM-DD for day-level (all-day) scheduling. Use when the user names a day but no time — do NOT invent a time of day.",
+        },
         scheduled_start: WHEN,
         scheduled_end: WHEN,
         started_at: WHEN,
@@ -186,6 +207,10 @@ const TOOLS: Anthropic.Tool[] = [
         todo_id: ID,
         project_id: ID,
         title: { type: ["string", "null"] },
+        scheduled_date: {
+          type: ["string", "null"],
+          description: "YYYY-MM-DD to (re)schedule day-level, without a time of day",
+        },
         scheduled_start: WHEN,
         scheduled_end: WHEN,
         started_at: WHEN,
@@ -260,6 +285,42 @@ const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { query: { type: "string" } },
       required: ["query"],
+    },
+  },
+  {
+    name: "save_memory",
+    description:
+      "Persist a note to your long-term memory (shown to you at the start of every conversation). Keyed: writing an existing key overwrites it; empty content deletes it. Use for durable context — ongoing situations, people, preferences, how the user works — NOT for things already recorded as todos/logs.",
+    input_schema: {
+      type: "object",
+      properties: {
+        key: { type: "string", description: "Short kebab-case topic, e.g. 'job-search', 'planning-habits'" },
+        content: { type: ["string", "null"], description: "The note (a few sentences). Empty/null deletes the key." },
+      },
+      required: ["key"],
+    },
+  },
+  {
+    name: "set_notification",
+    description:
+      "Write or replace the in-app notification under `slot` (one living notification per slot — this overwrites, it never stacks). Use to leave the user a note they'll see when they next look at the app: a check-in question, a reminder about something left open. Keep it short and specific.",
+    input_schema: {
+      type: "object",
+      properties: {
+        slot: { type: "string", description: "Stable purpose key, e.g. 'checkin'" },
+        title: { type: "string" },
+        body: { type: ["string", "null"] },
+      },
+      required: ["slot", "title"],
+    },
+  },
+  {
+    name: "clear_notification",
+    description: "Remove the notification in `slot` (e.g. its question has been answered).",
+    input_schema: {
+      type: "object",
+      properties: { slot: { type: "string" } },
+      required: ["slot"],
     },
   },
   {
@@ -419,23 +480,31 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         const todo = await getEntity<TodoRow>(s.env, "todo", s.user.id, todoId);
         title = todo?.title ?? null;
       }
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const dayStart = str(input.scheduled_date) ? dayStartInZone(tz, str(input.scheduled_date)!) : null;
       const startedAt = parseWhen(input.started_at);
       const row = await insertRow<ActionRow>(s.env, "actions", {
         user_id: s.user.id,
         todo_id: todoId,
         project_id: num(input.project_id),
         title,
-        scheduled_start: parseWhen(input.scheduled_start),
-        scheduled_end: parseWhen(input.scheduled_end),
+        scheduled_start: dayStart ?? parseWhen(input.scheduled_start),
+        scheduled_end: dayStart ? null : parseWhen(input.scheduled_end),
         started_at: startedAt,
         ended_at: parseWhen(input.ended_at),
         status: str(input.status) ?? (startedAt ? "in_progress" : "scheduled"),
+        all_day: dayStart ? 1 : 0,
         gcal_event_id: null,
         created_at: t,
         updated_at: t,
       });
       const when = row.scheduled_start
-        ? ` @ ${new Date(row.scheduled_start * 1000).toLocaleString("en-US", { timeZone: s.user.timezone ?? s.env.TIMEZONE })}`
+        ? ` @ ${new Date(row.scheduled_start * 1000).toLocaleString("en-US", {
+            timeZone: tz,
+            ...(row.all_day
+              ? { weekday: "short", month: "short", day: "numeric" }
+              : {}),
+          })}${row.all_day ? " (all day)" : ""}`
         : "";
       await feedEvent(s, "action", row.id, "created", `Created action “${row.title ?? "untitled"}” (${row.status})${when}`);
       return JSON.stringify({ action_id: row.id });
@@ -444,7 +513,19 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const id = num(input.action_id);
       const current = id && (await getEntity<ActionRow>(s.env, "action", s.user.id, id));
       if (!current) return "error: action not found";
+      // Day-level rescheduling arrives as scheduled_date; fold it into the
+      // regular columns before diffing.
+      const sd = str(input.scheduled_date);
+      if (sd) {
+        const dayStart = dayStartInZone(s.user.timezone ?? s.env.TIMEZONE, sd);
+        if (dayStart == null) return "error: scheduled_date must be YYYY-MM-DD";
+        input.scheduled_start = new Date(dayStart * 1000).toISOString();
+        input.all_day = 1;
+      } else if (input.scheduled_start != null) {
+        input.all_day = 0;
+      }
       const { cols, before, after } = collectUpdates(input, current as never, [
+        { name: "all_day" },
         { name: "todo_id" },
         { name: "project_id" },
         { name: "title" },
@@ -537,6 +618,25 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!q) return "error: query required";
       return JSON.stringify(await searchAll(s.env, s.user.id, q));
     }
+    case "save_memory": {
+      const key = str(input.key);
+      if (!key) return "error: key required";
+      await saveMemory(s.env, s.user.id, key, str(input.content) ?? "");
+      return str(input.content) ? "saved" : "deleted";
+    }
+    case "set_notification": {
+      const slot = str(input.slot);
+      const title = str(input.title);
+      if (!slot || !title) return "error: slot and title required";
+      await setNotification(s.env, s.user.id, slot, title, str(input.body));
+      return "set";
+    }
+    case "clear_notification": {
+      const slot = str(input.slot);
+      if (!slot) return "error: slot required";
+      await clearNotification(s.env, s.user.id, slot);
+      return "cleared";
+    }
     case "file_correction": {
       const description = str(input.description);
       if (description) await fileCorrection(s.env, s.user.id, s.session.id, description);
@@ -619,21 +719,37 @@ How you behave:
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
 - Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND end your reply with ONE short clarifying question; their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
 - Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask ("Which project is this for — X or Y?"). When the user answers, re-file it with update_log.
-- When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — create the todo AND a scheduled action for that window, and set the todo's status to scheduled. If the cue names only a day, still schedule it: pick a plausible hour (mid-morning for "tomorrow", within a couple of hours for "today") rather than dropping the schedule — the user corrects by talking. Intentions with no time cue stay unscheduled todos.
+- When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — create the todo AND a scheduled action for that window, and set the todo's status to scheduled. A day without a time is a DAY-LEVEL schedule: use scheduled_date (all-day), never invent an hour. Use scheduled_start only when the user gives an actual time. Intentions with no time cue stay unscheduled todos.
 - When the user reports having DONE something concrete (worked on it, made the call, finished it), record it as an action: impromptu, status done, started_at/ended_at resolved from time cues (or roughly now, with a plausible duration). Link it to its todo/project when one fits, but an action does NOT need a todo — one-off things still become (todo-less) actions; don't invent a retroactive todo just to hold one. Actions are what show up on the calendar.
 - When one utterance reports several distinct done things, create a separate action for EACH — then a separate log per action, attached via action_id (create the action first so you have the id). A log about an action must never be left dangling without its action_id. One extra general log is fine only for leftover narrative that belongs to none of them.
 - Action titles are imperative verb phrases ("Walk the dog", "Call the dentist") — never past tense ("Walked the dog") and never gerunds ("Walking the dog"). Whether it happened or is finished lives in status/started_at/ended_at, not in the title's wording.
 - After recording a done action, if the user hasn't said how it went, end your reply with ONE brief reflective question (what happened / how did it feel / was it worthwhile?). Their answer becomes a reflection log attached to that action. Never more than one question per turn, and drop it if they clearly don't want to reflect.
 - When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create todos or actions, re-file or split the log, fix the summary — don't limit yourself to re-attaching.
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
-- delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.`;
+- delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
+- MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
+- NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.`;
+
+/** Extra system prompt for 'plan' sessions ("what should I do today?"). */
+const PLAN_ADDENDUM = `
+
+THIS IS A PLANNING SESSION. The user wants help deciding what to do today. Different rules apply:
+- Be conversational and proactive — the silent-by-default rule is suspended. You're a thinking partner, not a stenographer.
+- Start from the evidence in the context: today's scheduled actions, overdue/stalled items, in-progress todos, what recent logs say they've been working on or avoiding. Weigh energy and mood if their words hint at it.
+- Propose a SHORT candidate plan (3-5 items max, less is fine) with one line of reasoning each, then ask what resonates. One question at a time; iterate.
+- As items are agreed, schedule them: all-day actions via scheduled_date for "today"-level commitments, timed only if the user names a time. Update todo statuses to scheduled.
+- If something on the list has been repeatedly deferred, gently name it and ask what's making it hard — that answer is worth a log.
+- Still file logs for anything notable the user says along the way.`;
 
 function contextBlock(data: {
   clock: { iso: string; pretty: string };
   learnings: string;
+  memories: { key: string; content: string }[];
+  notifications: { slot: string; title: string; body: string | null }[];
   projects: ProjectRow[];
   todos: TodoRow[];
   actions: ActionRow[];
+  recentLogs: LogRow[];
   contextEntity: string;
   changeFeedSoFar: string;
 }): string {
@@ -646,16 +762,29 @@ function contextBlock(data: {
   const actions = data.actions
     .map((a) => {
       const when = a.scheduled_start ?? a.started_at;
-      return `#${a.id} ${a.title ?? "untitled"} [${a.status}]${when ? ` @ ${new Date(when * 1000).toISOString()}` : ""}${a.todo_id ? ` (todo #${a.todo_id})` : ""}`;
+      const at = when
+        ? ` @ ${a.all_day ? new Date(when * 1000).toISOString().slice(0, 10) + " (all day)" : new Date(when * 1000).toISOString()}`
+        : "";
+      return `#${a.id} ${a.title ?? "untitled"} [${a.status}]${at}${a.todo_id ? ` (todo #${a.todo_id})` : ""}`;
     })
+    .join("\n");
+  const memories = data.memories.map((m) => `[${m.key}] ${m.content}`).join("\n");
+  const notifications = data.notifications
+    .map((n) => `[${n.slot}] ${n.title}${n.body ? ` — ${n.body}` : ""}`)
+    .join("\n");
+  const logs = data.recentLogs
+    .map((l) => `- [${new Date(l.occurred_at * 1000).toISOString().slice(0, 10)}] (${l.kind}) ${l.summary}`)
     .join("\n");
   return [
     `Current time: ${data.clock.pretty}. ISO: ${data.clock.iso}.`,
     data.learnings.trim() ? `What you've learned about this user (apply it):\n${data.learnings.trim()}` : "",
+    memories ? `Your memory notes:\n${memories}` : "",
+    notifications ? `Notifications currently shown to the user (clear a slot once its question is answered):\n${notifications}` : "",
     data.contextEntity ? `The user is currently looking at:\n${data.contextEntity}` : "",
     `Projects:\n${projects || "(none)"}`,
     `Open todos:\n${todos || "(none)"}`,
     `Actions (yesterday → next 7 days):\n${actions || "(none)"}`,
+    logs ? `Recent logs (newest first):\n${logs}` : "",
     data.changeFeedSoFar ? `Changes already made earlier in this conversation:\n${data.changeFeedSoFar}` : "",
   ]
     .filter(Boolean)
@@ -736,12 +865,17 @@ export async function runTurn(
   const tz = user.timezone ?? env.TIMEZONE;
   const t = now();
 
-  const [learnings, projects, todos, actions, contextEntity, priorMessages, priorEvents] =
+  const planMode = session.mode === "plan";
+  const [learnings, memories, notifications, projects, todos, actions, recentLogs, contextEntity, priorMessages, priorEvents] =
     await Promise.all([
       getLearnings(env, user.id),
+      listMemories(env, user.id),
+      listNotifications(env, user.id),
       listProjects(env, user.id),
       listTodos(env, user.id),
       listActions(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
+      // Planning wants the recent story; regular turns keep context lean.
+      planMode ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
       describeContextEntity(env, session, user.id),
       sessionMessages(env, session.id),
       recentSessionEvents(env, session.id),
@@ -749,13 +883,17 @@ export async function runTurn(
 
   const system =
     SYSTEM_PROMPT +
+    (planMode ? PLAN_ADDENDUM : "") +
     "\n\n" +
     contextBlock({
       clock: nowInZone(tz),
       learnings,
+      memories,
+      notifications,
       projects,
       todos,
       actions,
+      recentLogs,
       contextEntity,
       changeFeedSoFar: priorEvents
         .map((e) => `- ${e.kind} ${e.entity_type} #${e.entity_id}`)

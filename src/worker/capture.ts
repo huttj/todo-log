@@ -25,7 +25,10 @@ export const capture = new Hono<AppContext>();
 capture.use("*", requireEnabled);
 
 capture.post("/sessions", async (c) => {
-  const body = await c.req.json<{ context_type?: string; context_id?: number }>().catch(() => ({}) as Record<string, never>);
+  const body = await c.req
+    .json<{ context_type?: string; context_id?: number; mode?: string }>()
+    .catch(() => ({}) as Record<string, never>);
+  const mode = body.mode === "plan" ? "plan" : null;
   // A past chat as context is stored in its own column — the context_type
   // CHECK predates it and can't be widened in place on remote D1.
   if (body.context_type === "session" && body.context_id) {
@@ -33,6 +36,7 @@ capture.post("/sessions", async (c) => {
       type: null,
       id: null,
       aboutSessionId: body.context_id,
+      mode,
     });
     return c.json(session);
   }
@@ -42,6 +46,7 @@ capture.post("/sessions", async (c) => {
   const session = await createSession(c.env, c.get("user").id, {
     type,
     id: type && body.context_id ? body.context_id : null,
+    mode,
   });
   return c.json(session);
 });

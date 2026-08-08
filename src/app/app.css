@@ -1800,3 +1800,128 @@ blockquote audio {
 .landing-foot a {
   color: inherit;
 }
+
+/* -- today view -- */
+.today-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.today-head .today-title {
+  margin: 1rem 0 0.4rem;
+}
+
+.plan-btn {
+  border: none;
+  border-radius: 2rem;
+  padding: 0.5rem 1rem;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 0.88rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* -- notification bell -- */
+.bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.bell {
+  position: relative;
+}
+
+.bell-badge {
+  position: absolute;
+  top: 0.05rem;
+  right: 0.05rem;
+  background: #b3261e;
+  color: #fff;
+  font-size: 0.6rem;
+  line-height: 1;
+  border-radius: 0.6rem;
+  padding: 0.15rem 0.3rem;
+  min-width: 0.9rem;
+  text-align: center;
+}
+
+.notif-panel {
+  position: absolute;
+  top: 2.4rem;
+  right: 0;
+  width: min(20rem, calc(100vw - 2rem));
+  background: #fff;
+  border: 1px solid #e2e0da;
+  border-radius: 0.8rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  padding: 0.6rem;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notif {
+  border-bottom: 1px solid #f1efe9;
+  padding-bottom: 0.5rem;
+}
+
+.notif:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.notif-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.notif p {
+  font-size: 0.85rem;
+  color: #444;
+  line-height: 1.45;
+  margin: 0.25rem 0;
+}
+
+.notif-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.notif-foot .when {
+  font-size: 0.72rem;
+  color: #999;
+}
+
+/* -- replay message playback -- */
+.msg-play {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: inherit;
+  opacity: 0.55;
+  padding: 0.15rem 0;
+  margin-top: 0.2rem;
+}
+
+.msg-play:hover {
+  opacity: 1;
+}
+
+.msg-play:disabled {
+  cursor: default;
+  opacity: 0.4;
+}

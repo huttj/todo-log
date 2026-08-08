@@ -53,10 +53,12 @@ export default function Calendar(props: {
             onClick={() => navigate(`/actions/${a.id}`)}
           >
             <span className="time">
-              {new Date(when * 1000).toLocaleTimeString(undefined, {
-                hour: "numeric",
-                minute: "2-digit",
-              })}
+              {a.all_day
+                ? "all day"
+                : new Date(when * 1000).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
             </span>
             <span className="title">{title}</span>
             <select

@@ -33,7 +33,17 @@ export interface Action {
   started_at: number | null;
   ended_at: number | null;
   status: "scheduled" | "in_progress" | "done" | "skipped" | "canceled";
+  all_day: number;
   created_at: number;
+}
+
+export interface AppNotification {
+  id: number;
+  slot: string;
+  title: string;
+  body: string | null;
+  read: number;
+  updated_at: number;
 }
 
 export interface Log {

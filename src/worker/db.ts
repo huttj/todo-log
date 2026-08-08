@@ -9,6 +9,8 @@ import type {
   MessageRow,
   AudioSegmentRow,
   EventRow,
+  NotificationRow,
+  AgentMemoryRow,
   EntityType,
 } from "./types";
 
@@ -258,13 +260,19 @@ export async function listLogs(
 export async function createSession(
   env: Env,
   userId: number,
-  context: { type: string | null; id: number | null; aboutSessionId?: number | null },
+  context: {
+    type: string | null;
+    id: number | null;
+    aboutSessionId?: number | null;
+    mode?: string | null;
+  },
 ): Promise<SessionRow> {
   return insertRow<SessionRow>(env, "sessions", {
     user_id: userId,
     context_type: context.type,
     context_id: context.id,
     about_session_id: context.aboutSessionId ?? null,
+    mode: context.mode ?? null,
     started_at: now(),
   });
 }
@@ -458,6 +466,72 @@ export async function markCorrectionsProcessed(env: Env, ids: number[]): Promise
   )
     .bind(...ids)
     .run();
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (agent-controlled, one living row per slot) / agent memory
+// ---------------------------------------------------------------------------
+
+export async function setNotification(
+  env: Env,
+  userId: number,
+  slot: string,
+  title: string,
+  body: string | null,
+): Promise<void> {
+  const t = now();
+  await env.DB.prepare(
+    `INSERT INTO notifications (user_id, slot, title, body, read, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, ?, ?)
+     ON CONFLICT(user_id, slot) DO UPDATE SET
+       title = excluded.title, body = excluded.body, read = 0, updated_at = excluded.updated_at`,
+  )
+    .bind(userId, slot, title, body, t, t)
+    .run();
+}
+
+export async function clearNotification(env: Env, userId: number, slot: string): Promise<void> {
+  await env.DB.prepare(`DELETE FROM notifications WHERE user_id = ? AND slot = ?`)
+    .bind(userId, slot)
+    .run();
+}
+
+export async function listNotifications(env: Env, userId: number): Promise<NotificationRow[]> {
+  const r = await env.DB.prepare(
+    `SELECT * FROM notifications WHERE user_id = ? ORDER BY updated_at DESC`,
+  )
+    .bind(userId)
+    .all<NotificationRow>();
+  return r.results;
+}
+
+export async function saveMemory(env: Env, userId: number, key: string, content: string): Promise<void> {
+  if (!content.trim()) {
+    await env.DB.prepare(`DELETE FROM agent_memory WHERE user_id = ? AND key = ?`)
+      .bind(userId, key)
+      .run();
+    return;
+  }
+  await env.DB.prepare(
+    `INSERT INTO agent_memory (user_id, key, content, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id, key) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at`,
+  )
+    .bind(userId, key, content.trim(), now())
+    .run();
+}
+
+export async function listMemories(env: Env, userId: number): Promise<AgentMemoryRow[]> {
+  const r = await env.DB.prepare(
+    `SELECT * FROM agent_memory WHERE user_id = ? ORDER BY key`,
+  )
+    .bind(userId)
+    .all<AgentMemoryRow>();
+  return r.results;
+}
+
+export async function enabledUsers(env: Env): Promise<UserRow[]> {
+  const r = await env.DB.prepare(`SELECT * FROM users WHERE enabled = 1`).all<UserRow>();
+  return r.results;
 }
 
 export async function getLearnings(env: Env, userId: number): Promise<string> {

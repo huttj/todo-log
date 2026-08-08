@@ -56,6 +56,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function Capture(props: {
   context: CaptureContext | null;
+  mode?: "plan";
   autoStart: boolean;
   onClose: () => void;
   onChanged: () => void;
@@ -155,10 +156,12 @@ export default function Capture(props: {
     const s = await post<CaptureSession>("/sessions", {
       context_type: ctxRef.current?.type,
       context_id: ctxRef.current?.id,
+      mode: props.mode,
     });
     sessionRef.current = s;
     setSessionStarted(true);
     return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const ensureMessage = useCallback(async (): Promise<number> => {
@@ -605,7 +608,9 @@ export default function Capture(props: {
       />
       <header>
         <span className="context-chip">
-          {ctx ? (
+          {props.mode === "plan" ? (
+            <strong>Planning the day</strong>
+          ) : ctx ? (
             <>
               {ctx.type === "session" ? "chat" : ctx.type}: <strong>{ctx.label}</strong>
             </>

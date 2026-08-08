@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faSun,
   faLayerGroup,
   faBookOpen,
   faCalendarDays,
@@ -9,6 +10,8 @@ import {
   faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
 import Search from "./components/Search";
+import Bell from "./components/Bell";
+import Today from "./views/Today";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -20,7 +23,7 @@ import { Sessions, SessionView } from "./views/Sessions";
 import Calendar from "./views/Calendar";
 import Landing from "./views/Landing";
 import Capture, { type CaptureContext } from "./Capture";
-import { TALK_EVENT } from "./talk";
+import { TALK_EVENT, type TalkRequest } from "./talk";
 
 type AuthState = "loading" | "signed-out" | "waitlist" | "ready";
 
@@ -31,6 +34,7 @@ export default function App() {
   const [focus, setFocus] = useState<CaptureContext | null>(null);
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureAutoStart, setCaptureAutoStart] = useState(false);
+  const [captureMode, setCaptureMode] = useState<"plan" | undefined>(undefined);
   const [captureKey, setCaptureKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -39,8 +43,9 @@ export default function App() {
   // (e.g. a log card's reprocess button).
   useEffect(() => {
     const handler = (e: Event) => {
-      const ctx = (e as CustomEvent).detail as CaptureContext | null;
-      setFocus(ctx);
+      const req = (e as CustomEvent).detail as TalkRequest;
+      setFocus(req.context);
+      setCaptureMode(req.mode);
       setCaptureAutoStart(false);
       setCaptureKey((k) => k + 1); // fresh session bound to the new context
       setCaptureOpen(true);
@@ -57,6 +62,7 @@ export default function App() {
   const [talkHint, setTalkHint] = useState(false);
 
   const openCapture = (autoStart: boolean) => {
+    setCaptureMode(undefined);
     setCaptureAutoStart(autoStart);
     setCaptureOpen(true);
   };
@@ -118,7 +124,15 @@ export default function App() {
           <Link to="/">Todo Log</Link>
         </h1>
         <nav>
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")} title="Projects">
+          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")} title="Today">
+            <FontAwesomeIcon icon={faSun} />
+            <span className="nav-label">Today</span>
+          </NavLink>
+          <NavLink
+            to="/projects"
+            className={({ isActive }) => (isActive ? "active" : "")}
+            title="Projects"
+          >
             <FontAwesomeIcon icon={faLayerGroup} />
             <span className="nav-label">Projects</span>
           </NavLink>
@@ -145,12 +159,14 @@ export default function App() {
           <button className="nav-search" title="Search" onClick={() => setSearchOpen(true)}>
             <FontAwesomeIcon icon={faMagnifyingGlass} />
           </button>
+          <Bell refreshKey={refreshKey} />
         </nav>
       </header>
 
       <main>
         <Routes>
-          <Route path="/" element={<ProjectsHome {...viewProps} />} />
+          <Route path="/" element={<Today {...viewProps} />} />
+          <Route path="/projects" element={<ProjectsHome {...viewProps} />} />
           <Route path="/projects/:id" element={<ProjectView {...viewProps} />} />
           <Route path="/todos/:id" element={<TodoView {...viewProps} />} />
           <Route path="/logs" element={<Logs {...viewProps} />} />
@@ -184,7 +200,8 @@ export default function App() {
       {captureOpen && (
         <Capture
           key={captureKey}
-          context={focus}
+          context={captureMode === "plan" ? null : focus}
+          mode={captureMode}
           autoStart={captureAutoStart}
           onClose={() => setCaptureOpen(false)}
           onChanged={() => setRefreshKey((k) => k + 1)}

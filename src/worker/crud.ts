@@ -15,6 +15,7 @@ import {
   searchAll,
   insertEvent,
   getEvent,
+  listNotifications,
   ENTITY_TABLES,
 } from "./db";
 import type { EntityType, ProjectRow, TodoRow, ActionRow } from "./types";
@@ -148,6 +149,24 @@ crud.get("/logs", async (c) => {
       limit: q.limit ? Math.min(Number(q.limit), 200) : undefined,
     }),
   );
+});
+
+// -- Notifications (written by the agent; the app reads/acknowledges) -------
+
+crud.get("/notifications", async (c) => c.json(await listNotifications(c.env, c.get("user").id)));
+
+crud.post("/notifications/:id/read", async (c) => {
+  await c.env.DB.prepare(`UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?`)
+    .bind(Number(c.req.param("id")), c.get("user").id)
+    .run();
+  return c.json({ ok: true });
+});
+
+crud.delete("/notifications/:id", async (c) => {
+  await c.env.DB.prepare(`DELETE FROM notifications WHERE id = ? AND user_id = ?`)
+    .bind(Number(c.req.param("id")), c.get("user").id)
+    .run();
+  return c.json({ ok: true });
 });
 
 // Omni search across projects, todos, and logs.
