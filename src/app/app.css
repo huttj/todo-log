@@ -1129,6 +1129,25 @@ blockquote audio {
   margin-top: 2rem;
 }
 
+/* Right-aligned eye toggle in section headings */
+.h2-toggle {
+  margin-left: auto;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #b5b2a8;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.3rem;
+}
+
+.h2-toggle:hover {
+  color: #888;
+}
+
+.h2-toggle.on {
+  color: #4a6da7;
+}
+
 .project-detail {
   border-left: 2px solid #e8e6e0;
   padding: 0.4rem 0 0.4rem 0.75rem;
