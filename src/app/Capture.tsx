@@ -63,7 +63,8 @@ export default function Capture(props: {
   const [ctx, setCtx] = useState<CaptureContext | null>(props.context);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  /** Dock height in px while user-resized; null = default (content-sized). */
+  const [dockHeight, setDockHeight] = useState<number | null>(null);
   const [messageId, setMessageId] = useState<number | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [transcribing, setTranscribing] = useState(false);
@@ -530,38 +531,77 @@ export default function Capture(props: {
     setCtx(null);
   }
 
-  // Drag the handle up to expand the dock to full screen, down to restore;
-  // a plain tap toggles.
-  const handleStartY = useRef(0);
-  const handleFired = useRef(false);
+  // Handle: drag resizes the dock live, a fling snaps to full/default, and a
+  // plain tap toggles between the two.
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{
+    grabOffset: number;
+    bottom: number;
+    startY: number;
+    prevY: number;
+    prevT: number;
+    lastY: number;
+    lastT: number;
+    moved: boolean;
+  } | null>(null);
+  const MIN_DOCK = 190;
+  const maxDock = () => window.innerHeight - 8;
+
   const handleDown = (e: React.PointerEvent) => {
-    handleStartY.current = e.clientY;
-    handleFired.current = false;
+    const rect = dockRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = {
+      grabOffset: e.clientY - rect.top,
+      bottom: rect.bottom,
+      startY: e.clientY,
+      prevY: e.clientY,
+      prevT: e.timeStamp,
+      lastY: e.clientY,
+      lastT: e.timeStamp,
+      moved: false,
+    };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
   const handleMove = (e: React.PointerEvent) => {
-    if (handleFired.current) return;
-    const delta = handleStartY.current - e.clientY;
-    if (delta > 40) {
-      handleFired.current = true;
-      setExpanded(true);
-    } else if (delta < -40) {
-      handleFired.current = true;
-      setExpanded(false);
+    const d = dragRef.current;
+    if (!d) return;
+    if (Math.abs(e.clientY - d.startY) > 6) d.moved = true;
+    if (d.moved) {
+      setDockHeight(Math.min(maxDock(), Math.max(MIN_DOCK, d.bottom - e.clientY + d.grabOffset)));
     }
+    d.prevY = d.lastY;
+    d.prevT = d.lastT;
+    d.lastY = e.clientY;
+    d.lastT = e.timeStamp;
   };
   const handleUp = () => {
-    if (!handleFired.current) setExpanded((x) => !x);
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    if (!d.moved) {
+      // Tap: toggle default ↔ full.
+      setDockHeight((h) => (h == null ? maxDock() : null));
+      return;
+    }
+    // Fling: snap in the flick's direction; otherwise stay where dropped.
+    const v = (d.lastY - d.prevY) / Math.max(1, d.lastT - d.prevT);
+    if (v < -0.4) setDockHeight(maxDock());
+    else if (v > 0.4) setDockHeight(null);
   };
 
   return (
-    <div className={`capture-dock ${expanded ? "expanded" : ""}`}>
+    <div
+      ref={dockRef}
+      className={`capture-dock ${dockHeight != null ? "resized" : ""}`}
+      style={dockHeight != null ? { height: dockHeight, maxHeight: "none" } : undefined}
+    >
       <div
         className="dock-handle"
-        title={expanded ? "Drag down to shrink" : "Drag up to expand"}
+        title="Drag to resize · tap to toggle full screen"
         onPointerDown={handleDown}
         onPointerMove={handleMove}
         onPointerUp={handleUp}
+        onPointerCancel={() => (dragRef.current = null)}
       />
       <header>
         <span className="context-chip">

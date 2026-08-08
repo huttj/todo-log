@@ -736,17 +736,13 @@ blockquote audio {
   z-index: 10;
 }
 
-.capture-dock.expanded {
-  top: 0.5rem;
+/* User-resized (dragged/tapped): height is inline; let the chat fill it and
+   keep the composer pinned to the bottom even when the chat is empty. */
+.capture-dock.resized .chat {
   max-height: none;
 }
 
-.capture-dock.expanded .chat {
-  max-height: none;
-}
-
-/* No chat yet: keep the composer anchored at the bottom when expanded. */
-.capture-dock.expanded .composer {
+.capture-dock.resized .composer {
   margin-top: auto;
 }
 
