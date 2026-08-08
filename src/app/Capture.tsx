@@ -63,9 +63,8 @@ export default function Capture(props: {
   const [ctx, setCtx] = useState<CaptureContext | null>(props.context);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [messageId, setMessageId] = useState<number | null>(null);
-  const [pendingUploads, setPendingUploads] = useState(0);
-  const [closingSegs, setClosingSegs] = useState(0);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [transcribing, setTranscribing] = useState(false);
   const [chat, setChat] = useState<ChatEntry[]>([]);
@@ -94,11 +93,9 @@ export default function Capture(props: {
 
   const bumpUploads = (d: number) => {
     uploadsRef.current += d;
-    setPendingUploads((n) => n + d);
   };
   const bumpClosing = (d: number) => {
     closingRef.current = Math.max(0, closingRef.current + d);
-    setClosingSegs((n) => Math.max(0, n + d));
   };
 
   // Draft survives closes/reloads until it's actually sent.
@@ -219,7 +216,10 @@ export default function Capture(props: {
         if (duration < 0.4 || chunks.length === 0) return;
         const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
         bumpUploads(1);
-        setTranscribing(true);
+        // Only flag the composer as transcribing if this segment's transcript
+        // will actually land there — after Send the message belongs to the
+        // chat (the queue folds late transcripts in server-side).
+        if (messageIdRef.current === msgId) setTranscribing(true);
         uploadSegment(msgId, seq, duration, blob)
           .catch((e) => setError(String(e.message ?? e)))
           .finally(() => bumpUploads(-1));
@@ -266,7 +266,10 @@ export default function Capture(props: {
     }
   }, [props.autoStart, startRecording]);
 
-  const busy = pendingUploads > 0 || transcribing || closingSegs > 0;
+  // Composer indicator: only transcription that will land in the box. The
+  // global upload/closing counters gate the send queue but cover already-sent
+  // messages too, so they must not drive it.
+  const busy = transcribing;
   const hasContent = draft.trim().length > 0 || seqRef.current > 0;
 
   const updateEntry = (id: number, fn: (e: ChatEntry) => ChatEntry) =>
@@ -527,8 +530,39 @@ export default function Capture(props: {
     setCtx(null);
   }
 
+  // Drag the handle up to expand the dock to full screen, down to restore;
+  // a plain tap toggles.
+  const handleStartY = useRef(0);
+  const handleFired = useRef(false);
+  const handleDown = (e: React.PointerEvent) => {
+    handleStartY.current = e.clientY;
+    handleFired.current = false;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const handleMove = (e: React.PointerEvent) => {
+    if (handleFired.current) return;
+    const delta = handleStartY.current - e.clientY;
+    if (delta > 40) {
+      handleFired.current = true;
+      setExpanded(true);
+    } else if (delta < -40) {
+      handleFired.current = true;
+      setExpanded(false);
+    }
+  };
+  const handleUp = () => {
+    if (!handleFired.current) setExpanded((x) => !x);
+  };
+
   return (
-    <div className="capture-dock">
+    <div className={`capture-dock ${expanded ? "expanded" : ""}`}>
+      <div
+        className="dock-handle"
+        title={expanded ? "Drag down to shrink" : "Drag up to expand"}
+        onPointerDown={handleDown}
+        onPointerMove={handleMove}
+        onPointerUp={handleUp}
+      />
       <header>
         <span className="context-chip">
           {ctx ? (

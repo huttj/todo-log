@@ -736,6 +736,39 @@ blockquote audio {
   z-index: 10;
 }
 
+.capture-dock.expanded {
+  top: 0.5rem;
+  max-height: none;
+}
+
+.capture-dock.expanded .chat {
+  max-height: none;
+}
+
+/* No chat yet: keep the composer anchored at the bottom when expanded. */
+.capture-dock.expanded .composer {
+  margin-top: auto;
+}
+
+.dock-handle {
+  align-self: center;
+  width: 4rem;
+  padding: 0.25rem 0;
+  margin: -0.35rem 0 -0.3rem;
+  display: flex;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dock-handle::before {
+  content: "";
+  width: 2.6rem;
+  height: 0.28rem;
+  border-radius: 0.14rem;
+  background: #d5d2c8;
+}
+
 .app.dock-open main {
   padding-bottom: 45dvh;
 }
