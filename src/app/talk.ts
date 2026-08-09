@@ -8,9 +8,14 @@ export interface TalkRequest {
   context: CaptureContext | null;
   /** 'plan' opens a day-planning session. */
   mode?: "plan";
+  /** Set when replying to a notification — becomes the session's context. */
+  replyTo?: { id: number; title: string };
 }
 
-export function requestTalk(ctx: CaptureContext | null, opts?: { mode?: "plan" }) {
-  const detail: TalkRequest = { context: ctx, mode: opts?.mode };
+export function requestTalk(
+  ctx: CaptureContext | null,
+  opts?: { mode?: "plan"; replyTo?: { id: number; title: string } },
+) {
+  const detail: TalkRequest = { context: ctx, mode: opts?.mode, replyTo: opts?.replyTo };
   window.dispatchEvent(new CustomEvent(TALK_EVENT, { detail }));
 }

@@ -99,6 +99,8 @@ export interface SessionRow {
   about_session_id: number | null;
   /** 'plan' = day-planning session (planning prompt addendum). */
   mode: string | null;
+  /** Set when the session started from a notification's reply button. */
+  re_notification_id: number | null;
   started_at: number;
   ended_at: number | null;
 }
@@ -110,8 +112,15 @@ export interface NotificationRow {
   title: string;
   body: string | null;
   read: number;
+  dismissed_at: number | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface BriefingRow {
+  user_id: number;
+  content_json: string;
+  generated_at: number;
 }
 
 export interface AgentMemoryRow {

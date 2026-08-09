@@ -19,6 +19,7 @@ import {
 } from "./db";
 import { transcribe } from "./transcribe";
 import { runTurn } from "./agent";
+import { generateBriefing } from "./briefing";
 import type { AudioSegmentRow, LogRow, MessageRow, SessionRow } from "./types";
 
 export const capture = new Hono<AppContext>();
@@ -26,9 +27,10 @@ capture.use("*", requireEnabled);
 
 capture.post("/sessions", async (c) => {
   const body = await c.req
-    .json<{ context_type?: string; context_id?: number; mode?: string }>()
+    .json<{ context_type?: string; context_id?: number; mode?: string; notification_id?: number }>()
     .catch(() => ({}) as Record<string, never>);
   const mode = body.mode === "plan" ? "plan" : null;
+  const reNotificationId = typeof body.notification_id === "number" ? body.notification_id : null;
   // A past chat as context is stored in its own column — the context_type
   // CHECK predates it and can't be widened in place on remote D1.
   if (body.context_type === "session" && body.context_id) {
@@ -37,6 +39,7 @@ capture.post("/sessions", async (c) => {
       id: null,
       aboutSessionId: body.context_id,
       mode,
+      reNotificationId,
     });
     return c.json(session);
   }
@@ -47,6 +50,7 @@ capture.post("/sessions", async (c) => {
     type,
     id: type && body.context_id ? body.context_id : null,
     mode,
+    reNotificationId,
   });
   return c.json(session);
 });
@@ -250,9 +254,14 @@ capture.post("/messages/:id/send", async (c) => {
           created_at: now(),
         });
         await emit({ type: "done", reply: result.reply, feed: result.feed });
+        await writer.close().catch(() => {});
+        // Every turn can change what today looks like — recompute the briefing
+        // (after closing the stream so the client never waits on it).
+        await generateBriefing(c.env, user).catch((err) =>
+          console.error("briefing regeneration after turn failed:", err),
+        );
       } catch (err) {
         await emit({ type: "error", error: err instanceof Error ? err.message : String(err) });
-      } finally {
         await writer.close().catch(() => {});
       }
     })(),

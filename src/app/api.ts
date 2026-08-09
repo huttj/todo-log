@@ -46,6 +46,15 @@ export interface AppNotification {
   updated_at: number;
 }
 
+export interface Briefing {
+  headline: string;
+  today: string[];
+  tomorrow: string[];
+  projects: { project_id: number | null; name: string; line: string }[];
+  oneoffs: string[];
+  week: string[];
+}
+
 export interface Log {
   id: number;
   message_id: number | null;

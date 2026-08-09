@@ -15,8 +15,10 @@ import {
   listTodos,
   listMemories,
   setNotification,
+  getBriefing,
 } from "./db";
 import { transcribe } from "./transcribe";
+import { generateBriefing } from "./briefing";
 
 const DISTILL_MODEL = "claude-opus-5";
 const CHECKIN_MODEL = "claude-sonnet-5";
@@ -27,6 +29,30 @@ export async function runSweep(env: Env): Promise<void> {
   await healSegments(env);
   await distillCorrections(env);
   await runCheckins(env);
+  await refreshStaleBriefings(env);
+}
+
+/** Chats regenerate the briefing; cron covers the mornings and quiet days —
+ * refresh whenever it's stale (> 4h) during waking hours. */
+async function refreshStaleBriefings(env: Env): Promise<void> {
+  let users: UserRow[];
+  try {
+    users = await enabledUsers(env);
+  } catch {
+    return;
+  }
+  const t = now();
+  for (const user of users) {
+    try {
+      const hour = hourInZone(user.timezone ?? env.TIMEZONE);
+      if (hour < 6 || hour >= 23) continue;
+      const current = await getBriefing(env, user.id);
+      if (current && t - current.generated_at < 4 * 3600) continue;
+      await generateBriefing(env, user);
+    } catch (err) {
+      console.error(`sweep: briefing refresh for user ${user.id} failed:`, err);
+    }
+  }
 }
 
 async function healSegments(env: Env): Promise<void> {

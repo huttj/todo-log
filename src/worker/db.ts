@@ -11,6 +11,7 @@ import type {
   EventRow,
   NotificationRow,
   AgentMemoryRow,
+  BriefingRow,
   EntityType,
 } from "./types";
 
@@ -265,6 +266,7 @@ export async function createSession(
     id: number | null;
     aboutSessionId?: number | null;
     mode?: string | null;
+    reNotificationId?: number | null;
   },
 ): Promise<SessionRow> {
   return insertRow<SessionRow>(env, "sessions", {
@@ -273,6 +275,7 @@ export async function createSession(
     context_id: context.id,
     about_session_id: context.aboutSessionId ?? null,
     mode: context.mode ?? null,
+    re_notification_id: context.reNotificationId ?? null,
     started_at: now(),
   });
 }
@@ -484,25 +487,61 @@ export async function setNotification(
     `INSERT INTO notifications (user_id, slot, title, body, read, created_at, updated_at)
      VALUES (?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(user_id, slot) DO UPDATE SET
-       title = excluded.title, body = excluded.body, read = 0, updated_at = excluded.updated_at`,
+       title = excluded.title, body = excluded.body, read = 0, dismissed_at = NULL,
+       updated_at = excluded.updated_at`,
   )
     .bind(userId, slot, title, body, t, t)
     .run();
 }
 
+/** Agent's clear = user's dismiss: keep the row as history. */
 export async function clearNotification(env: Env, userId: number, slot: string): Promise<void> {
-  await env.DB.prepare(`DELETE FROM notifications WHERE user_id = ? AND slot = ?`)
-    .bind(userId, slot)
+  await env.DB.prepare(
+    `UPDATE notifications SET dismissed_at = ? WHERE user_id = ? AND slot = ? AND dismissed_at IS NULL`,
+  )
+    .bind(now(), userId, slot)
     .run();
 }
 
+export async function dismissNotification(env: Env, userId: number, id: number): Promise<void> {
+  await env.DB.prepare(`UPDATE notifications SET dismissed_at = ? WHERE id = ? AND user_id = ?`)
+    .bind(now(), id, userId)
+    .run();
+}
+
+/** Active (non-dismissed) notifications, newest first. */
 export async function listNotifications(env: Env, userId: number): Promise<NotificationRow[]> {
   const r = await env.DB.prepare(
-    `SELECT * FROM notifications WHERE user_id = ? ORDER BY updated_at DESC`,
+    `SELECT * FROM notifications WHERE user_id = ? AND dismissed_at IS NULL ORDER BY updated_at DESC`,
   )
     .bind(userId)
     .all<NotificationRow>();
   return r.results;
+}
+
+export async function getNotificationById(
+  env: Env,
+  userId: number,
+  id: number,
+): Promise<NotificationRow | null> {
+  return env.DB.prepare(`SELECT * FROM notifications WHERE id = ? AND user_id = ?`)
+    .bind(id, userId)
+    .first<NotificationRow>();
+}
+
+export async function getBriefing(env: Env, userId: number): Promise<BriefingRow | null> {
+  return env.DB.prepare(`SELECT * FROM briefings WHERE user_id = ?`)
+    .bind(userId)
+    .first<BriefingRow>();
+}
+
+export async function setBriefing(env: Env, userId: number, contentJson: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO briefings (user_id, content_json, generated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET content_json = excluded.content_json, generated_at = excluded.generated_at`,
+  )
+    .bind(userId, contentJson, now())
+    .run();
 }
 
 export async function saveMemory(env: Env, userId: number, key: string, content: string): Promise<void> {

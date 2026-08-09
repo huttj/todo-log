@@ -16,8 +16,11 @@ import {
   insertEvent,
   getEvent,
   listNotifications,
+  dismissNotification,
+  getBriefing,
   ENTITY_TABLES,
 } from "./db";
+import { generateBriefing } from "./briefing";
 import type { EntityType, ProjectRow, TodoRow, ActionRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -163,10 +166,26 @@ crud.post("/notifications/:id/read", async (c) => {
 });
 
 crud.delete("/notifications/:id", async (c) => {
-  await c.env.DB.prepare(`DELETE FROM notifications WHERE id = ? AND user_id = ?`)
-    .bind(Number(c.req.param("id")), c.get("user").id)
-    .run();
+  await dismissNotification(c.env, c.get("user").id, Number(c.req.param("id")));
   return c.json({ ok: true });
+});
+
+// -- Daily briefing ---------------------------------------------------------
+
+crud.get("/briefing", async (c) => {
+  const row = await getBriefing(c.env, c.get("user").id);
+  if (!row) return c.json({ briefing: null, generated_at: null });
+  try {
+    return c.json({ briefing: JSON.parse(row.content_json), generated_at: row.generated_at });
+  } catch {
+    return c.json({ briefing: null, generated_at: null });
+  }
+});
+
+crud.post("/briefing/refresh", async (c) => {
+  const briefing = await generateBriefing(c.env, c.get("user"));
+  if (!briefing) return c.json({ error: "briefing generation failed — try again" }, 502);
+  return c.json({ briefing, generated_at: now() });
 });
 
 // Omni search across projects, todos, and logs.

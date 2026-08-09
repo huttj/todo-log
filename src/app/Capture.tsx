@@ -57,6 +57,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export default function Capture(props: {
   context: CaptureContext | null;
   mode?: "plan";
+  replyTo?: { id: number; title: string };
   autoStart: boolean;
   onClose: () => void;
   onChanged: () => void;
@@ -157,6 +158,7 @@ export default function Capture(props: {
       context_type: ctxRef.current?.type,
       context_id: ctxRef.current?.id,
       mode: props.mode,
+      notification_id: props.replyTo?.id,
     });
     sessionRef.current = s;
     setSessionStarted(true);
@@ -608,7 +610,11 @@ export default function Capture(props: {
       />
       <header>
         <span className="context-chip">
-          {props.mode === "plan" ? (
+          {props.replyTo ? (
+            <>
+              re: <strong>{props.replyTo.title.slice(0, 48)}</strong>
+            </>
+          ) : props.mode === "plan" ? (
             <strong>Planning the day</strong>
           ) : ctx ? (
             <>

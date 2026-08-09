@@ -81,7 +81,7 @@ export default function Bell(props: { refreshKey: number }) {
                   className="link"
                   onClick={() => {
                     setOpen(false);
-                    requestTalk(null);
+                    requestTalk(null, { replyTo: { id: n.id, title: n.title } });
                   }}
                 >
                   <FontAwesomeIcon icon={faReply} /> reply

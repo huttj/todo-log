@@ -34,6 +34,8 @@ import {
   setNotification,
   clearNotification,
   listNotifications,
+  getNotificationById,
+  getBriefing,
   saveMemory,
   listMemories,
   recentSessionEvents,
@@ -792,6 +794,13 @@ function contextBlock(data: {
 }
 
 async function describeContextEntity(env: Env, session: SessionRow, userId: number): Promise<string> {
+  // Replying to a notification you left: the notification IS the context.
+  if (session.re_notification_id) {
+    const n = await getNotificationById(env, userId, session.re_notification_id);
+    if (n) {
+      return `The user tapped "reply" on this notification you left them — their messages answer it:\n[${n.slot}] ${n.title}${n.body ? ` — ${n.body}` : ""}\n(When answered, clear_notification("${n.slot}").)`;
+    }
+  }
   // A past chat as context: the user opened Talk from that chat's replay page,
   // so this conversation is ABOUT that one — include its transcript and feed.
   if (session.about_session_id) {
@@ -866,7 +875,7 @@ export async function runTurn(
   const t = now();
 
   const planMode = session.mode === "plan";
-  const [learnings, memories, notifications, projects, todos, actions, recentLogs, contextEntity, priorMessages, priorEvents] =
+  const [learnings, memories, notifications, projects, todos, actions, recentLogs, briefingRow, contextEntity, priorMessages, priorEvents] =
     await Promise.all([
       getLearnings(env, user.id),
       listMemories(env, user.id),
@@ -876,6 +885,7 @@ export async function runTurn(
       listActions(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
       // Planning wants the recent story; regular turns keep context lean.
       planMode ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
+      planMode ? getBriefing(env, user.id) : Promise.resolve(null),
       describeContextEntity(env, session, user.id),
       sessionMessages(env, session.id),
       recentSessionEvents(env, session.id),
@@ -898,7 +908,10 @@ export async function runTurn(
       changeFeedSoFar: priorEvents
         .map((e) => `- ${e.kind} ${e.entity_type} #${e.entity_id}`)
         .join("\n"),
-    });
+    }) +
+    (planMode && briefingRow
+      ? `\n\nThe precomputed daily briefing currently shown to the user (start from it — refine, don't recite):\n${briefingRow.content_json}`
+      : "");
 
   const messages: Anthropic.MessageParam[] = [
     ...conversationOrder(priorMessages)

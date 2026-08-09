@@ -35,6 +35,9 @@ export default function App() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureAutoStart, setCaptureAutoStart] = useState(false);
   const [captureMode, setCaptureMode] = useState<"plan" | undefined>(undefined);
+  const [captureReplyTo, setCaptureReplyTo] = useState<{ id: number; title: string } | undefined>(
+    undefined,
+  );
   const [captureKey, setCaptureKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -46,6 +49,7 @@ export default function App() {
       const req = (e as CustomEvent).detail as TalkRequest;
       setFocus(req.context);
       setCaptureMode(req.mode);
+      setCaptureReplyTo(req.replyTo);
       setCaptureAutoStart(false);
       setCaptureKey((k) => k + 1); // fresh session bound to the new context
       setCaptureOpen(true);
@@ -63,6 +67,7 @@ export default function App() {
 
   const openCapture = (autoStart: boolean) => {
     setCaptureMode(undefined);
+    setCaptureReplyTo(undefined);
     setCaptureAutoStart(autoStart);
     setCaptureOpen(true);
   };
@@ -156,11 +161,13 @@ export default function App() {
             <FontAwesomeIcon icon={faComments} />
             <span className="nav-label">Chats</span>
           </NavLink>
+        </nav>
+        <div className="nav-tools">
           <button className="nav-search" title="Search" onClick={() => setSearchOpen(true)}>
             <FontAwesomeIcon icon={faMagnifyingGlass} />
           </button>
           <Bell refreshKey={refreshKey} />
-        </nav>
+        </div>
       </header>
 
       <main>
@@ -200,8 +207,9 @@ export default function App() {
       {captureOpen && (
         <Capture
           key={captureKey}
-          context={captureMode === "plan" ? null : focus}
+          context={captureMode === "plan" || captureReplyTo ? null : focus}
           mode={captureMode}
+          replyTo={captureReplyTo}
           autoStart={captureAutoStart}
           onClose={() => setCaptureOpen(false)}
           onChanged={() => setRefreshKey((k) => k + 1)}
