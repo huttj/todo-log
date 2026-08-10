@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
+import { faArrowsRotate, faComment } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   post,
@@ -19,6 +19,7 @@ import {
 import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
 import { renderEntityRefs } from "../refs";
+import { requestTalk } from "../talk";
 import type { CaptureContext } from "../Capture";
 
 const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
@@ -182,19 +183,39 @@ export default function Today(props: {
     );
   };
 
-  const projectLine = (p: BriefingProjectLine) => (
+  // Each loose thread gets a "talk about this" button that opens the chat
+  // seeded with the thread text (shown as an agent bubble).
+  const threadLine = (text: string) => (
     <>
-      {p.project_id ? (
-        <Link className="brief-ref" to={`/projects/${p.project_id}`}>
-          {p.name}
-        </Link>
-      ) : (
-        <strong>{p.name}</strong>
-      )}
-      {" — "}
-      {renderRefs(p.line)}
+      {renderRefs(text)}{" "}
+      <button
+        className="thread-talk"
+        title="Talk about this"
+        onClick={() => requestTalk(null, { seed: text })}
+      >
+        <FontAwesomeIcon icon={faComment} />
+      </button>
     </>
   );
+
+  // The style guide has lines start with the linked project name; only add a
+  // name prefix for lines that don't (avoids "Back Taxes — Back Taxes — ...").
+  const projectLine = (p: BriefingProjectLine) =>
+    p.line.trimStart().startsWith("[") ? (
+      <>{renderRefs(p.line)}</>
+    ) : (
+      <>
+        {p.project_id ? (
+          <Link className="brief-ref" to={`/projects/${p.project_id}`}>
+            {p.name}
+          </Link>
+        ) : (
+          <strong>{p.name}</strong>
+        )}
+        {" — "}
+        {renderRefs(p.line)}
+      </>
+    );
 
   const isoDate = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
 
@@ -246,8 +267,8 @@ export default function Today(props: {
               {briefCard(
                 "oneoffs",
                 "Loose threads",
-                (briefing.oneoffs ?? []).map(renderRefs),
-                (briefing.oneoffs_more ?? []).map(renderRefs),
+                (briefing.oneoffs ?? []).map(threadLine),
+                (briefing.oneoffs_more ?? []).map(threadLine),
               )}
               {briefCard(
                 "coming",

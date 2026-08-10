@@ -2172,3 +2172,17 @@ header {
   color: #999;
   margin: 0.25rem 0 0.75rem;
 }
+
+.thread-talk {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #4a6da7;
+  font-size: 0.75rem;
+  padding: 0 0.2rem;
+  opacity: 0.7;
+}
+
+.thread-talk:hover {
+  opacity: 1;
+}

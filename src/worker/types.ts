@@ -105,6 +105,8 @@ export interface SessionRow {
   mode: string | null;
   /** Set when the session started from a notification's reply button. */
   re_notification_id: number | null;
+  /** Briefing text this session was opened to talk about (loose threads). */
+  seed_text: string | null;
   started_at: number;
   ended_at: number | null;
 }

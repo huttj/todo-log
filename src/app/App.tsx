@@ -35,6 +35,7 @@ export default function App() {
   const [captureReplyTo, setCaptureReplyTo] = useState<{ id: number; title: string } | undefined>(
     undefined,
   );
+  const [captureSeed, setCaptureSeed] = useState<string | undefined>(undefined);
   const [captureKey, setCaptureKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -47,6 +48,7 @@ export default function App() {
       setFocus(req.context);
       setCaptureMode(req.mode);
       setCaptureReplyTo(req.replyTo);
+      setCaptureSeed(req.seed);
       setCaptureAutoStart(false);
       setCaptureKey((k) => k + 1); // fresh session bound to the new context
       setCaptureOpen(true);
@@ -65,6 +67,7 @@ export default function App() {
   const openCapture = (autoStart: boolean) => {
     setCaptureMode(undefined);
     setCaptureReplyTo(undefined);
+    setCaptureSeed(undefined);
     setCaptureAutoStart(autoStart);
     setCaptureOpen(true);
   };
@@ -197,6 +200,7 @@ export default function App() {
           context={captureMode === "plan" || captureReplyTo ? null : focus}
           mode={captureMode}
           replyTo={captureReplyTo}
+          seed={captureSeed}
           autoStart={captureAutoStart}
           onClose={() => setCaptureOpen(false)}
           onChanged={() => setRefreshKey((k) => k + 1)}

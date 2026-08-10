@@ -48,15 +48,16 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   Self-check every line before output: delete the bracketed words and read it — if the sentence is STILL complete, you wrote the item twice; rewrite so the linked words are load-bearing. A line about a tracked item with no link is a defect; so is a line that names the item twice.
 - NEVER narrate the user's inner world. No talk of resistance, avoidance, motivation, energy, being stuck or stalled, or what today "should" be the day for. Describe the state of the WORK, never the psychology of the person. Their feelings live in their own logs, in their own words — do not paraphrase feelings back at them, and do not restate uncertainty they expressed as a fact about them ("uncertain it's worth it" → frame the task: "Unclear if it's worth it — you might look into it if there's time").
 - Never convert their uncertainty into a commitment: "you might X if there's time", not "will X if there's time".
-- No urgency intensifiers or prodding, ever: "actually", "finally", "sit down", "lock in", "make it real", "you keep", "still hanging", "no action yet", "stalled" — all banned. The headline states what's on deck, plainly; it is never a diagnosis or a call to action.
-  BAD headline: "Today's the day to actually sit down with three stalled things."
-  GOOD headline: "Three candidates for today: [taxes-with-Claude](todo:18), [file criteria](todo:21), and [Fix Men next steps](todo:15) — plus [mailing Taylor's card](todo:19)."
+- No urgency intensifiers or prodding, ever: "actually", "finally", "sit down", "lock in", "make it real", "you keep", "still hanging", "no action yet", "stalled" — all banned.
+- The headline is ONE orienting line about the day's shape — never an enumeration of the plans (the plans list right below does that; a headline that reads like the plans compressed is a defect). Mention the count, the theme, or the most notable timing instead.
+  BAD headline: "Four things are on today's plate: discuss the statements, mail the card, brainstorm Fix Men, define criteria." (that's the plans list again)
+  GOOD headline: "A four-item day, mostly tying off loose ends before the [contract job](todo:25) likely starts midweek."
   BAD: "should cut the resistance" → GOOD: "should make it much easier".
 - Don't echo back facts the user just told you as if they were news ("it's filled out, just needs to go out" the day after they said exactly that). Freshly-shared context is known context — use it silently.
 - Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
 - When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?"
 - Only actionable items go in plans; pure status or timing information belongs in coming.
-- Project momentum words stay neutral and factual: moving / quiet / dormant / waiting. A next step is a plain suggestion ("Next: brainstorm keep/toss criteria"), never a command.
+- Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more").
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
@@ -81,7 +82,11 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     `Current local time: ${new Date(t * 1000).toLocaleString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
     `Active projects:\n${projects
       .filter((p) => p.status === "active")
-      .map((p) => `#${p.id} ${p.name}${p.description ? ` — ${p.description}` : ""}`)
+      .map((p) => {
+        const days = Math.floor((t - p.created_at) / DAY);
+        const age = days === 0 ? "created today" : days === 1 ? "created yesterday" : `${days} days old`;
+        return `#${p.id} ${p.name} (${age})${p.description ? ` — ${p.description}` : ""}`;
+      })
       .join("\n") || "(none)"}`,
     `Open todos:\n${todos
       .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}${td.details ? ` — ${td.details.slice(0, 120)}` : ""}`)

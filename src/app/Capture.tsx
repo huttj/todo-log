@@ -68,6 +68,7 @@ export default function Capture(props: {
   context: CaptureContext | null;
   mode?: "plan";
   replyTo?: { id: number; title: string };
+  seed?: string;
   autoStart: boolean;
   onClose: () => void;
   onChanged: () => void;
@@ -80,7 +81,9 @@ export default function Capture(props: {
   const [messageId, setMessageId] = useState<number | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [transcribing, setTranscribing] = useState(false);
-  const [chat, setChat] = useState<ChatEntry[]>([]);
+  const [chat, setChat] = useState<ChatEntry[]>(
+    props.seed ? [{ id: ++entrySeq, role: "assistant", text: props.seed }] : [],
+  );
   const [draft, setDraft] = useState(() => localStorage.getItem(DRAFT_KEY) ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -185,6 +188,7 @@ export default function Capture(props: {
       context_id: ctxRef.current?.id,
       mode: props.mode,
       notification_id: props.replyTo?.id,
+      seed_text: props.seed,
     });
     sessionRef.current = s;
     setSessionStarted(true);

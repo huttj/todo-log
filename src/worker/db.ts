@@ -343,6 +343,7 @@ export async function createSession(
     aboutSessionId?: number | null;
     mode?: string | null;
     reNotificationId?: number | null;
+    seedText?: string | null;
   },
 ): Promise<SessionRow> {
   return insertRow<SessionRow>(env, "sessions", {
@@ -352,6 +353,7 @@ export async function createSession(
     about_session_id: context.aboutSessionId ?? null,
     mode: context.mode ?? null,
     re_notification_id: context.reNotificationId ?? null,
+    seed_text: context.seedText ?? null,
     started_at: now(),
   });
 }

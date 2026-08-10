@@ -911,6 +911,10 @@ function contextBlock(data: {
 }
 
 async function describeContextEntity(env: Env, session: SessionRow, userId: number): Promise<string> {
+  // Opened via "talk about this" on a briefing line — that line is the topic.
+  if (session.seed_text) {
+    return `The user opened this conversation to talk about this item from their briefing (they see it quoted at the top of the chat):\n"${session.seed_text}"\nStart from it — answer, update the record, or ask what they want to do with it.`;
+  }
   // Replying to a notification you left: the notification IS the context.
   if (session.re_notification_id) {
     const n = await getNotificationById(env, userId, session.re_notification_id);

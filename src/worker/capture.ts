@@ -26,11 +26,19 @@ capture.use("*", requireEnabled);
 
 capture.post("/sessions", async (c) => {
   const body = await c.req
-    .json<{ context_type?: string; context_id?: number; mode?: string; notification_id?: number }>()
+    .json<{
+      context_type?: string;
+      context_id?: number;
+      mode?: string;
+      notification_id?: number;
+      seed_text?: string;
+    }>()
     .catch(() => ({}) as Record<string, never>);
   // Talk opened from the Today page = a planning-flavored session.
   const mode = body.mode === "plan" || body.context_type === "today" ? "plan" : null;
   const reNotificationId = typeof body.notification_id === "number" ? body.notification_id : null;
+  const seedText =
+    typeof body.seed_text === "string" && body.seed_text.trim() ? body.seed_text.trim().slice(0, 2000) : null;
   // A past chat as context is stored in its own column — the context_type
   // CHECK predates it and can't be widened in place on remote D1.
   if (body.context_type === "session" && body.context_id) {
@@ -40,6 +48,7 @@ capture.post("/sessions", async (c) => {
       aboutSessionId: body.context_id,
       mode,
       reNotificationId,
+      seedText,
     });
     return c.json(session);
   }
@@ -51,6 +60,7 @@ capture.post("/sessions", async (c) => {
     id: type && body.context_id ? body.context_id : null,
     mode,
     reNotificationId,
+    seedText,
   });
   return c.json(session);
 });
