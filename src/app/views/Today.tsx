@@ -2,7 +2,7 @@
 // the day's schedule (scheduled todos) and logs. Arrows / date picker browse
 // other days; briefing, slipped, and in-flight sections only show on today.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -38,7 +38,6 @@ export default function Today(props: {
   const [logs, setLogs] = useState<Log[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const navigate = useNavigate();
 
   const day = useMemo(() => {
     const d = new Date();
@@ -106,7 +105,6 @@ export default function Today(props: {
     <div
       key={s.schedule_id}
       className={`action-row status-${s.slot_status === "planned" ? s.status : s.slot_status}`}
-      onClick={() => navigate(`/todos/${s.id}`)}
     >
       <span className="time">
         {s.slot_all_day
@@ -118,10 +116,11 @@ export default function Today(props: {
               minute: "2-digit",
             })}
       </span>
-      <span className="title">{s.title}</span>
+      <span className="title">
+        <Link to={`/todos/${s.id}`}>{s.title}</Link>
+      </span>
       <select
         value={s.slot_status}
-        onClick={(e) => e.stopPropagation()}
         onChange={async (e) => {
           await patch(`/schedule/${s.schedule_id}`, { status: e.target.value });
           props.onFocus({ type: "todo", id: s.id, label: s.title });

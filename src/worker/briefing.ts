@@ -42,7 +42,9 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   BAD: "Discuss the statements with Claude to finalize the tax plan [Discuss bank statements with Claude to finalize tax plan](todo:22)." (title appended as a citation — the sentence says it twice)
   BAD: "tax discussion with Claude [todo:22]" (bare token)
   GOOD: "[Discuss the statements](todo:22) with Claude to finalize the tax plan."
-  A line about a tracked item with no link is a defect; so is a line that names the item twice.
+  GOOD: "Mail [Taylor's birthday card](todo:21)."
+  GOOD (project line): "[Back Taxes](project:3) — Moving. Next: [feed the statements](todo:22) to Claude."
+  Self-check every line before output: delete the bracketed words and read it — if the sentence is STILL complete, you wrote the item twice; rewrite so the linked words are load-bearing. A line about a tracked item with no link is a defect; so is a line that names the item twice.
 - NEVER narrate the user's inner world. No talk of resistance, avoidance, motivation, energy, being stuck or stalled, or what today "should" be the day for. Describe the state of the WORK, never the psychology of the person. Their feelings live in their own logs, in their own words — do not paraphrase feelings back at them, and do not restate uncertainty they expressed as a fact about them ("uncertain it's worth it" → frame the task: "Unclear if it's worth it — you might look into it if there's time").
 - Never convert their uncertainty into a commitment: "you might X if there's time", not "will X if there's time".
 - No urgency intensifiers or prodding, ever: "actually", "finally", "sit down", "lock in", "make it real", "you keep", "still hanging", "no action yet", "stalled" — all banned. The headline states what's on deck, plainly; it is never a diagnosis or a call to action.

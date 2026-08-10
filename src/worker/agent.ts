@@ -209,7 +209,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "create_log",
     description:
-      "File THE journal log for this utterance — one log per recording, covering everything said. `summary` is a compact paraphrase of all of it; `quotes` are 0-3 verbatim sentences worth preserving exactly. Attach to the single most central todo/project (entity pages also surface logs from turns that touched them, so one attachment is enough).",
+      "File THE journal log for this utterance — one log per recording, covering everything said. `summary` is a compact paraphrase of all of it, subjectless or first-person (journal voice, never 'he/the user'); `quotes` are 0-3 verbatim sentences worth preserving exactly. Attach to the single most central todo/project (entity pages also surface logs from turns that touched them, so one attachment is enough).",
     input_schema: {
       type: "object",
       properties: {
@@ -831,7 +831,7 @@ How you behave:
 - Your reply is a terse confirmation, 1-2 short sentences. The UI already shows a change feed of your tool calls — don't enumerate them again. If nothing needed doing, say so briefly.
 - LINKS IN REPLIES: when your reply mentions a todo/project/log, wrap the words of YOUR sentence markdown-style — "filed it under [the kitchen project](project:3)" — and the app renders them as links. Never bare tokens like [todo:22], never pasted entity titles as citations.
 - NEVER claim an action you didn't take. The reply may only reference changes actually made through tool calls this turn — if you logged something but created no todo, don't say you created a todo.
-- Quotes: preserve 0-3 verbatim sentences worth keeping exactly (feelings, decisions, doubts). Summary is a compact paraphrase in the user's voice, third person omitted.
+- Quotes: preserve 0-3 verbatim sentences worth keeping exactly (feelings, decisions, doubts). Summary is a compact paraphrase written subjectless or first-person, as if the user wrote it in their own journal — NEVER third person. GOOD: "Filled out the card; haven't seen her, so mailing it instead." BAD: "He filled out the card but hasn't given it to her." Never "he/she/they/the user".
 - Use existing IDs from the context. Create a project only when clearly new. Link impromptu things to todos/projects when the connection is obvious; otherwise leave unlinked.
 - A todo does NOT need a project. When the user states something they intend or need to do and no existing project fits, create the todo with no project_id — never skip the todo for lack of a project, and never invent a project just to hold it. A log alone is not enough for a stated task.
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.

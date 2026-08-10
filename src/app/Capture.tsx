@@ -11,6 +11,7 @@ import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
 import { renderEntityRefs } from "./refs";
+import TranscriptPlayer from "./components/TranscriptPlayer";
 
 // Short segments transcribe reliably (Workers AI Whisper degrades on long
 // clips) and give near-live transcript feedback.
@@ -40,6 +41,10 @@ interface ChatEntry {
   showFeed?: boolean;
   questions?: { question: string; suggestions?: string[] }[];
   questionsAnswered?: boolean;
+  /** Voice message's server id — enables the transcript player. */
+  msgId?: number;
+  hasAudio?: boolean;
+  showPlayer?: boolean;
 }
 
 interface QueuedSend {
@@ -384,6 +389,7 @@ export default function Capture(props: {
         const session = await ensureSession();
         msgId = (await post<{ id: number }>(`/sessions/${session.id}/messages`)).id;
       }
+      updateEntry(item.userEntryId, (e) => ({ ...e, msgId: msgId!, hasAudio: item.hadSegments }));
       // Wait for in-flight segment handoffs and uploads to land.
       while (uploadsRef.current > 0 || closingRef.current > 0) await sleep(200);
       // Edited drafts: fold any still-pending transcripts into the text so
@@ -749,6 +755,20 @@ export default function Capture(props: {
                   <span className="transcribing-note">
                     <TypingDots /> transcribing
                   </span>
+                )}
+                {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
+                  <>
+                    <button
+                      className="msg-play"
+                      title="Play the recording"
+                      onClick={() =>
+                        updateEntry(entry.id, (e) => ({ ...e, showPlayer: !e.showPlayer }))
+                      }
+                    >
+                      {entry.showPlayer ? "⏹" : "▶"}
+                    </button>
+                    {entry.showPlayer && <TranscriptPlayer messageId={entry.msgId} autoPlay />}
+                  </>
                 )}
                 {entry.feed && entry.feed.length > 0 && (
                   <ul className="feed">

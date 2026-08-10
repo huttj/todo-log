@@ -78,7 +78,15 @@ capture.get("/sessions/:id", async (c) => {
   if (!session) return c.json({ error: "not found" }, 404);
   const messages = await sessionMessages(c.env, session.id);
   const events = await sessionEvents(c.env, session.id);
-  return c.json({ session, messages, events });
+  // Which messages actually have audio (typed ones get no play button).
+  const counts = await c.env.DB.prepare(
+    `SELECT message_id, COUNT(*) AS n FROM audio_segments
+     WHERE message_id IN (SELECT id FROM messages WHERE session_id = ?) GROUP BY message_id`,
+  )
+    .bind(session.id)
+    .all<{ message_id: number; n: number }>();
+  const audio_message_ids = counts.results.filter((r) => r.n > 0).map((r) => r.message_id);
+  return c.json({ session, messages, events, audio_message_ids });
 });
 
 // Delete a chat: messages, audio, and its events links go; journal logs stay

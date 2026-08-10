@@ -171,6 +171,7 @@ export function SessionView(props: {
     session: CaptureSession & { started_at?: number };
     messages: Message[];
     events?: EventRecord[];
+    audio_message_ids?: number[];
   } | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -188,7 +189,12 @@ export function SessionView(props: {
     });
 
   useEffect(() => {
-    api<{ session: CaptureSession; messages: Message[]; events: EventRecord[] }>(`/sessions/${sessionId}`)
+    api<{
+      session: CaptureSession;
+      messages: Message[];
+      events: EventRecord[];
+      audio_message_ids: number[];
+    }>(`/sessions/${sessionId}`)
       .then(setData)
       .catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
@@ -312,7 +318,7 @@ export function SessionView(props: {
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />
               )}
-              {m.role === "user" && (
+              {m.role === "user" && (data.audio_message_ids ?? []).includes(m.id) && (
                 <>
                   <button
                     className="msg-play"

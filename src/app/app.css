@@ -2156,3 +2156,13 @@ header {
   margin-top: 0.5rem;
   padding: 0;
 }
+
+/* Schedule rows: the title is the link, the row itself is inert. */
+.action-row .title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.action-row .title a:hover {
+  text-decoration: underline;
+}
