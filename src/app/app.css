@@ -2303,3 +2303,38 @@ header {
   color: #b5b2a8;
   margin: -0.2rem 0 0.5rem;
 }
+
+/* -- agent settings (Chats page) -- */
+.agent-settings {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eceae4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.2rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.agent-settings h2 {
+  width: 100%;
+  margin: 0 0 0.2rem;
+}
+
+.agent-settings label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.agent-settings label.dim {
+  opacity: 0.5;
+}
+
+.agent-settings select {
+  font: inherit;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.35rem;
+  border: 1px solid #ccc;
+}

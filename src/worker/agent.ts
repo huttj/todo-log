@@ -1042,13 +1042,29 @@ export async function runTurn(
     (briefingRow
       ? `\n\nThe briefing currently shown on the Today view${planMode ? " (start from it — refine, don't recite)" : ""}:\n${briefingRow.content_json}`
       : "");
+  // Static prefix (tools + prompt) caches for 1h — it must survive BETWEEN
+  // turns (5-min TTL expired between real-world turns, so every turn paid a
+  // full ~11K-token rewrite at 1.25x; that was most of per-turn cost). The
+  // volatile block is deliberately uncached: it changes every turn, so a
+  // breakpoint there is a pure write premium with no reads. Within-turn reuse
+  // comes from the top-level auto-cache on the message tail.
   const system: Anthropic.TextBlockParam[] = [
-    { type: "text", text: staticSystem, cache_control: { type: "ephemeral" } },
-    { type: "text", text: volatileSystem, cache_control: { type: "ephemeral" } },
+    { type: "text", text: staticSystem, cache_control: { type: "ephemeral", ttl: "1h" } },
+    { type: "text", text: volatileSystem },
   ];
   const tools: Anthropic.Tool[] = TOOLS.map((t, i) =>
-    i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t,
+    i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral", ttl: "1h" } } : t,
   );
+
+  // Per-user tuning: model + thinking (Chats page → agent settings).
+  let cfg: { model?: string; thinking?: boolean } = {};
+  try {
+    cfg = user.agent_config ? JSON.parse(user.agent_config) : {};
+  } catch {
+    cfg = {};
+  }
+  const model = cfg.model === "haiku" ? "claude-haiku-4-5" : AGENT_MODEL;
+  const thinkingOn = cfg.thinking !== false;
 
   const messages: Anthropic.MessageParam[] = [
     ...conversationOrder(priorMessages)
@@ -1074,12 +1090,20 @@ export async function runTurn(
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     onEvent?.({ type: "iteration" });
     if (thinking && !thinking.endsWith("\n\n")) thinking += "\n\n";
+    // Haiku 4.5: no adaptive thinking and no effort param — omit both.
     const stream = client.messages.stream({
-      model: AGENT_MODEL,
+      model,
       max_tokens: 8192,
-      thinking: { type: "adaptive", display: "summarized" },
-      // Routine filing doesn't need deep deliberation; planning gets more.
-      output_config: { effort: planMode ? "high" : "medium" },
+      ...(model === AGENT_MODEL
+        ? {
+            thinking: thinkingOn
+              ? ({ type: "adaptive", display: "summarized" } as const)
+              : ({ type: "disabled" } as const),
+            // Routine filing doesn't need deep deliberation; planning gets more.
+            output_config: { effort: planMode ? "high" : "medium" },
+          }
+        : {}),
+      cache_control: { type: "ephemeral" },
       system,
       tools,
       messages,
@@ -1146,7 +1170,7 @@ export async function runTurn(
   await recordUsage(env, {
     userId: user.id,
     kind: "turn",
-    model: AGENT_MODEL,
+    model,
     sessionId: session.id,
     messageId,
     usage,
@@ -1157,6 +1181,6 @@ export async function runTurn(
     feed: state.feed,
     thinking: thinking.trim(),
     questions: state.questions,
-    costUsd: computeCost(AGENT_MODEL, usage),
+    costUsd: computeCost(model, usage),
   };
 }

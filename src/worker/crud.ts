@@ -248,6 +248,30 @@ crud.get("/usage/day", async (c) => {
   return c.json({ cost: row?.cost ?? 0 });
 });
 
+// -- Agent settings (model / thinking) --------------------------------------
+
+crud.get("/settings/agent", async (c) => {
+  let cfg: { model?: string; thinking?: boolean } = {};
+  try {
+    cfg = c.get("user").agent_config ? JSON.parse(c.get("user").agent_config!) : {};
+  } catch {
+    cfg = {};
+  }
+  return c.json({ model: cfg.model === "haiku" ? "haiku" : "sonnet", thinking: cfg.thinking !== false });
+});
+
+crud.post("/settings/agent", async (c) => {
+  const body = await c.req.json<{ model?: string; thinking?: boolean }>();
+  const cfg = {
+    model: body.model === "haiku" ? "haiku" : "sonnet",
+    thinking: body.thinking !== false,
+  };
+  await c.env.DB.prepare(`UPDATE users SET agent_config = ? WHERE id = ?`)
+    .bind(JSON.stringify(cfg), c.get("user").id)
+    .run();
+  return c.json(cfg);
+});
+
 // Omni search across projects, todos, and logs.
 crud.get("/search", async (c) => {
   const q = c.req.query("q")?.trim();

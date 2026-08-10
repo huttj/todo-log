@@ -31,6 +31,8 @@ export interface UserRow {
   enabled: number;
   timezone: string | null;
   last_checkin_at: number | null;
+  /** JSON: {"model": "sonnet"|"haiku", "thinking": boolean} */
+  agent_config: string | null;
   created_at: number;
 }
 

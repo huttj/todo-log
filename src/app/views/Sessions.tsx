@@ -19,6 +19,7 @@ import TranscriptPlayer from "../components/TranscriptPlayer";
 import Markdown from "../components/Markdown";
 import { fmtCost } from "../fmt";
 import { requestTalk } from "../talk";
+import { post } from "../api";
 import type { CaptureContext } from "../Capture";
 
 function QuestionChips(props: { questionsJson: string }) {
@@ -200,6 +201,63 @@ export function Sessions(props: {
           })}
         </section>
       ))}
+      <AgentSettings />
+    </div>
+  );
+}
+
+function AgentSettings() {
+  const [model, setModel] = useState<"sonnet" | "haiku">("sonnet");
+  const [thinking, setThinking] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api<{ model: "sonnet" | "haiku"; thinking: boolean }>("/settings/agent")
+      .then((r) => {
+        setModel(r.model);
+        setThinking(r.thinking);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  async function save(next: { model: "sonnet" | "haiku"; thinking: boolean }) {
+    setModel(next.model);
+    setThinking(next.thinking);
+    try {
+      await post("/settings/agent", next);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 1500);
+    } catch {
+      /* transient */
+    }
+  }
+
+  if (!loaded) return null;
+  return (
+    <div className="agent-settings">
+      <h2>Agent settings</h2>
+      <label>
+        Model{" "}
+        <select
+          value={model}
+          onChange={(e) => save({ model: e.target.value as "sonnet" | "haiku", thinking })}
+        >
+          <option value="sonnet">Sonnet 5 — best quality</option>
+          <option value="haiku">Haiku 4.5 — ~2x cheaper, faster</option>
+        </select>
+      </label>
+      <label className={model === "haiku" ? "dim" : ""}>
+        <input
+          type="checkbox"
+          checked={model === "sonnet" && thinking}
+          disabled={model === "haiku"}
+          onChange={(e) => save({ model, thinking: e.target.checked })}
+        />
+        Thinking (better on ambiguous input; costs more)
+      </label>
+      {saved && <span className="hint">saved</span>}
     </div>
   );
 }
