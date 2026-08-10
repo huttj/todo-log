@@ -39,6 +39,7 @@ export default function Today(props: {
   const [scheduled, setScheduled] = useState<ScheduleEntry[]>([]);
   const [overdue, setOverdue] = useState<ScheduleEntry[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
+  const [daySpend, setDaySpend] = useState(0);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
 
@@ -73,6 +74,9 @@ export default function Today(props: {
       .then(setScheduled)
       .catch(() => {});
     api<Log[]>(`/logs?from=${dayStart}&to=${dayStart + DAY}`).then(setLogs).catch(() => {});
+    api<{ cost: number }>(`/usage/day?from=${dayStart}&to=${dayStart + DAY}`)
+      .then((r) => setDaySpend(r.cost))
+      .catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
     api<Project[]>("/projects").then(setProjects).catch(() => {});
   };
@@ -249,6 +253,12 @@ export default function Today(props: {
         </div>
         <button onClick={() => setDayOffset(dayOffset + 1)}>›</button>
       </div>
+      {daySpend > 0 && (
+        <p className="day-cost" title="Total agent spend this day">
+          agent spend {isToday ? "so far " : ""}
+          {fmtCost(daySpend)}
+        </p>
+      )}
 
       {isToday && (
         <>

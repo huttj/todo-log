@@ -235,6 +235,19 @@ crud.get("/usage/summary", async (c) => {
   });
 });
 
+// Total LLM spend inside a time range (the Today view's per-day line).
+crud.get("/usage/day", async (c) => {
+  const from = Number(c.req.query("from") ?? 0);
+  const to = Number(c.req.query("to") ?? now());
+  const row = await c.env.DB.prepare(
+    `SELECT COALESCE(SUM(cost_usd), 0) AS cost FROM llm_usage
+     WHERE user_id = ? AND created_at >= ? AND created_at < ?`,
+  )
+    .bind(c.get("user").id, from, to)
+    .first<{ cost: number }>();
+  return c.json({ cost: row?.cost ?? 0 });
+});
+
 // Omni search across projects, todos, and logs.
 crud.get("/search", async (c) => {
   const q = c.req.query("q")?.trim();

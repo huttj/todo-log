@@ -2296,3 +2296,10 @@ header {
 .session-head .expand:hover {
   opacity: 1;
 }
+
+.day-cost {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #b5b2a8;
+  margin: -0.2rem 0 0.5rem;
+}
