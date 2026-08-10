@@ -998,6 +998,9 @@ export async function runTurn(
   const t = now();
 
   const planMode = session.mode === "plan";
+  // Seeded chats (loose threads etc.) get the same rich today-context as
+  // planning: recent logs join the always-present briefing and schedule.
+  const wantsStory = planMode || !!session.seed_text;
   const [learnings, memories, notifications, projects, todos, scheduled, recentLogs, briefingRow, contextEntity, priorMessages, priorEvents] =
     await Promise.all([
       getLearnings(env, user.id),
@@ -1006,8 +1009,8 @@ export async function runTurn(
       listProjects(env, user.id),
       listTodos(env, user.id),
       listSchedule(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
-      // Planning wants the recent story; regular turns keep context lean.
-      planMode ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
+      // Planning and seeded chats want the recent story; regular turns stay lean.
+      wantsStory ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
       getBriefing(env, user.id),
       describeContextEntity(env, session, user.id),
       sessionMessages(env, session.id),
