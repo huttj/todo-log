@@ -25,6 +25,13 @@ export interface Todo {
   updated_at: number;
 }
 
+export interface ScheduleEntry extends Todo {
+  schedule_id: number;
+  slot_start: number;
+  slot_all_day: number;
+  slot_status: string;
+}
+
 export interface AppNotification {
   id: number;
   slot: string;

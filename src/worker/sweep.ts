@@ -1,7 +1,7 @@
 // Cron sweep (Cyborgy pattern): heal untranscribed audio segments, then
 // distill pending corrections into each user's learnings doc.
 import Anthropic from "@anthropic-ai/sdk";
-import type { Env, UserRow, TodoRow } from "./types";
+import type { Env, UserRow, TodoRow, ScheduleRow } from "./types";
 import {
   now,
   stuckSegments,
@@ -11,7 +11,7 @@ import {
   getLearnings,
   setLearnings,
   enabledUsers,
-  listScheduledTodos,
+  listSchedule,
   listTodos,
   listMemories,
   setNotification,
@@ -167,25 +167,23 @@ async function runCheckins(env: Env): Promise<void> {
 }
 
 async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void> {
-  const [scheduled, todos, memories] = await Promise.all([
-    listScheduledTodos(env, user.id, { from: t - 2 * DAY, to: t + DAY }),
+  const [schedule, todos, memories] = await Promise.all([
+    listSchedule(env, user.id, { from: t - 2 * DAY, to: t + DAY }),
     listTodos(env, user.id),
     listMemories(env, user.id),
   ]);
-  const open = scheduled.filter((td) => td.status === "scheduled" || td.status === "in_progress");
+  const open = schedule.filter((s) => s.slot_status === "planned");
   const inFlight = todos.filter(
     (td) => (td.status === "in_progress" || td.status === "scheduled") && !open.some((o) => o.id === td.id),
   );
   if (open.length === 0 && inFlight.length === 0) return;
 
   const tz = user.timezone ?? env.TIMEZONE;
-  const line = (td: TodoRow) => {
-    const when = td.scheduled_start
-      ? td.all_day
-        ? `${new Date(td.scheduled_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })} (any time)`
-        : new Date(td.scheduled_start * 1000).toLocaleString("en-US", { timeZone: tz })
-      : "unscheduled";
-    return `- todo “${td.title}” [${td.status}] ${when}`;
+  const line = (s: ScheduleRow) => {
+    const when = s.slot_all_day
+      ? `${new Date(s.slot_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })} (any time)`
+      : new Date(s.slot_start * 1000).toLocaleString("en-US", { timeZone: tz });
+    return `- todo “${s.title}” [${s.status}] ${when}`;
   };
   const todoLine = (td: TodoRow) => `- todo “${td.title}” [${td.status}]`;
 

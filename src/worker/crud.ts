@@ -10,7 +10,10 @@ import {
   getEntity,
   listProjects,
   listTodos,
-  listScheduledTodos,
+  listSchedule,
+  getSlot,
+  otherPlannedSlots,
+  undoBriefing,
   listLogs,
   searchAll,
   insertEvent,
@@ -97,12 +100,40 @@ crud.post("/todos", async (c) => {
   return c.json(row);
 });
 
-// -- Scheduled todos (the Today/schedule surface) ---------------------------
+// -- Schedule slots (the Today/schedule surface) ----------------------------
 
-crud.get("/todos/scheduled", async (c) => {
+crud.get("/schedule", async (c) => {
   const from = Number(c.req.query("from") ?? now() - 86400);
   const to = Number(c.req.query("to") ?? now() + 7 * 86400);
-  return c.json(await listScheduledTodos(c.env, c.get("user").id, { from, to }));
+  return c.json(await listSchedule(c.env, c.get("user").id, { from, to }));
+});
+
+// Slot status from the UI. Marking the last planned slot done also finishes
+// the todo (one-shot tasks); recurring todos with future slots stay open.
+crud.patch("/schedule/:id", async (c) => {
+  const user = c.get("user");
+  const slot = await getSlot(c.env, user.id, Number(c.req.param("id")));
+  if (!slot) return c.json({ error: "not found" }, 404);
+  const body = await c.req.json<{ status?: string }>();
+  if (!body.status || !["planned", "done", "skipped"].includes(body.status)) {
+    return c.json({ error: "status must be planned|done|skipped" }, 400);
+  }
+  await c.env.DB.prepare(`UPDATE todo_schedules SET status = ? WHERE id = ? AND user_id = ?`)
+    .bind(body.status, slot.id, user.id)
+    .run();
+  let todoStatus: string | null = null;
+  if (body.status === "done" && (await otherPlannedSlots(c.env, user.id, slot.todo_id, slot.id)) === 0) {
+    todoStatus = "done";
+    await updateRow(c.env, "todos", user.id, slot.todo_id, { status: "done", updated_at: now() });
+    await insertEvent(c.env, {
+      userId: user.id,
+      entityType: "todo",
+      entityId: slot.todo_id,
+      kind: "status_changed",
+      payload: { manual: true, via: "schedule_slot", after: { status: "done" } },
+    });
+  }
+  return c.json({ ok: true, todo_status: todoStatus });
 });
 
 // -- Logs -------------------------------------------------------------------
@@ -141,11 +172,25 @@ crud.delete("/notifications/:id", async (c) => {
 
 crud.get("/briefing", async (c) => {
   const row = await getBriefing(c.env, c.get("user").id);
-  if (!row) return c.json({ briefing: null, generated_at: null });
+  if (!row) return c.json({ briefing: null, generated_at: null, has_prev: false });
+  try {
+    return c.json({
+      briefing: JSON.parse(row.content_json),
+      generated_at: row.generated_at,
+      has_prev: !!(row as { prev_content_json?: string | null }).prev_content_json,
+    });
+  } catch {
+    return c.json({ briefing: null, generated_at: null, has_prev: false });
+  }
+});
+
+crud.post("/briefing/undo", async (c) => {
+  const row = await undoBriefing(c.env, c.get("user").id);
+  if (!row) return c.json({ error: "nothing to undo" }, 400);
   try {
     return c.json({ briefing: JSON.parse(row.content_json), generated_at: row.generated_at });
   } catch {
-    return c.json({ briefing: null, generated_at: null });
+    return c.json({ error: "stored briefing unreadable" }, 500);
   }
 });
 

@@ -10,6 +10,7 @@ import {
   post,
   patch,
   type Todo,
+  type ScheduleEntry,
   type Project,
   type Log,
   type Briefing,
@@ -19,7 +20,7 @@ import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
 
-const TODO_STATUSES = ["idea", "scheduled", "in_progress", "done", "abandoned"] as const;
+const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
 const DAY = 86400;
 
 export default function Today(props: {
@@ -31,8 +32,9 @@ export default function Today(props: {
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scheduled, setScheduled] = useState<Todo[]>([]);
-  const [overdue, setOverdue] = useState<Todo[]>([]);
+  const [scheduled, setScheduled] = useState<ScheduleEntry[]>([]);
+  const [overdue, setOverdue] = useState<ScheduleEntry[]>([]);
+  const [hasPrev, setHasPrev] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -49,17 +51,18 @@ export default function Today(props: {
 
   const load = () => {
     if (isToday) {
-      api<{ briefing: Briefing | null; generated_at: number | null }>("/briefing")
+      api<{ briefing: Briefing | null; generated_at: number | null; has_prev?: boolean }>("/briefing")
         .then((r) => {
           setBriefing(r.briefing);
           setGeneratedAt(r.generated_at);
+          setHasPrev(!!r.has_prev);
         })
         .catch(() => {});
-      api<Todo[]>(`/todos/scheduled?from=${dayStart - 7 * DAY}&to=${dayStart}`)
-        .then((past) => setOverdue(past.filter((td) => td.status === "scheduled")))
+      api<ScheduleEntry[]>(`/schedule?from=${dayStart - 7 * DAY}&to=${dayStart}`)
+        .then((past) => setOverdue(past.filter((s) => s.slot_status === "planned")))
         .catch(() => {});
     }
-    api<Todo[]>(`/todos/scheduled?from=${dayStart}&to=${dayStart + DAY}`)
+    api<ScheduleEntry[]>(`/schedule?from=${dayStart}&to=${dayStart + DAY}`)
       .then(setScheduled)
       .catch(() => {});
     api<Log[]>(`/logs?from=${dayStart}&to=${dayStart + DAY}`).then(setLogs).catch(() => {});
@@ -99,33 +102,45 @@ export default function Today(props: {
     (t) => t.status === "in_progress" && !scheduled.some((s) => s.id === t.id),
   );
 
-  const scheduledRow = (td: Todo, showDay = false) => (
-    <div key={td.id} className={`action-row status-${td.status}`} onClick={() => navigate(`/todos/${td.id}`)}>
+  async function undoBriefingClick() {
+    try {
+      const r = await post<{ briefing: Briefing; generated_at: number }>("/briefing/undo");
+      setBriefing(r.briefing);
+      setGeneratedAt(r.generated_at);
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    }
+  }
+
+  const scheduledRow = (s: ScheduleEntry, showDay = false) => (
+    <div
+      key={s.schedule_id}
+      className={`action-row status-${s.slot_status === "planned" ? s.status : s.slot_status}`}
+      onClick={() => navigate(`/todos/${s.id}`)}
+    >
       <span className="time">
-        {td.all_day
+        {s.slot_all_day
           ? showDay
-            ? new Date((td.scheduled_start ?? 0) * 1000).toLocaleDateString(undefined, {
-                weekday: "short",
-              })
+            ? new Date(s.slot_start * 1000).toLocaleDateString(undefined, { weekday: "short" })
             : "any time"
-          : new Date((td.scheduled_start ?? 0) * 1000).toLocaleTimeString(undefined, {
+          : new Date(s.slot_start * 1000).toLocaleTimeString(undefined, {
               hour: "numeric",
               minute: "2-digit",
             })}
       </span>
-      <span className="title">{td.title}</span>
+      <span className="title">{s.title}</span>
       <select
-        value={td.status}
+        value={s.slot_status}
         onClick={(e) => e.stopPropagation()}
         onChange={async (e) => {
-          await patch(`/todos/${td.id}`, { status: e.target.value });
-          props.onFocus({ type: "todo", id: td.id, label: td.title });
+          await patch(`/schedule/${s.schedule_id}`, { status: e.target.value });
+          props.onFocus({ type: "todo", id: s.id, label: s.title });
           load();
         }}
       >
-        {TODO_STATUSES.map((s) => (
-          <option key={s} value={s}>
-            {s.replace("_", " ")}
+        {SLOT_STATUSES.map((st) => (
+          <option key={st} value={st}>
+            {st}
           </option>
         ))}
       </select>
@@ -133,7 +148,7 @@ export default function Today(props: {
   );
 
   const sorted = [...scheduled].sort(
-    (a, b) => (b.all_day - a.all_day) || (a.scheduled_start ?? 0) - (b.scheduled_start ?? 0),
+    (a, b) => (b.slot_all_day - a.slot_all_day) || (a.slot_start - b.slot_start),
   );
 
   // [todo:12] / [project:3] / [action:7] / [log:9] tokens become entity links.
@@ -252,7 +267,10 @@ export default function Today(props: {
           {briefing && (
             <>
               <div className="briefing brief-card">
-                <p className="headline">{renderRefs(briefing.headline)}</p>
+                <section className="brief-section">
+                  <h2>Overview</h2>
+                  <p className="headline">{renderRefs(briefing.headline)}</p>
+                </section>
               </div>
               {briefCard(
                 "today",
@@ -286,6 +304,11 @@ export default function Today(props: {
           )}
           <div className="brief-refresh">
             {error && <span className="error">Briefing refresh failed: {error}</span>}
+            {hasPrev && (
+              <button className="link" onClick={() => void undoBriefingClick()}>
+                undo briefing
+              </button>
+            )}
             <button
               className={`h2-toggle refresh ${refreshing ? "spin" : ""}`}
               title={
@@ -305,7 +328,7 @@ export default function Today(props: {
       {sorted.length > 0 && (
         <section>
           <h2>Schedule</h2>
-          {sorted.map((td) => scheduledRow(td))}
+          {sorted.map((s) => scheduledRow(s))}
         </section>
       )}
       {!isToday && sorted.length === 0 && <p className="empty">Nothing scheduled this day.</p>}
@@ -313,7 +336,7 @@ export default function Today(props: {
       {isToday && overdue.length > 0 && (
         <section>
           <h2>Slipped</h2>
-          {overdue.map((td) => scheduledRow(td, true))}
+          {overdue.map((s) => scheduledRow(s, true))}
         </section>
       )}
 

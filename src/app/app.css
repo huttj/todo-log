@@ -2063,3 +2063,17 @@ header {
   gap: 0.6rem;
   margin: 0.1rem 0 0.75rem;
 }
+
+/* Consistent vertical rhythm on Today: the refresh row is compact, and every
+   section heading gets the same breathing room. */
+.brief-refresh {
+  margin: 0.15rem 0 0.25rem;
+}
+
+.today section h2 {
+  margin-top: 1.1rem;
+}
+
+.brief-card .headline {
+  font-size: 0.98rem;
+}

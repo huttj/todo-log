@@ -3,12 +3,12 @@
 // agent sees it every turn and rewrites it via update_briefing when warranted;
 // cron refreshes it when stale; ↻ recomputes on demand.
 import Anthropic from "@anthropic-ai/sdk";
-import type { Env, UserRow, TodoRow } from "./types";
+import type { Env, UserRow, ScheduleRow } from "./types";
 import {
   now,
   listProjects,
   listTodos,
-  listScheduledTodos,
+  listSchedule,
   listLogs,
   listMemories,
   listNotifications,
@@ -38,11 +38,18 @@ export interface Briefing {
 /** Style contract shared by the generator and the agent's update_briefing
  * tool — this is what makes the briefing feel like a colleague, not a nag. */
 export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
-- Entity references: when a line concerns a specific tracked item, embed a token inline where it reads naturally — [todo:ID], [project:ID], [log:ID]. The app renders these as links. Example: "Feed the statements to Claude [todo:12]".
-- Mirror the user's own words and commitment level. If they said they'd "look into" something, write "look into" — never escalate ("mentioned you'd look into" ≠ "said you'd do").
-- You have a lot of information but not the full picture. When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION rather than an assertion — especially loose threads: "Did you return the spare key to Reggie?"
-- Only actionable items go in plans; pure status or timing information ("nothing due until Tuesday") belongs in coming.
-- Describe momentum neutrally: moving / quiet / dormant / waiting. Never nudge, guilt, or editorialize urgency. Banned register: "finally", "you keep postponing", "still hanging", "no action yet", "sit down and", "make it real", "the actual plan", prescriptive sequencing like "before touching X". A next step is a plain suggestion ("Next: brainstorm keep/toss criteria"), never a command or a judgment.
+- Entity link tokens are REQUIRED: every line that concerns a tracked todo/project/log MUST embed its token inline where it reads naturally — [todo:ID], [project:ID], [log:ID]. The app renders these as links; a line about a tracked item with no token is a defect. Example: "Discuss the bank statements with Claude [todo:18]".
+- NEVER narrate the user's inner world. No talk of resistance, avoidance, motivation, energy, being stuck or stalled, or what today "should" be the day for. Describe the state of the WORK, never the psychology of the person. Their feelings live in their own logs, in their own words — do not paraphrase feelings back at them, and do not restate uncertainty they expressed as a fact about them ("uncertain it's worth it" → frame the task: "Unclear if it's worth it — you might look into it if there's time").
+- Never convert their uncertainty into a commitment: "you might X if there's time", not "will X if there's time".
+- No urgency intensifiers or prodding, ever: "actually", "finally", "sit down", "lock in", "make it real", "you keep", "still hanging", "no action yet", "stalled" — all banned. The headline states what's on deck, plainly; it is never a diagnosis or a call to action.
+  BAD headline: "Today's the day to actually sit down with three stalled things."
+  GOOD headline: "Three candidates for today: taxes-with-Claude [todo:18], file criteria [todo:21], and Fix Men next steps [todo:15] — plus mailing Taylor's card [todo:19]."
+  BAD: "should cut the resistance" → GOOD: "should make it much easier".
+- Don't echo back facts the user just told you as if they were news ("it's filled out, just needs to go out" the day after they said exactly that). Freshly-shared context is known context — use it silently.
+- Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
+- When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?"
+- Only actionable items go in plans; pure status or timing information belongs in coming.
+- Project momentum words stay neutral and factual: moving / quiet / dormant / waiting. A next step is a plain suggestion ("Next: brainstorm keep/toss criteria"), never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more").
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
@@ -52,18 +59,16 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
   const [projects, todos, scheduled, logs, memories, notifications] = await Promise.all([
     listProjects(env, user.id),
     listTodos(env, user.id),
-    listScheduledTodos(env, user.id, { from: t - 2 * DAY, to: t + 7 * DAY }),
+    listSchedule(env, user.id, { from: t - 2 * DAY, to: t + 7 * DAY }),
     listLogs(env, user.id, { from: t - 7 * DAY, limit: 40 }),
     listMemories(env, user.id),
     listNotifications(env, user.id),
   ]);
 
-  const when = (td: TodoRow) =>
-    td.scheduled_start
-      ? td.all_day
-        ? `${new Date(td.scheduled_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" })} (any time)`
-        : new Date(td.scheduled_start * 1000).toLocaleString("en-US", { timeZone: tz })
-      : "unscheduled";
+  const when = (s: ScheduleRow) =>
+    s.slot_all_day
+      ? `${new Date(s.slot_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" })} (any time)`
+      : new Date(s.slot_start * 1000).toLocaleString("en-US", { timeZone: tz });
 
   const input = [
     `Current local time: ${new Date(t * 1000).toLocaleString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
@@ -74,7 +79,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     `Open todos:\n${todos
       .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}${td.details ? ` — ${td.details.slice(0, 120)}` : ""}`)
       .join("\n") || "(none)"}`,
-    `Scheduled todos (last 2 days → next 7):\n${scheduled.map((td) => `#${td.id} ${td.title} [${td.status}] ${when(td)}`).join("\n") || "(none)"}`,
+    `Schedule (last 2 days → next 7; a todo can have several slots):\n${scheduled.map((s) => `todo #${s.id} ${s.title} [slot: ${s.slot_status}] ${when(s)}`).join("\n") || "(none)"}`,
     `Recent logs (last 7 days, newest first — the user's own words about how it's going):\n${logs
       .map((l) => `#${l.id} [${new Date(l.occurred_at * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })}] (${l.kind}) ${l.summary}`)
       .join("\n") || "(none)"}`,

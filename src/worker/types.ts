@@ -109,6 +109,24 @@ export interface SessionRow {
   ended_at: number | null;
 }
 
+/** A schedule slot joined with its todo (slot fields aliased slot_*). */
+export interface ScheduleRow extends TodoRow {
+  schedule_id: number;
+  slot_start: number;
+  slot_all_day: number;
+  slot_status: string;
+}
+
+export interface TodoScheduleRow {
+  id: number;
+  user_id: number;
+  todo_id: number;
+  scheduled_start: number;
+  all_day: number;
+  status: string;
+  created_at: number;
+}
+
 export interface NotificationRow {
   id: number;
   user_id: number;
@@ -176,7 +194,7 @@ export interface EventRow {
  * event_id 0 = synthetic (no audit row, not undoable — e.g. briefing update). */
 export interface ChangeFeedItem {
   event_id: number;
-  entity_type: EntityType | "briefing";
+  entity_type: EntityType | "briefing" | "schedule";
   entity_id: number;
   kind: string;
   label: string;

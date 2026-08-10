@@ -10,6 +10,7 @@ import type {
   SessionRow,
   ProjectRow,
   TodoRow,
+  ScheduleRow,
   LogRow,
   ChangeFeedItem,
   EntityType,
@@ -24,7 +25,9 @@ import {
   listProjects,
   listTodos,
   listTodosForProject,
-  listScheduledTodos,
+  listSchedule,
+  createSlot,
+  getSlot,
   listLogs,
   searchAll,
   insertEvent,
@@ -136,7 +139,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "create_todo",
     description:
-      "Create a todo. `title` is an imperative verb phrase ('Walk the dog' — never 'Walked' or 'Walking'). `outcome` is what done looks like; `details` holds constraints, fears, dependencies. `project_id` is optional — standalone todos are normal; never skip creating a stated task just because no project fits. Scheduling lives here too: `scheduled_date` (YYYY-MM-DD) for a day-level plan when the user names a day but no time — never invent an hour; `scheduled_start` (ISO with offset) only when they give an actual time.",
+      "Create a todo. `title` is an imperative verb phrase ('Walk the dog' — never 'Walked' or 'Walking'). `outcome` is what done looks like; `details` holds constraints, fears, dependencies. `project_id` is optional — standalone todos are normal; never skip creating a stated task just because no project fits. Scheduling: `scheduled_date` (YYYY-MM-DD) for a day-level plan when the user names a day but no time — never invent an hour; `scheduled_start` (ISO with offset) only when they give an actual time. This creates a schedule slot; use schedule_todo to add more slots later (the same todo can be scheduled many times).",
     input_schema: {
       type: "object",
       properties: {
@@ -157,7 +160,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_todo",
     description:
-      "Update a todo. Only include fields that change. Status transitions should reflect reality (user started → in_progress, finished → done). Scheduling: `scheduled_date` (day-level) or `scheduled_start` (timed); set both null via scheduled_start=null to unschedule.",
+      "Update a todo. Only include fields that change. Status transitions should reflect reality (user started → in_progress, finished → done). For scheduling use schedule_todo / update_schedule.",
     input_schema: {
       type: "object",
       properties: {
@@ -166,14 +169,41 @@ const TOOLS: Anthropic.Tool[] = [
         outcome: { type: ["string", "null"] },
         details: { type: ["string", "null"] },
         project_id: ID,
-        scheduled_date: { type: ["string", "null"], description: "YYYY-MM-DD, day-level" },
-        scheduled_start: WHEN,
         status: {
           type: ["string", "null"],
           enum: ["idea", "scheduled", "in_progress", "done", "abandoned", null],
         },
       },
       required: ["todo_id"],
+    },
+  },
+  {
+    name: "schedule_todo",
+    description:
+      "Add a schedule slot to a todo — the same todo can be scheduled multiple times (e.g. practice Tue AND Thu). `scheduled_date` (YYYY-MM-DD) for day-level (\"any time\" — never invent an hour), `scheduled_start` (ISO with offset) when the user gives a time. Sets the todo's status to scheduled if it was just an idea.",
+    input_schema: {
+      type: "object",
+      properties: {
+        todo_id: { type: "integer" },
+        scheduled_date: { type: ["string", "null"], description: "YYYY-MM-DD, day-level" },
+        scheduled_start: WHEN,
+      },
+      required: ["todo_id"],
+    },
+  },
+  {
+    name: "update_schedule",
+    description:
+      "Reschedule a slot or set its outcome. `status`: planned | done | skipped. Slot ids appear in the schedule context (slot#N). Marking a slot done does NOT finish the todo — update the todo separately if the whole task is done.",
+    input_schema: {
+      type: "object",
+      properties: {
+        schedule_id: { type: "integer" },
+        scheduled_date: { type: ["string", "null"], description: "YYYY-MM-DD, day-level" },
+        scheduled_start: WHEN,
+        status: { type: ["string", "null"], enum: ["planned", "done", "skipped", null] },
+      },
+      required: ["schedule_id"],
     },
   },
   {
@@ -446,17 +476,17 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         outcome: str(input.outcome),
         details: str(input.details),
         status: str(input.status) ?? (scheduledStart ? "scheduled" : "idea"),
-        scheduled_start: scheduledStart,
-        all_day: dayStart ? 1 : 0,
         created_at: t,
         updated_at: t,
       });
-      const when = row.scheduled_start
-        ? ` @ ${new Date(row.scheduled_start * 1000).toLocaleString("en-US", {
-            timeZone: tz,
-            ...(row.all_day ? { weekday: "short", month: "short", day: "numeric" } : {}),
-          })}${row.all_day ? " (any time)" : ""}`
-        : "";
+      let when = "";
+      if (scheduledStart) {
+        await createSlot(s.env, s.user.id, row.id, scheduledStart, !!dayStart);
+        when = ` @ ${new Date(scheduledStart * 1000).toLocaleString("en-US", {
+          timeZone: tz,
+          ...(dayStart ? { weekday: "short", month: "short", day: "numeric" } : {}),
+        })}${dayStart ? " (any time)" : ""}`;
+      }
       await feedEvent(s, "todo", row.id, "created", `Created todo “${row.title}” (${row.status})${when}`);
       return JSON.stringify({ todo_id: row.id });
     }
@@ -464,23 +494,11 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const id = num(input.todo_id);
       const current = id && (await getEntity<TodoRow>(s.env, "todo", s.user.id, id));
       if (!current) return "error: todo not found";
-      // Day-level rescheduling arrives as scheduled_date; fold into columns.
-      const sd = str(input.scheduled_date);
-      if (sd) {
-        const dayStart = dayStartInZone(s.user.timezone ?? s.env.TIMEZONE, sd);
-        if (dayStart == null) return "error: scheduled_date must be YYYY-MM-DD";
-        input.scheduled_start = new Date(dayStart * 1000).toISOString();
-        input.all_day = 1;
-      } else if (input.scheduled_start != null) {
-        input.all_day = 0;
-      }
       const { cols, before, after } = collectUpdates(input, current as never, [
         { name: "title" },
         { name: "outcome" },
         { name: "details" },
         { name: "project_id" },
-        { name: "scheduled_start", parse: parseWhen },
-        { name: "all_day" },
         { name: "status" },
       ]);
       if (Object.keys(cols).length === 0) return "no changes";
@@ -492,6 +510,71 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           ? `Todo “${current.title}”: ${current.status} → ${cols.status}`
           : `Updated todo “${current.title}” (${Object.keys(after).join(", ")})`;
       await feedEvent(s, "todo", current.id, kind, label, { before, after });
+      return "ok";
+    }
+    case "schedule_todo": {
+      const todoId = num(input.todo_id);
+      const todo = todoId && (await getEntity<TodoRow>(s.env, "todo", s.user.id, todoId));
+      if (!todo) return "error: todo not found";
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const dayStart = str(input.scheduled_date) ? dayStartInZone(tz, str(input.scheduled_date)!) : null;
+      const startAt = dayStart ?? parseWhen(input.scheduled_start);
+      if (startAt == null) return "error: scheduled_date or scheduled_start required";
+      const slot = await createSlot(s.env, s.user.id, todo.id, startAt, !!dayStart);
+      if (todo.status === "idea") {
+        await updateRow(s.env, "todos", s.user.id, todo.id, { status: "scheduled", updated_at: t });
+      }
+      const when = `${new Date(startAt * 1000).toLocaleString("en-US", {
+        timeZone: tz,
+        ...(dayStart ? { weekday: "short", month: "short", day: "numeric" } : {}),
+      })}${dayStart ? " (any time)" : ""}`;
+      const item: ChangeFeedItem = {
+        event_id: 0,
+        entity_type: "schedule",
+        entity_id: slot.id,
+        kind: "scheduled",
+        label: `Scheduled “${todo.title}” — ${when}`,
+      };
+      s.feed.push(item);
+      s.onEvent?.({ type: "feed", item });
+      return JSON.stringify({ schedule_id: slot.id });
+    }
+    case "update_schedule": {
+      const slotId = num(input.schedule_id);
+      const slot = slotId && (await getSlot(s.env, s.user.id, slotId));
+      if (!slot) return "error: schedule slot not found";
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const dayStart = str(input.scheduled_date) ? dayStartInZone(tz, str(input.scheduled_date)!) : null;
+      const startAt = dayStart ?? parseWhen(input.scheduled_start);
+      const cols: Record<string, unknown> = {};
+      if (startAt != null) {
+        cols.scheduled_start = startAt;
+        cols.all_day = dayStart ? 1 : 0;
+      }
+      const status = str(input.status);
+      if (status && ["planned", "done", "skipped"].includes(status)) cols.status = status;
+      if (Object.keys(cols).length === 0) return "no changes";
+      await s.env.DB.prepare(
+        `UPDATE todo_schedules SET ${Object.keys(cols)
+          .map((k) => `${k} = ?`)
+          .join(", ")} WHERE id = ? AND user_id = ?`,
+      )
+        .bind(...Object.values(cols), slot.id, s.user.id)
+        .run();
+      const todo = await getEntity<TodoRow>(s.env, "todo", s.user.id, slot.todo_id);
+      const label =
+        status && status !== "planned"
+          ? `Slot for “${todo?.title ?? slot.todo_id}”: ${status}`
+          : `Rescheduled “${todo?.title ?? slot.todo_id}”`;
+      const item: ChangeFeedItem = {
+        event_id: 0,
+        entity_type: "schedule",
+        entity_id: slot.id,
+        kind: "scheduled",
+        label,
+      };
+      s.feed.push(item);
+      s.onEvent?.({ type: "feed", item });
       return "ok";
     }
     case "create_log": {
@@ -734,7 +817,7 @@ function contextBlock(data: {
   notifications: { slot: string; title: string; body: string | null }[];
   projects: ProjectRow[];
   todos: TodoRow[];
-  scheduled: TodoRow[];
+  scheduled: ScheduleRow[];
   recentLogs: LogRow[];
   contextEntity: string;
   changeFeedSoFar: string;
@@ -746,13 +829,11 @@ function contextBlock(data: {
     .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}`)
     .join("\n");
   const scheduled = data.scheduled
-    .map((td) => {
-      const when = td.scheduled_start
-        ? td.all_day
-          ? `${new Date(td.scheduled_start * 1000).toISOString().slice(0, 10)} (any time)`
-          : new Date(td.scheduled_start * 1000).toISOString()
-        : "";
-      return `#${td.id} ${td.title} [${td.status}] @ ${when}`;
+    .map((sl) => {
+      const when = sl.slot_all_day
+        ? `${new Date(sl.slot_start * 1000).toISOString().slice(0, 10)} (any time)`
+        : new Date(sl.slot_start * 1000).toISOString();
+      return `slot#${sl.schedule_id} todo#${sl.id} ${sl.title} [slot: ${sl.slot_status}] @ ${when}`;
     })
     .join("\n");
   const memories = data.memories.map((m) => `[${m.key}] ${m.content}`).join("\n");
@@ -770,7 +851,7 @@ function contextBlock(data: {
     data.contextEntity ? `The user is currently looking at:\n${data.contextEntity}` : "",
     `Projects:\n${projects || "(none)"}`,
     `Open todos:\n${todos || "(none)"}`,
-    `Scheduled todos (yesterday → next 7 days):\n${scheduled || "(none)"}`,
+    `Schedule (yesterday → next 7 days; a todo can have several slots):\n${scheduled || "(none)"}`,
     logs ? `Recent logs (newest first):\n${logs}` : "",
     data.changeFeedSoFar ? `Changes already made earlier in this conversation:\n${data.changeFeedSoFar}` : "",
   ]
@@ -867,7 +948,7 @@ export async function runTurn(
       listNotifications(env, user.id),
       listProjects(env, user.id),
       listTodos(env, user.id),
-      listScheduledTodos(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
+      listSchedule(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
       // Planning wants the recent story; regular turns keep context lean.
       planMode ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
       getBriefing(env, user.id),

@@ -12,6 +12,8 @@ import type {
   NotificationRow,
   AgentMemoryRow,
   BriefingRow,
+  ScheduleRow,
+  TodoScheduleRow,
   EntityType,
 } from "./types";
 
@@ -163,20 +165,63 @@ export async function listTodos(
   return r.results;
 }
 
-/** Todos scheduled inside a time range (the Today/schedule surface). */
-export async function listScheduledTodos(
+/** Schedule slots (joined with their todos) inside a time range — the
+ * Today/schedule surface. A todo can appear once per slot. */
+export async function listSchedule(
   env: Env,
   userId: number,
   range: { from: number; to: number },
-): Promise<TodoRow[]> {
+): Promise<ScheduleRow[]> {
   const r = await env.DB.prepare(
-    `SELECT * FROM todos WHERE user_id = ? AND scheduled_start IS NOT NULL
-     AND scheduled_start >= ? AND scheduled_start < ?
-     ORDER BY all_day DESC, scheduled_start`,
+    `SELECT s.id AS schedule_id, s.scheduled_start AS slot_start, s.all_day AS slot_all_day,
+            s.status AS slot_status, t.*
+     FROM todo_schedules s JOIN todos t ON t.id = s.todo_id AND t.user_id = s.user_id
+     WHERE s.user_id = ? AND s.scheduled_start >= ? AND s.scheduled_start < ?
+     ORDER BY s.all_day DESC, s.scheduled_start`,
   )
     .bind(userId, range.from, range.to)
-    .all<TodoRow>();
+    .all<ScheduleRow>();
   return r.results;
+}
+
+export async function createSlot(
+  env: Env,
+  userId: number,
+  todoId: number,
+  scheduledStart: number,
+  allDay: boolean,
+): Promise<TodoScheduleRow> {
+  return insertRow<TodoScheduleRow>(env, "todo_schedules", {
+    user_id: userId,
+    todo_id: todoId,
+    scheduled_start: scheduledStart,
+    all_day: allDay ? 1 : 0,
+    status: "planned",
+    created_at: now(),
+  });
+}
+
+export async function getSlot(env: Env, userId: number, id: number): Promise<TodoScheduleRow | null> {
+  return env.DB.prepare(`SELECT * FROM todo_schedules WHERE id = ? AND user_id = ?`)
+    .bind(id, userId)
+    .first<TodoScheduleRow>();
+}
+
+/** Future planned slots for a todo (excluding one slot, e.g. the one just
+ * completed) — used to decide whether finishing a slot finishes the todo. */
+export async function otherPlannedSlots(
+  env: Env,
+  userId: number,
+  todoId: number,
+  excludeSlotId: number,
+): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM todo_schedules
+     WHERE user_id = ? AND todo_id = ? AND id != ? AND status = 'planned' AND scheduled_start >= ?`,
+  )
+    .bind(userId, todoId, excludeSlotId, now() - 86400)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
 }
 
 export async function listTodosForProject(env: Env, userId: number, projectId: number): Promise<TodoRow[]> {
@@ -569,10 +614,24 @@ export async function getBriefing(env: Env, userId: number): Promise<BriefingRow
 export async function setBriefing(env: Env, userId: number, contentJson: string): Promise<void> {
   await env.DB.prepare(
     `INSERT INTO briefings (user_id, content_json, generated_at) VALUES (?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET content_json = excluded.content_json, generated_at = excluded.generated_at`,
+     ON CONFLICT(user_id) DO UPDATE SET
+       prev_content_json = briefings.content_json,
+       content_json = excluded.content_json,
+       generated_at = excluded.generated_at`,
   )
     .bind(userId, contentJson, now())
     .run();
+}
+
+/** Swap current and previous briefing (undo doubles as redo). */
+export async function undoBriefing(env: Env, userId: number): Promise<BriefingRow | null> {
+  await env.DB.prepare(
+    `UPDATE briefings SET content_json = prev_content_json, prev_content_json = content_json,
+       generated_at = ? WHERE user_id = ? AND prev_content_json IS NOT NULL`,
+  )
+    .bind(now(), userId)
+    .run();
+  return getBriefing(env, userId);
 }
 
 export async function saveMemory(env: Env, userId: number, key: string, content: string): Promise<void> {

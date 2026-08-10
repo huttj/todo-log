@@ -502,6 +502,20 @@ export default function Capture(props: {
     }
   }
 
+  /** Briefing updates aren't audit events — undo swaps the stored briefing. */
+  async function undoBriefingItem(entryId: number, feedIndex: number) {
+    try {
+      await post("/briefing/undo");
+      updateEntry(entryId, (e) => ({
+        ...e,
+        feed: e.feed?.map((f, i) => (i === feedIndex ? { ...f, kind: "undone" } : f)),
+      }));
+      props.onChanged();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    }
+  }
+
   // Pill playback: one shared player; disabled while recording.
   const [playingSeg, setPlayingSeg] = useState<number | null>(null);
   const playerRef = useRef<HTMLAudioElement | null>(null);
@@ -686,9 +700,19 @@ export default function Capture(props: {
                     ).map((f, fi) => (
                       <li key={`${f.event_id}-${fi}`} className={f.kind === "undone" ? "undone" : ""}>
                         <span>{f.label}</span>
-                        {f.kind !== "undone" && !entry.live && f.event_id !== 0 && (
-                          <button onClick={() => undo(f.event_id)}>undo</button>
-                        )}
+                        {f.kind !== "undone" &&
+                          !entry.live &&
+                          (f.event_id !== 0 || f.kind === "briefing_updated") && (
+                            <button
+                              onClick={() =>
+                                f.kind === "briefing_updated"
+                                  ? undoBriefingItem(entry.id, fi)
+                                  : undo(f.event_id)
+                              }
+                            >
+                              undo
+                            </button>
+                          )}
                       </li>
                     ))}
                     {entry.feed.length > 5 && (
