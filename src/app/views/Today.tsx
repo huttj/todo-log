@@ -165,13 +165,22 @@ export default function Today(props: {
       return next;
     });
 
-  const briefCard = (key: string, heading: string, items: ReactNode[], more: ReactNode[]) => {
+  const briefCard = (
+    key: string,
+    heading: string,
+    items: ReactNode[],
+    more: ReactNode[],
+    action?: ReactNode,
+  ) => {
     if (items.length + more.length === 0) return null;
     const expanded = seeMore.has(key);
     return (
       <div className="briefing brief-card">
         <section className="brief-section">
-          <h2>{heading}</h2>
+          <h2>
+            {heading}
+            {action}
+          </h2>
           <ul className={`brief-list ${key}`}>
             {items.map((x, i) => (
               <li key={i}>{x}</li>
@@ -192,21 +201,6 @@ export default function Today(props: {
       </div>
     );
   };
-
-  // Each loose thread gets a "talk about this" button that opens the chat
-  // seeded with the thread text (shown as an agent bubble).
-  const threadLine = (text: string) => (
-    <>
-      {renderRefs(text)}{" "}
-      <button
-        className="thread-talk"
-        title="Talk about this"
-        onClick={() => requestTalk(null, { seed: text })}
-      >
-        <FontAwesomeIcon icon={faComment} />
-      </button>
-    </>
-  );
 
   // The style guide has lines start with the linked project name; only add a
   // name prefix for lines that don't (avoids "Back Taxes — Back Taxes — ...").
@@ -277,8 +271,24 @@ export default function Today(props: {
               {briefCard(
                 "oneoffs",
                 "Loose threads",
-                (briefing.oneoffs ?? []).map(threadLine),
-                (briefing.oneoffs_more ?? []).map(threadLine),
+                (briefing.oneoffs ?? []).map(renderRefs),
+                (briefing.oneoffs_more ?? []).map(renderRefs),
+                <button
+                  className="thread-talk"
+                  title="Talk through these threads"
+                  onClick={() =>
+                    requestTalk(null, {
+                      seed: [
+                        "Loose threads:",
+                        ...[...(briefing.oneoffs ?? []), ...(briefing.oneoffs_more ?? [])].map(
+                          (x) => `• ${x}`,
+                        ),
+                      ].join("\n"),
+                    })
+                  }
+                >
+                  <FontAwesomeIcon icon={faComment} />
+                </button>,
               )}
               {briefCard(
                 "coming",

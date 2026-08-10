@@ -2191,3 +2191,14 @@ header {
   font-size: 0.72rem;
   color: #b5b2a8;
 }
+
+/* Section-level talk button sits at the heading's right edge; seeded bubbles
+   keep their line breaks. */
+.brief-section h2 .thread-talk {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+.bubble p {
+  white-space: pre-line;
+}
