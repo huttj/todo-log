@@ -9,14 +9,18 @@ export interface TalkRequest {
   /** 'plan' opens a day-planning session. */
   mode?: "plan";
   /** Set when replying to a notification — becomes the session's context. */
-  replyTo?: { id: number; title: string };
+  replyTo?: { id: number; title: string; body?: string | null };
   /** Briefing text to open the chat about (shown as an agent bubble). */
   seed?: string;
 }
 
 export function requestTalk(
   ctx: CaptureContext | null,
-  opts?: { mode?: "plan"; replyTo?: { id: number; title: string }; seed?: string },
+  opts?: {
+    mode?: "plan";
+    replyTo?: { id: number; title: string; body?: string | null };
+    seed?: string;
+  },
 ) {
   const detail: TalkRequest = {
     context: ctx,

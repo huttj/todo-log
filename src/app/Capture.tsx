@@ -67,7 +67,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export default function Capture(props: {
   context: CaptureContext | null;
   mode?: "plan";
-  replyTo?: { id: number; title: string };
+  replyTo?: { id: number; title: string; body?: string | null };
   seed?: string;
   autoStart: boolean;
   onClose: () => void;
@@ -81,9 +81,17 @@ export default function Capture(props: {
   const [messageId, setMessageId] = useState<number | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
   const [transcribing, setTranscribing] = useState(false);
-  const [chat, setChat] = useState<ChatEntry[]>(
-    props.seed ? [{ id: ++entrySeq, role: "assistant", text: props.seed }] : [],
-  );
+  // Seeded openings (loose thread, notification reply) show as an agent bubble.
+  const [chat, setChat] = useState<ChatEntry[]>(() => {
+    const opener =
+      props.seed ??
+      (props.replyTo
+        ? props.replyTo.body
+          ? `${props.replyTo.title}\n${props.replyTo.body}`
+          : props.replyTo.title
+        : null);
+    return opener ? [{ id: ++entrySeq, role: "assistant", text: opener }] : [];
+  });
   const [draft, setDraft] = useState(() => localStorage.getItem(DRAFT_KEY) ?? "");
   const [error, setError] = useState<string | null>(null);
 

@@ -32,9 +32,9 @@ export default function App() {
   const [captureOpen, setCaptureOpen] = useState(false);
   const [captureAutoStart, setCaptureAutoStart] = useState(false);
   const [captureMode, setCaptureMode] = useState<"plan" | undefined>(undefined);
-  const [captureReplyTo, setCaptureReplyTo] = useState<{ id: number; title: string } | undefined>(
-    undefined,
-  );
+  const [captureReplyTo, setCaptureReplyTo] = useState<
+    { id: number; title: string; body?: string | null } | undefined
+  >(undefined);
   const [captureSeed, setCaptureSeed] = useState<string | undefined>(undefined);
   const [captureKey, setCaptureKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
