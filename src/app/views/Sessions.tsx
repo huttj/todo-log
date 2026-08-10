@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan, faPlay, faStop } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faPlay, faStop, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   del,
@@ -18,6 +18,7 @@ import EventFeed from "../components/EventFeed";
 import TranscriptPlayer from "../components/TranscriptPlayer";
 import Markdown from "../components/Markdown";
 import { fmtCost } from "../fmt";
+import { requestTalk } from "../talk";
 import type { CaptureContext } from "../Capture";
 
 function QuestionChips(props: { questionsJson: string }) {
@@ -148,8 +149,18 @@ export function Sessions(props: {
           <h2>{day}</h2>
           {list.map((s) => {
             const label = contextLabel(s, todos, projects);
+            const timeLabel = new Date(s.started_at * 1000).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+            });
             return (
-              <div key={s.id} className="session-row" onClick={() => navigate(`/sessions/${s.id}`)}>
+              <div
+                key={s.id}
+                className="session-row"
+                onClick={() => requestTalk(null, { resume: { id: s.id, label: timeLabel } })}
+              >
                 <div className="session-head">
                   <span className="time">
                     {new Date(s.started_at * 1000).toLocaleTimeString(undefined, {
@@ -162,6 +173,16 @@ export function Sessions(props: {
                     {s.message_count} msg
                     {(s.cost_usd ?? 0) > 0 && ` · ${fmtCost(s.cost_usd!)}`}
                   </span>
+                  <button
+                    className="link expand"
+                    title="Open full view"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/sessions/${s.id}`);
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} />
+                  </button>
                   <button
                     className="link trash"
                     title="Delete chat"

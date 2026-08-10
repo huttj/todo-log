@@ -160,7 +160,12 @@ capture.post("/sessions/:id/done", async (c) => {
 capture.post("/sessions/:id/messages", async (c) => {
   const session = await getSession(c.env, c.get("user").id, Number(c.req.param("id")));
   if (!session) return c.json({ error: "not found" }, 404);
-  if (session.ended_at) return c.json({ error: "session is done" }, 400);
+  // Continuing an ended chat reopens it.
+  if (session.ended_at) {
+    await c.env.DB.prepare(`UPDATE sessions SET ended_at = NULL WHERE id = ?`)
+      .bind(session.id)
+      .run();
+  }
   const message = await insertRow<MessageRow>(c.env, "messages", {
     session_id: session.id,
     role: "user",

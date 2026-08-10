@@ -748,12 +748,12 @@ blockquote audio {
 
 .dock-handle {
   align-self: center;
-  width: 7rem;
-  /* Fat hit box: the padding extends the grab area ~0.5rem above the dock's
-     top edge (negative margin pulls it past the border) and down over the
-     header's dead center — the visible pill stays where it was. */
-  padding: 1rem 0 0.8rem;
-  margin: -1.5rem 0 -0.75rem;
+  width: 4.5rem;
+  /* Hit box reaches a full 1rem above the dock's top edge (negative margin
+     pulls it past the border) and down over the header's center; the visible
+     pill stays put. */
+  padding: 1.3rem 0 0.8rem;
+  margin: -1.7rem 0 -0.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2285,4 +2285,14 @@ header {
 .md h3 {
   font-size: 0.95rem;
   margin: 0.5rem 0 0.25rem;
+}
+
+.session-head .expand {
+  flex-shrink: 0;
+  color: #999;
+  opacity: 0.7;
+}
+
+.session-head .expand:hover {
+  opacity: 1;
 }

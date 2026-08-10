@@ -12,6 +12,8 @@ export interface TalkRequest {
   replyTo?: { id: number; title: string; body?: string | null };
   /** Briefing text to open the chat about (shown as an agent bubble). */
   seed?: string;
+  /** Open an existing chat in the dock, history loaded, ready to continue. */
+  resume?: { id: number; label: string };
 }
 
 export function requestTalk(
@@ -20,6 +22,7 @@ export function requestTalk(
     mode?: "plan";
     replyTo?: { id: number; title: string; body?: string | null };
     seed?: string;
+    resume?: { id: number; label: string };
   },
 ) {
   const detail: TalkRequest = {
@@ -27,6 +30,7 @@ export function requestTalk(
     mode: opts?.mode,
     replyTo: opts?.replyTo,
     seed: opts?.seed,
+    resume: opts?.resume,
   };
   window.dispatchEvent(new CustomEvent(TALK_EVENT, { detail }));
 }

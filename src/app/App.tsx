@@ -36,6 +36,9 @@ export default function App() {
     { id: number; title: string; body?: string | null } | undefined
   >(undefined);
   const [captureSeed, setCaptureSeed] = useState<string | undefined>(undefined);
+  const [captureResume, setCaptureResume] = useState<{ id: number; label: string } | undefined>(
+    undefined,
+  );
   const [captureKey, setCaptureKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -49,6 +52,7 @@ export default function App() {
       setCaptureMode(req.mode);
       setCaptureReplyTo(req.replyTo);
       setCaptureSeed(req.seed);
+      setCaptureResume(req.resume);
       setCaptureAutoStart(false);
       setCaptureKey((k) => k + 1); // fresh session bound to the new context
       setCaptureOpen(true);
@@ -68,6 +72,7 @@ export default function App() {
     setCaptureMode(undefined);
     setCaptureReplyTo(undefined);
     setCaptureSeed(undefined);
+    setCaptureResume(undefined);
     setCaptureAutoStart(autoStart);
     setCaptureOpen(true);
   };
@@ -201,6 +206,7 @@ export default function App() {
           mode={captureMode}
           replyTo={captureReplyTo}
           seed={captureSeed}
+          resume={captureResume}
           autoStart={captureAutoStart}
           onClose={() => setCaptureOpen(false)}
           onChanged={() => setRefreshKey((k) => k + 1)}

@@ -71,6 +71,7 @@ export default function Capture(props: {
   mode?: "plan";
   replyTo?: { id: number; title: string; body?: string | null };
   seed?: string;
+  resume?: { id: number; label: string };
   autoStart: boolean;
   onClose: () => void;
   onChanged: () => void;
@@ -123,6 +124,84 @@ export default function Capture(props: {
   const bumpClosing = (d: number) => {
     closingRef.current = Math.max(0, closingRef.current + d);
   };
+
+  // Resuming an existing chat: load its history into the dock and point the
+  // session ref at it so new sends continue the same session.
+  useEffect(() => {
+    const resume = props.resume;
+    if (!resume) return;
+    let alive = true;
+    api<{
+      session: CaptureSession;
+      messages: {
+        id: number;
+        role: "user" | "assistant";
+        text: string | null;
+        thinking?: string | null;
+        reply_to?: number | null;
+        questions_json?: string | null;
+      }[];
+      events?: { id: number; message_id?: number | null; entity_type: string; entity_id: number; kind: string }[];
+      audio_message_ids?: number[];
+      message_costs?: { message_id: number; cost: number }[];
+    }>(`/sessions/${resume.id}`)
+      .then((data) => {
+        if (!alive) return;
+        sessionRef.current = data.session;
+        setSessionStarted(true);
+        // Pair replies behind their user message (same ordering as replay).
+        const byReply = new Map<number, typeof data.messages>();
+        const orphans: typeof data.messages = [];
+        for (const m of data.messages) {
+          if (m.role !== "assistant" || !m.text) continue;
+          if (m.reply_to) {
+            (byReply.get(m.reply_to) ?? byReply.set(m.reply_to, []).get(m.reply_to)!).push(m);
+          } else orphans.push(m);
+        }
+        const feedFor = (userMsgId: number): FeedItem[] =>
+          (data.events ?? [])
+            .filter((e) => e.message_id === userMsgId)
+            .map((e) => ({
+              event_id: e.id,
+              entity_type: e.entity_type,
+              entity_id: e.entity_id,
+              kind: e.kind,
+              label: `${e.kind.replace("_", " ")} ${e.entity_type} #${e.entity_id}`,
+            }));
+        const costFor = (userMsgId: number) =>
+          (data.message_costs ?? []).find((x) => x.message_id === userMsgId)?.cost;
+        const entries: ChatEntry[] = [];
+        for (const m of data.messages) {
+          if (m.role !== "user" || !m.text) continue;
+          entries.push({
+            id: ++entrySeq,
+            role: "user",
+            text: m.text,
+            msgId: m.id,
+            hasAudio: (data.audio_message_ids ?? []).includes(m.id),
+          });
+          const replies = byReply.get(m.id) ?? (orphans.length ? [orphans.shift()!] : []);
+          for (const a of replies) {
+            entries.push({
+              id: ++entrySeq,
+              role: "assistant",
+              text: a.text ?? "",
+              thinking: a.thinking ?? undefined,
+              feed: feedFor(m.id),
+              cost: costFor(m.id),
+              questions: a.questions_json ? JSON.parse(a.questions_json) : undefined,
+              questionsAnswered: true,
+            });
+          }
+        }
+        setChat(entries);
+      })
+      .catch(() => setError("couldn't load the chat — try again"));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.resume?.id]);
 
   // Draft survives closes/reloads until it's actually sent.
   useEffect(() => {
@@ -694,7 +773,11 @@ export default function Capture(props: {
       />
       <header>
         <span className="context-chip">
-          {props.replyTo ? (
+          {props.resume ? (
+            <>
+              chat: <strong>{props.resume.label}</strong>
+            </>
+          ) : props.replyTo ? (
             <>
               re: <strong>{props.replyTo.title.slice(0, 48)}</strong>
             </>
