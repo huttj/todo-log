@@ -748,13 +748,18 @@ blockquote audio {
 
 .dock-handle {
   align-self: center;
-  width: 4rem;
-  padding: 0.25rem 0;
-  margin: -0.35rem 0 -0.3rem;
+  width: 7rem;
+  /* Fat hit box: the padding extends the grab area ~0.5rem above the dock's
+     top edge (negative margin pulls it past the border) and down over the
+     header's dead center — the visible pill stays where it was. */
+  padding: 1rem 0 0.8rem;
+  margin: -1.5rem 0 -0.75rem;
   display: flex;
+  align-items: center;
   justify-content: center;
   cursor: grab;
   touch-action: none;
+  z-index: 1;
 }
 
 .dock-handle::before {
@@ -2238,4 +2243,46 @@ header {
 
 .log-pills .attachment {
   white-space: normal;
+}
+
+/* -- markdown in chat bubbles -- */
+.md p {
+  margin: 0 0 0.45rem;
+  white-space: normal;
+}
+
+.md > *:last-child {
+  margin-bottom: 0;
+}
+
+.md ul,
+.md ol {
+  margin: 0.2rem 0 0.45rem;
+  padding-left: 1.2rem;
+}
+
+.md li {
+  margin-bottom: 0.15rem;
+}
+
+.md code {
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 0.25rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.85em;
+}
+
+.md pre {
+  background: rgba(0, 0, 0, 0.07);
+  border-radius: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  overflow-x: auto;
+  margin: 0.3rem 0 0.45rem;
+}
+
+.md h1,
+.md h2,
+.md h3 {
+  font-size: 0.95rem;
+  margin: 0.5rem 0 0.25rem;
 }

@@ -280,9 +280,10 @@ export default function Today(props: {
                   onClick={() =>
                     requestTalk(null, {
                       seed: [
-                        "Loose threads:",
+                        "**Loose threads:**",
+                        "",
                         ...[...(briefing.oneoffs ?? []), ...(briefing.oneoffs_more ?? [])].map(
-                          (x) => `• ${x}`,
+                          (x) => `- ${x}`,
                         ),
                       ].join("\n"),
                     })

@@ -16,7 +16,7 @@ import {
 } from "../api";
 import EventFeed from "../components/EventFeed";
 import TranscriptPlayer from "../components/TranscriptPlayer";
-import { renderEntityRefs } from "../refs";
+import Markdown from "../components/Markdown";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 
@@ -341,7 +341,7 @@ export function SessionView(props: {
                   {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
                 </>
               )}
-              <p>{m.role === "assistant" ? renderEntityRefs(m.text ?? "") : m.text}</p>
+              {m.role === "assistant" ? <Markdown text={m.text ?? ""} /> : <p>{m.text}</p>}
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />
               )}

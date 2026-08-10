@@ -10,7 +10,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
-import { renderEntityRefs } from "./refs";
+import Markdown from "./components/Markdown";
 import { fmtCost } from "./fmt";
 import TranscriptPlayer from "./components/TranscriptPlayer";
 
@@ -89,8 +89,8 @@ export default function Capture(props: {
       props.seed ??
       (props.replyTo
         ? props.replyTo.body
-          ? `${props.replyTo.title}\n${props.replyTo.body}`
-          : props.replyTo.title
+          ? `**${props.replyTo.title}**\n\n${props.replyTo.body}`
+          : `**${props.replyTo.title}**`
         : null);
     return opener ? [{ id: ++entrySeq, role: "assistant", text: opener }] : [];
   });
@@ -739,7 +739,11 @@ export default function Capture(props: {
                   </>
                 )}
                 {entry.text ? (
-                  <p>{entry.role === "assistant" ? renderEntityRefs(entry.text) : entry.text}</p>
+                  entry.role === "assistant" ? (
+                    <Markdown text={entry.text} />
+                  ) : (
+                    <p>{entry.text}</p>
+                  )
                 ) : entry.live ? (
                   <TypingDots />
                 ) : null}
