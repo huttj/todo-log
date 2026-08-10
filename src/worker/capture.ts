@@ -251,6 +251,7 @@ capture.post("/messages/:id/send", async (c) => {
           text: result.reply,
           thinking: result.thinking || null,
           reply_to: message.id,
+          questions_json: result.questions.length ? JSON.stringify(result.questions) : null,
           created_at: now(),
         });
         await emit({ type: "done", reply: result.reply, feed: result.feed });

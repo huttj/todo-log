@@ -10,6 +10,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
+import { renderEntityRefs } from "./refs";
 
 // Short segments transcribe reliably (Workers AI Whisper degrades on long
 // clips) and give near-live transcript feedback.
@@ -37,6 +38,8 @@ interface ChatEntry {
   showThinking?: boolean;
   /** Long change feeds collapse behind "+N more changes". */
   showFeed?: boolean;
+  questions?: { question: string; suggestions?: string[] }[];
+  questionsAnswered?: boolean;
 }
 
 interface QueuedSend {
@@ -340,6 +343,27 @@ export default function Capture(props: {
     void processQueue();
   }
 
+  /** Send a canned answer (question chip) as its own message. */
+  function sendText(text: string, fromEntryId: number) {
+    updateEntry(fromEntryId, (e) => ({ ...e, questionsAnswered: true }));
+    const item: QueuedSend = {
+      msgId: null,
+      hadSegments: false,
+      dirty: true,
+      text,
+      appended: new Set(),
+      userEntryId: ++entrySeq,
+      assistantEntryId: ++entrySeq,
+    };
+    setChat((c) => [
+      ...c,
+      { id: item.userEntryId, role: "user", text },
+      { id: item.assistantEntryId, role: "assistant", text: "", thinking: "", feed: [], live: true, pending: true },
+    ]);
+    queueRef.current.push(item);
+    void processQueue();
+  }
+
   async function processQueue() {
     if (processingRef.current) return;
     processingRef.current = true;
@@ -413,6 +437,7 @@ export default function Capture(props: {
             | { type: "thinking"; text: string }
             | { type: "delta"; text: string }
             | { type: "feed"; item: FeedItem }
+            | { type: "questions"; questions: { question: string; suggestions?: string[] }[] }
             | { type: "done"; reply: string; feed: FeedItem[] }
             | { type: "error"; error: string };
           switch (evt.type) {
@@ -440,6 +465,12 @@ export default function Capture(props: {
               updateEntry(item.assistantEntryId, (e) => ({
                 ...e,
                 feed: [...(e.feed ?? []), evt.item],
+              }));
+              break;
+            case "questions":
+              updateEntry(item.assistantEntryId, (e) => ({
+                ...e,
+                questions: [...(e.questions ?? []), ...evt.questions],
               }));
               break;
             case "done":
@@ -686,7 +717,34 @@ export default function Capture(props: {
                     {entry.showThinking && <p className="thinking expanded">{entry.thinking}</p>}
                   </>
                 )}
-                {entry.text ? <p>{entry.text}</p> : entry.live ? <TypingDots /> : null}
+                {entry.text ? (
+                  <p>{entry.role === "assistant" ? renderEntityRefs(entry.text) : entry.text}</p>
+                ) : entry.live ? (
+                  <TypingDots />
+                ) : null}
+                {entry.role === "assistant" && entry.questions && entry.questions.length > 0 && (
+                  <div className="q-block">
+                    {entry.questions.map((q, qi) => (
+                      <div key={qi} className="q-item">
+                        <p className="q-text">{q.question}</p>
+                        {q.suggestions && q.suggestions.length > 0 && (
+                          <div className="q-chips">
+                            {q.suggestions.map((sug, sj) => (
+                              <button
+                                key={sj}
+                                className="q-chip"
+                                disabled={entry.questionsAnswered}
+                                onClick={() => sendText(sug, entry.id)}
+                              >
+                                {sug}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {entry.role === "user" && entry.transcribing && (
                   <span className="transcribing-note">
                     <TypingDots /> transcribing

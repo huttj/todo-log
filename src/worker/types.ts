@@ -162,6 +162,8 @@ export interface MessageRow {
   thinking: string | null;
   /** Assistant only: id of the user message this reply answers. */
   reply_to: number | null;
+  /** Assistant only: ask_user questions (JSON), rendered as chips. */
+  questions_json: string | null;
   created_at: number;
 }
 

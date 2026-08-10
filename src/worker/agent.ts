@@ -352,6 +352,32 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "ask_user",
+    description:
+      "Interrupt with one or more questions, each with optional short suggested answers rendered as tappable chips. Use whenever an answer would change what you do — attachment ambiguity, whether to schedule, how something went. After calling this, END your reply (a short lead-in sentence is fine); never repeat the questions in prose.",
+    input_schema: {
+      type: "object",
+      properties: {
+        questions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              question: { type: "string" },
+              suggestions: {
+                type: ["array", "null"],
+                items: { type: "string" },
+                description: "2-4 short tappable answers, when natural options exist",
+              },
+            },
+            required: ["question"],
+          },
+        },
+      },
+      required: ["questions"],
+    },
+  },
+  {
     name: "file_correction",
     description:
       "Record that the user corrected your behavior or interpretation (what you got wrong, what they wanted). File it AND apply the fix with other tools.",
@@ -367,6 +393,11 @@ const TOOLS: Anthropic.Tool[] = [
 // Tool execution
 // ---------------------------------------------------------------------------
 
+export interface AskedQuestion {
+  question: string;
+  suggestions: string[];
+}
+
 interface TurnState {
   env: Env;
   user: UserRow;
@@ -374,7 +405,8 @@ interface TurnState {
   messageId: number;
   feed: ChangeFeedItem[];
   createdLogIds: number[];
-  onEvent?: (e: { type: "feed"; item: ChangeFeedItem }) => void;
+  questions: AskedQuestion[];
+  onEvent?: (e: TurnEvent) => void;
 }
 
 function str(v: unknown): string | null {
@@ -705,6 +737,23 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       await clearNotification(s.env, s.user.id, slot);
       return "cleared";
     }
+    case "ask_user": {
+      const qs: AskedQuestion[] = Array.isArray(input.questions)
+        ? (input.questions as Record<string, unknown>[])
+            .map((q) => ({
+              question: str(q.question) ?? "",
+              suggestions: Array.isArray(q.suggestions)
+                ? (q.suggestions as unknown[]).filter((x): x is string => typeof x === "string").slice(0, 5)
+                : [],
+            }))
+            .filter((q) => q.question)
+            .slice(0, 3)
+        : [];
+      if (qs.length === 0) return "error: questions required";
+      s.questions.push(...qs);
+      s.onEvent?.({ type: "questions", questions: qs });
+      return "asked — end your reply now; the user's next message answers these";
+    }
     case "file_correction": {
       const description = str(input.description);
       if (description) await fileCorrection(s.env, s.user.id, s.session.id, description);
@@ -780,18 +829,19 @@ How you behave:
 - ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said — never split one utterance into multiple topical logs. Attach it to the single most central todo/project (entity pages also surface logs from any turn that touched them, so one attachment covers the rest). Also update statuses to match reality: starting → in_progress, finished → done.
 - Be silent-by-default in spirit: NO advice, opinions, or coaching unless the user directly asks. When asked, answer concisely using the context below.
 - Your reply is a terse confirmation, 1-2 short sentences. The UI already shows a change feed of your tool calls — don't enumerate them again. If nothing needed doing, say so briefly.
+- LINKS IN REPLIES: when your reply mentions a todo/project/log, wrap the words of YOUR sentence markdown-style — "filed it under [the kitchen project](project:3)" — and the app renders them as links. Never bare tokens like [todo:22], never pasted entity titles as citations.
 - NEVER claim an action you didn't take. The reply may only reference changes actually made through tool calls this turn — if you logged something but created no todo, don't say you created a todo.
 - Quotes: preserve 0-3 verbatim sentences worth keeping exactly (feelings, decisions, doubts). Summary is a compact paraphrase in the user's voice, third person omitted.
 - Use existing IDs from the context. Create a project only when clearly new. Link impromptu things to todos/projects when the connection is obvious; otherwise leave unlinked.
 - A todo does NOT need a project. When the user states something they intend or need to do and no existing project fits, create the todo with no project_id — never skip the todo for lack of a project, and never invent a project just to hold it. A log alone is not enough for a stated task.
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
-- Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND end your reply with ONE short clarifying question; their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
-- Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask ("Which project is this for — X or Y?"). When the user answers, re-file it with update_log.
+- Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND ask via the ask_user tool (with suggested answers when natural options exist); their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
+- Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask via ask_user with the candidates as suggestions. When the user answers, re-file it with update_log.
 - When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — schedule the todo: scheduled_date for a day without a time (day-level, "any time" — never invent an hour), scheduled_start only when they give an actual time. Status becomes scheduled. Intentions with no time cue stay unscheduled todos.
 - When the user reports having DONE something concrete, the log IS the record (occurred_at resolved from time cues). If it corresponds to a todo, mark that todo done; one-off done things need no todo — the log alone is the right artifact, and it shows on the day it happened.
 - LINKAGE: when the turn creates a todo from what the user said, prefer attaching the utterance's log to that todo (create it first so the id exists), unless a different entity is clearly more central.
 - Todo titles are imperative verb phrases ("Walk the dog", "Call the dentist") — never past tense ("Walked the dog") and never gerunds ("Walking the dog"). Whether it happened or is finished lives in status, not in the title's wording.
-- After recording that something got done, if the user hasn't said how it went, end your reply with ONE brief reflective question (what happened / how did it feel / was it worthwhile?). Their answer becomes a reflection log. Never more than one question per turn, and drop it if they clearly don't want to reflect.
+- After recording that something got done, if the user hasn't said how it went, ask ONE brief reflective question via ask_user (what happened / how did it feel / was it worthwhile? — suggestions like "Went well" / "Rough" / "Skip" are fine). Their answer becomes a reflection log. Never more than one question per turn, and drop it if they clearly don't want to reflect.
 - When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create or reschedule todos, re-file the log, fix the summary — don't limit yourself to re-attaching.
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
@@ -919,6 +969,7 @@ export interface TurnResult {
   feed: ChangeFeedItem[];
   /** Accumulated (summarized) thinking across all iterations, for replay. */
   thinking: string;
+  questions: AskedQuestion[];
 }
 
 /** Live progress events emitted while the turn runs, for SSE streaming. */
@@ -926,7 +977,8 @@ export type TurnEvent =
   | { type: "iteration" }
   | { type: "thinking"; text: string }
   | { type: "delta"; text: string }
-  | { type: "feed"; item: ChangeFeedItem };
+  | { type: "feed"; item: ChangeFeedItem }
+  | { type: "questions"; questions: AskedQuestion[] };
 
 export async function runTurn(
   env: Env,
@@ -986,7 +1038,16 @@ export async function runTurn(
     { role: "user" as const, content: userText },
   ];
 
-  const state: TurnState = { env, user, session, messageId, feed: [], createdLogIds: [], onEvent };
+  const state: TurnState = {
+    env,
+    user,
+    session,
+    messageId,
+    feed: [],
+    createdLogIds: [],
+    questions: [],
+    onEvent,
+  };
 
   let reply = "";
   let thinking = "";
@@ -1059,5 +1120,10 @@ export async function runTurn(
       .run();
   }
 
-  return { reply: reply || "Noted.", feed: state.feed, thinking: thinking.trim() };
+  return {
+    reply: reply || "Noted.",
+    feed: state.feed,
+    thinking: thinking.trim(),
+    questions: state.questions,
+  };
 }

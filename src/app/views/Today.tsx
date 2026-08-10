@@ -18,6 +18,7 @@ import {
 } from "../api";
 import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
+import { renderEntityRefs } from "../refs";
 import type { CaptureContext } from "../Capture";
 
 const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
@@ -34,7 +35,6 @@ export default function Today(props: {
   const [error, setError] = useState<string | null>(null);
   const [scheduled, setScheduled] = useState<ScheduleEntry[]>([]);
   const [overdue, setOverdue] = useState<ScheduleEntry[]>([]);
-  const [hasPrev, setHasPrev] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -55,7 +55,6 @@ export default function Today(props: {
         .then((r) => {
           setBriefing(r.briefing);
           setGeneratedAt(r.generated_at);
-          setHasPrev(!!r.has_prev);
         })
         .catch(() => {});
       api<ScheduleEntry[]>(`/schedule?from=${dayStart - 7 * DAY}&to=${dayStart}`)
@@ -102,15 +101,6 @@ export default function Today(props: {
     (t) => t.status === "in_progress" && !scheduled.some((s) => s.id === t.id),
   );
 
-  async function undoBriefingClick() {
-    try {
-      const r = await post<{ briefing: Briefing; generated_at: number }>("/briefing/undo");
-      setBriefing(r.briefing);
-      setGeneratedAt(r.generated_at);
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    }
-  }
 
   const scheduledRow = (s: ScheduleEntry, showDay = false) => (
     <div
@@ -151,34 +141,10 @@ export default function Today(props: {
     (a, b) => (b.slot_all_day - a.slot_all_day) || (a.slot_start - b.slot_start),
   );
 
-  // [todo:12] / [project:3] / [action:7] / [log:9] tokens become entity links.
-  const renderRefs = (text: string) => {
-    const out: ReactNode[] = [];
-    const re = /\[(todo|project|action|log):(\d+)\]/g;
-    let last = 0;
-    let m: RegExpExecArray | null;
-    let k = 0;
-    while ((m = re.exec(text))) {
-      if (m.index > last) out.push(text.slice(last, m.index));
-      const type = m[1];
-      const id = Number(m[2]);
-      const label =
-        type === "todo"
-          ? (todoTitle.get(id) ?? `#${id}`)
-          : type === "project"
-            ? (projectName.get(id) ?? `#${id}`)
-            : `#${id}`;
-      const base = { todo: "todos", project: "projects", action: "actions", log: "logs" }[type];
-      out.push(
-        <Link key={k++} className="brief-ref" to={`/${base}/${id}`}>
-          {typeof label === "string" && label.length > 40 ? `${label.slice(0, 40)}…` : label}
-        </Link>,
-      );
-      last = re.lastIndex;
-    }
-    out.push(text.slice(last));
-    return out;
-  };
+  // [the agent's own words](todo:12) become links; legacy bare tokens fall
+  // back to entity titles. Shared renderer with the chat bubbles.
+  const renderRefs = (text: string) =>
+    renderEntityRefs(text, { todo: todoTitle, project: projectName });
 
   const [seeMore, setSeeMore] = useState<Set<string>>(new Set());
   const toggleMore = (key: string) =>
@@ -304,11 +270,6 @@ export default function Today(props: {
           )}
           <div className="brief-refresh">
             {error && <span className="error">Briefing refresh failed: {error}</span>}
-            {hasPrev && (
-              <button className="link" onClick={() => void undoBriefingClick()}>
-                undo briefing
-              </button>
-            )}
             <button
               className={`h2-toggle refresh ${refreshing ? "spin" : ""}`}
               title={

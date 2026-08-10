@@ -132,6 +132,7 @@ export interface Message {
   text: string | null;
   thinking?: string | null;
   reply_to?: number | null;
+  questions_json?: string | null;
 }
 
 export interface Segment {

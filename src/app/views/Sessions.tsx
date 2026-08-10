@@ -1,5 +1,5 @@
 // Chat history: past capture sessions (newest first) and a replay page.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrashCan, faPlay, faStop } from "@fortawesome/free-solid-svg-icons";
@@ -12,10 +12,38 @@ import {
   type Todo,
   type Project,
   type EventRecord,
-  type Segment,
 } from "../api";
 import EventFeed from "../components/EventFeed";
+import TranscriptPlayer from "../components/TranscriptPlayer";
+import { renderEntityRefs } from "../refs";
 import type { CaptureContext } from "../Capture";
+
+function QuestionChips(props: { questionsJson: string }) {
+  let questions: { question: string; suggestions?: string[] }[] = [];
+  try {
+    questions = JSON.parse(props.questionsJson) as typeof questions;
+  } catch {
+    return null;
+  }
+  return (
+    <div className="q-block">
+      {questions.map((q, i) => (
+        <div key={i} className="q-item">
+          <p className="q-text">{q.question}</p>
+          {q.suggestions && q.suggestions.length > 0 && (
+            <div className="q-chips">
+              {q.suggestions.map((sug, j) => (
+                <span key={j} className="q-chip static">
+                  {sug}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function contextLabel(
   s: {
@@ -147,51 +175,17 @@ export function SessionView(props: {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [openThoughts, setOpenThoughts] = useState<Set<number>>(new Set());
-  // Playback of a user message's audio: one shared player, segments chained.
-  const [playingMsg, setPlayingMsg] = useState<number | null>(null);
-  const [noAudio, setNoAudio] = useState<Set<number>>(new Set());
-  const playerRef = useRef<HTMLAudioElement | null>(null);
+  // Expanded per-message transcript players (highlight + slider + speed).
+  const [openPlayers, setOpenPlayers] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
 
-  const stopPlayback = () => {
-    playerRef.current?.pause();
-    playerRef.current = null;
-    setPlayingMsg(null);
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => stopPlayback, []);
-
-  async function togglePlay(msgId: number) {
-    if (playingMsg === msgId) {
-      stopPlayback();
-      return;
-    }
-    stopPlayback();
-    let segments: Segment[] = [];
-    try {
-      segments = (await api<{ segments: Segment[] }>(`/messages/${msgId}`)).segments;
-    } catch {
-      /* fall through to no-audio marking */
-    }
-    if (segments.length === 0) {
-      setNoAudio((s) => new Set(s).add(msgId));
-      return;
-    }
-    setPlayingMsg(msgId);
-    const queue = [...segments].sort((a, b) => a.seq - b.seq);
-    const playNext = () => {
-      const seg = queue.shift();
-      if (!seg) {
-        setPlayingMsg((cur) => (cur === msgId ? null : cur));
-        return;
-      }
-      const player = new Audio(`/api/audio/${seg.id}`);
-      playerRef.current = player;
-      player.onended = playNext;
-      void player.play().catch(() => setPlayingMsg((cur) => (cur === msgId ? null : cur)));
-    };
-    playNext();
-  }
+  const togglePlayer = (msgId: number) =>
+    setOpenPlayers((s) => {
+      const next = new Set(s);
+      if (next.has(msgId)) next.delete(msgId);
+      else next.add(msgId);
+      return next;
+    });
 
   useEffect(() => {
     api<{ session: CaptureSession; messages: Message[]; events: EventRecord[] }>(`/sessions/${sessionId}`)
@@ -314,17 +308,27 @@ export function SessionView(props: {
                   {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
                 </>
               )}
-              <p>{m.text}</p>
+              <p>{m.role === "assistant" ? renderEntityRefs(m.text ?? "") : m.text}</p>
+              {m.role === "assistant" && m.questions_json && (
+                <QuestionChips questionsJson={m.questions_json} />
+              )}
               {m.role === "user" && (
-                <button
-                  className="msg-play"
-                  title={noAudio.has(m.id) ? "No audio for this message" : "Play the recording"}
-                  disabled={noAudio.has(m.id)}
-                  onClick={() => void togglePlay(m.id)}
-                >
-                  <FontAwesomeIcon icon={playingMsg === m.id ? faStop : faPlay} />
-                  {noAudio.has(m.id) ? " no audio" : ""}
-                </button>
+                <>
+                  <button
+                    className="msg-play"
+                    title="Play the recording"
+                    onClick={() => togglePlayer(m.id)}
+                  >
+                    <FontAwesomeIcon icon={openPlayers.has(m.id) ? faStop : faPlay} />
+                  </button>
+                  {openPlayers.has(m.id) && (
+                    <TranscriptPlayer
+                      messageId={m.id}
+                      autoPlay
+                      emptyNote="No audio for this message (typed)."
+                    />
+                  )}
+                </>
               )}
               {feed && feed.length > 0 && (
                 <EventFeed events={feed} todos={todos} projects={projects} />

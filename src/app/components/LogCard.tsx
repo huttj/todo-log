@@ -5,15 +5,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
-import {
-  api,
-  type Log,
-  type LogTranscript,
-  type Quote,
-  type SegmentDetail,
-  type TranscriptWord,
-} from "../api";
+import { api, type Log, type Quote, type SegmentDetail, type TranscriptWord } from "../api";
 import { requestTalk } from "../talk";
+import TranscriptPlayer from "./TranscriptPlayer";
+import { getSpeed, setGlobalSpeed, nextSpeed } from "../audio";
 
 export interface LogAttachment {
   label: string;
@@ -78,7 +73,7 @@ export default function LogCard(props: {
       >
         {log.summary}
       </p>
-      {showFull && <FullTranscript logId={log.id} />}
+      {showFull && <TranscriptPlayer logId={log.id} emptyNote="No audio for this log (typed input)." />}
       {(quotes.length > 0 || log.message_id) && (
         <div className="log-toggles">
           {quotes.length > 0 ? (
@@ -108,165 +103,6 @@ export default function LogCard(props: {
         </div>
       )}
       {showQuotes && quotes.map((q, i) => <QuoteBlock key={i} quote={q} />)}
-    </div>
-  );
-}
-
-const SPEEDS = [1, 1.25, 1.5, 2];
-
-/** The whole utterance as ONE transcript: segments stitched into a single
- * word stream, played back-to-back by one player, with speed control.
- * Clicking any word seeks into the right segment. */
-function FullTranscript(props: { logId: number }) {
-  const [segs, setSegs] = useState<SegmentDetail[] | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
-  const [current, setCurrent] = useState<{ seg: number; word: number }>({ seg: -1, word: -1 });
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const speedRef = useRef(1);
-  const tickerRef = useRef<number | null>(null);
-  // One pre-buffered player per segment — rolling to the next is instant
-  // instead of stalling on a fresh fetch+decode.
-  const playersRef = useRef<HTMLAudioElement[]>([]);
-
-  useEffect(() => {
-    let alive = true;
-    api<LogTranscript>(`/logs/${props.logId}/transcript`)
-      .then(async (data) => {
-        const details = await Promise.all(
-          data.segments.map((s) => api<SegmentDetail>(`/segments/${s.id}`)),
-        );
-        if (!alive) return;
-        playersRef.current = details.map((s) => {
-          const a = new Audio(`/api/audio/${s.id}`);
-          a.preload = "auto";
-          return a;
-        });
-        setSegs(details);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-      audioRef.current?.pause();
-      for (const a of playersRef.current) a.pause();
-      playersRef.current = [];
-    };
-  }, [props.logId]);
-
-  const stop = () => {
-    if (tickerRef.current) window.clearInterval(tickerRef.current);
-    tickerRef.current = null;
-    audioRef.current?.pause();
-    audioRef.current = null;
-    setPlaying(false);
-    setCurrent({ seg: -1, word: -1 });
-  };
-
-  // Pause keeps the player and position; toggling resumes where it left off.
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (playing && audio) {
-      audio.pause();
-      setPlaying(false);
-    } else if (audio) {
-      setPlaying(true);
-      void audio.play().catch(stop);
-    } else {
-      playSegment(0);
-    }
-  };
-
-  const playSegment = (segIdx: number, at = 0, opts: { overlapPrev?: boolean } = {}) => {
-    if (!segs || segIdx >= segs.length) {
-      stop();
-      return;
-    }
-    if (tickerRef.current) window.clearInterval(tickerRef.current);
-    const prev = audioRef.current;
-    if (prev) {
-      prev.ontimeupdate = null;
-      prev.onended = null;
-      // On an early roll the previous tail keeps playing out under the next
-      // segment's start — that overlap is what kills the audible gap.
-      if (!opts.overlapPrev) prev.pause();
-    }
-    const audio = playersRef.current[segIdx] ?? new Audio(`/api/audio/${segs[segIdx].id}`);
-    audioRef.current = audio;
-    audio.playbackRate = speedRef.current;
-    audio.currentTime = at;
-    audio.ontimeupdate = () => {
-      const words = segs[segIdx].words;
-      if (!words) return;
-      const t = audio.currentTime;
-      setCurrent({ seg: segIdx, word: words.findIndex((w) => t >= w.start && t < w.end + 0.15) });
-    };
-    // Early roll: start the next segment before this one ends, with enough
-    // lead to swallow play()'s own startup latency (timeupdate is too
-    // coarse, so poll finely while playing).
-    let rolled = false;
-    const roll = () => {
-      if (rolled) return;
-      rolled = true;
-      playSegment(segIdx + 1, 0, { overlapPrev: true });
-    };
-    const hasNext = segIdx + 1 < segs.length;
-    if (hasNext) {
-      tickerRef.current = window.setInterval(() => {
-        if (audio.paused || rolled) return;
-        const remaining = (audio.duration - audio.currentTime) / (audio.playbackRate || 1);
-        if (Number.isFinite(remaining) && remaining <= 0.18) roll();
-      }, 20);
-    }
-    audio.onended = () => {
-      if (hasNext) roll();
-      else stop();
-    };
-    setPlaying(true);
-    setCurrent({ seg: segIdx, word: -1 });
-    void audio.play().catch(stop);
-  };
-
-  const cycleSpeed = () => {
-    const next = SPEEDS[(SPEEDS.indexOf(speedRef.current) + 1) % SPEEDS.length];
-    speedRef.current = next;
-    setSpeed(next);
-    if (audioRef.current) audioRef.current.playbackRate = next;
-  };
-
-  if (!segs) return <p className="segment-transcript">…</p>;
-  if (segs.length === 0) {
-    return <p className="segment-transcript full">No audio for this log (typed input).</p>;
-  }
-
-  return (
-    <div className="segment-transcript full combined" onClick={(e) => e.stopPropagation()}>
-      <div className="player-bar">
-        <button className="play-btn" onClick={togglePlay}>
-          {playing ? "⏸" : "▶"}
-        </button>
-        <button className="speed-btn" onClick={cycleSpeed} title="Playback speed">
-          {speed}×
-        </button>
-      </div>
-      <p className="word-transcript">
-        {segs.map((seg, si) =>
-          seg.words && seg.words.length > 0 ? (
-            seg.words.map((w, wi) => (
-              <span
-                key={`${si}-${wi}`}
-                className={current.seg === si && current.word === wi ? "current" : ""}
-                onClick={() => playSegment(si, w.start)}
-              >
-                {w.word}{" "}
-              </span>
-            ))
-          ) : (
-            <span key={`${si}-t`} onClick={() => playSegment(si)}>
-              {seg.transcript ?? ""}{" "}
-            </span>
-          ),
-        )}
-      </p>
     </div>
   );
 }
@@ -302,13 +138,14 @@ function InteractiveTranscript(props: {
 }) {
   const [seg, setSeg] = useState<SegmentDetail | null>(null);
   const [currentIdx, setCurrentIdx] = useState(-1);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(getSpeed);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const win = props.window;
 
   const cycleSpeed = () => {
-    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+    const next = nextSpeed(speed);
     setSpeed(next);
+    setGlobalSpeed(next);
     if (audioRef.current) audioRef.current.playbackRate = next;
   };
 

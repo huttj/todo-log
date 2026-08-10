@@ -38,12 +38,14 @@ export interface Briefing {
 /** Style contract shared by the generator and the agent's update_briefing
  * tool — this is what makes the briefing feel like a colleague, not a nag. */
 export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
-- Entity link tokens are REQUIRED: every line that concerns a tracked todo/project/log MUST embed its token inline where it reads naturally — [todo:ID], [project:ID], [log:ID]. The app renders these as links; a line about a tracked item with no token is a defect. Example: "Discuss the bank statements with Claude [todo:18]".
+- Entity links are REQUIRED and use markdown-style syntax: wrap the exact words of YOUR OWN sentence that should be tappable — [discussing the statements](todo:18), [Back Taxes](project:3), [Friday's reflection](log:41). YOU choose which of your words become the link; the app links exactly those words. NEVER append or repeat the entity's title next to the link — the link text IS part of your sentence, not a citation. A line about a tracked item with no link is a defect.
+  BAD: "tax discussion with Claude [todo:18]" (bare token) or "the tax plan Discuss bank statements with Claude" (title pasted in).
+  GOOD: "[Discuss the bank statements](todo:18) with Claude."
 - NEVER narrate the user's inner world. No talk of resistance, avoidance, motivation, energy, being stuck or stalled, or what today "should" be the day for. Describe the state of the WORK, never the psychology of the person. Their feelings live in their own logs, in their own words — do not paraphrase feelings back at them, and do not restate uncertainty they expressed as a fact about them ("uncertain it's worth it" → frame the task: "Unclear if it's worth it — you might look into it if there's time").
 - Never convert their uncertainty into a commitment: "you might X if there's time", not "will X if there's time".
 - No urgency intensifiers or prodding, ever: "actually", "finally", "sit down", "lock in", "make it real", "you keep", "still hanging", "no action yet", "stalled" — all banned. The headline states what's on deck, plainly; it is never a diagnosis or a call to action.
   BAD headline: "Today's the day to actually sit down with three stalled things."
-  GOOD headline: "Three candidates for today: taxes-with-Claude [todo:18], file criteria [todo:21], and Fix Men next steps [todo:15] — plus mailing Taylor's card [todo:19]."
+  GOOD headline: "Three candidates for today: [taxes-with-Claude](todo:18), [file criteria](todo:21), and [Fix Men next steps](todo:15) — plus [mailing Taylor's card](todo:19)."
   BAD: "should cut the resistance" → GOOD: "should make it much easier".
 - Don't echo back facts the user just told you as if they were news ("it's filled out, just needs to go out" the day after they said exactly that). Freshly-shared context is known context — use it silently.
 - Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
