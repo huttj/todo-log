@@ -38,9 +38,11 @@ export interface Briefing {
 /** Style contract shared by the generator and the agent's update_briefing
  * tool — this is what makes the briefing feel like a colleague, not a nag. */
 export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
-- Entity links are REQUIRED and use markdown-style syntax: wrap the exact words of YOUR OWN sentence that should be tappable — [discussing the statements](todo:18), [Back Taxes](project:3), [Friday's reflection](log:41). YOU choose which of your words become the link; the app links exactly those words. NEVER append or repeat the entity's title next to the link — the link text IS part of your sentence, not a citation. A line about a tracked item with no link is a defect.
-  BAD: "tax discussion with Claude [todo:18]" (bare token) or "the tax plan Discuss bank statements with Claude" (title pasted in).
-  GOOD: "[Discuss the bank statements](todo:18) with Claude."
+- Entity links are REQUIRED and use markdown-style syntax. The procedure: write the sentence first, exactly as you naturally would. THEN pick 2-5 consecutive words ALREADY IN that sentence and wrap them: "Next: [discuss the statements](todo:18) with Claude." The link adds ZERO new words to the line. If you find yourself putting the entity's TITLE inside the brackets, you have failed — the bracketed words must be your sentence's own words, which keep reading grammatically when the brackets are removed.
+  BAD: "Discuss the statements with Claude to finalize the tax plan [Discuss bank statements with Claude to finalize tax plan](todo:22)." (title appended as a citation — the sentence says it twice)
+  BAD: "tax discussion with Claude [todo:22]" (bare token)
+  GOOD: "[Discuss the statements](todo:22) with Claude to finalize the tax plan."
+  A line about a tracked item with no link is a defect; so is a line that names the item twice.
 - NEVER narrate the user's inner world. No talk of resistance, avoidance, motivation, energy, being stuck or stalled, or what today "should" be the day for. Describe the state of the WORK, never the psychology of the person. Their feelings live in their own logs, in their own words — do not paraphrase feelings back at them, and do not restate uncertainty they expressed as a fact about them ("uncertain it's worth it" → frame the task: "Unclear if it's worth it — you might look into it if there's time").
 - Never convert their uncertainty into a commitment: "you might X if there's time", not "will X if there's time".
 - No urgency intensifiers or prodding, ever: "actually", "finally", "sit down", "lock in", "make it real", "you keep", "still hanging", "no action yet", "stalled" — all banned. The headline states what's on deck, plainly; it is never a diagnosis or a call to action.
