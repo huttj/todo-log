@@ -10,7 +10,7 @@ import {
   getEntity,
   listProjects,
   listTodos,
-  listActions,
+  listScheduledTodos,
   listLogs,
   searchAll,
   insertEvent,
@@ -21,7 +21,7 @@ import {
   ENTITY_TABLES,
 } from "./db";
 import { generateBriefing } from "./briefing";
-import type { EntityType, ProjectRow, TodoRow, ActionRow } from "./types";
+import type { EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
 crud.use("*", requireEnabled);
@@ -97,45 +97,12 @@ crud.post("/todos", async (c) => {
   return c.json(row);
 });
 
-// -- Actions ----------------------------------------------------------------
+// -- Scheduled todos (the Today/schedule surface) ---------------------------
 
-crud.get("/actions", async (c) => {
+crud.get("/todos/scheduled", async (c) => {
   const from = Number(c.req.query("from") ?? now() - 86400);
   const to = Number(c.req.query("to") ?? now() + 7 * 86400);
-  return c.json(await listActions(c.env, c.get("user").id, { from, to }));
-});
-
-crud.get("/actions/:id", async (c) => {
-  const action = await getEntity<ActionRow>(c.env, "action", c.get("user").id, Number(c.req.param("id")));
-  if (!action) return c.json({ error: "not found" }, 404);
-  return c.json(action);
-});
-
-crud.post("/actions", async (c) => {
-  const body = await c.req.json<Record<string, unknown>>();
-  const t = now();
-  const row = await insertRow<ActionRow>(c.env, "actions", {
-    user_id: c.get("user").id,
-    todo_id: typeof body.todo_id === "number" ? body.todo_id : null,
-    project_id: typeof body.project_id === "number" ? body.project_id : null,
-    title: typeof body.title === "string" ? body.title : null,
-    scheduled_start: typeof body.scheduled_start === "number" ? body.scheduled_start : null,
-    scheduled_end: typeof body.scheduled_end === "number" ? body.scheduled_end : null,
-    started_at: null,
-    ended_at: null,
-    status: typeof body.status === "string" ? body.status : "scheduled",
-    gcal_event_id: null,
-    created_at: t,
-    updated_at: t,
-  });
-  await insertEvent(c.env, {
-    userId: c.get("user").id,
-    entityType: "action",
-    entityId: row.id,
-    kind: "created",
-    payload: { manual: true },
-  });
-  return c.json(row);
+  return c.json(await listScheduledTodos(c.env, c.get("user").id, { from, to }));
 });
 
 // -- Logs -------------------------------------------------------------------
@@ -199,7 +166,7 @@ crud.get("/search", async (c) => {
 
 const PATCHABLE: Record<EntityType, string[]> = {
   project: ["name", "description", "kind", "status"],
-  todo: ["title", "outcome", "details", "project_id", "status"],
+  todo: ["title", "outcome", "details", "project_id", "status", "scheduled_start", "all_day"],
   action: [
     "todo_id",
     "project_id",

@@ -28,7 +28,8 @@ capture.post("/sessions", async (c) => {
   const body = await c.req
     .json<{ context_type?: string; context_id?: number; mode?: string; notification_id?: number }>()
     .catch(() => ({}) as Record<string, never>);
-  const mode = body.mode === "plan" ? "plan" : null;
+  // Talk opened from the Today page = a planning-flavored session.
+  const mode = body.mode === "plan" || body.context_type === "today" ? "plan" : null;
   const reNotificationId = typeof body.notification_id === "number" ? body.notification_id : null;
   // A past chat as context is stored in its own column — the context_type
   // CHECK predates it and can't be widened in place on remote D1.

@@ -20,21 +20,9 @@ export interface Todo {
   outcome: string | null;
   details: string | null;
   status: "idea" | "scheduled" | "in_progress" | "done" | "abandoned";
-  updated_at: number;
-}
-
-export interface Action {
-  id: number;
-  todo_id: number | null;
-  project_id: number | null;
-  title: string | null;
   scheduled_start: number | null;
-  scheduled_end: number | null;
-  started_at: number | null;
-  ended_at: number | null;
-  status: "scheduled" | "in_progress" | "done" | "skipped" | "canceled";
   all_day: number;
-  created_at: number;
+  updated_at: number;
 }
 
 export interface AppNotification {
@@ -46,13 +34,25 @@ export interface AppNotification {
   updated_at: number;
 }
 
+export interface BriefingProjectLine {
+  project_id: number | null;
+  name: string;
+  line: string;
+}
+
 export interface Briefing {
   headline: string;
-  today: string[];
-  tomorrow: string[];
-  projects: { project_id: number | null; name: string; line: string }[];
-  oneoffs: string[];
-  week: string[];
+  today?: string[];
+  today_more?: string[];
+  oneoffs?: string[];
+  oneoffs_more?: string[];
+  coming?: string[];
+  coming_more?: string[];
+  projects?: BriefingProjectLine[];
+  projects_more?: BriefingProjectLine[];
+  /** Legacy keys from pre-split briefings; folded into `coming` on render. */
+  tomorrow?: string[];
+  week?: string[];
 }
 
 export interface Log {
@@ -108,6 +108,7 @@ export interface CaptureSession {
   context_type: string | null;
   context_id: number | null;
   about_session_id?: number | null;
+  mode?: string | null;
   ended_at: number | null;
 }
 

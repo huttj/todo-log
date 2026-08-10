@@ -43,9 +43,7 @@ export default function LogView(props: {
           label: `project: ${projects.find((p) => p.id === log.project_id)?.name ?? log.project_id}`,
           to: `/projects/${log.project_id}`,
         }
-      : log.action_id
-        ? { label: `action #${log.action_id}`, to: `/actions/${log.action_id}` }
-        : null;
+      : null;
 
   return (
     <div className="tasks log-page">

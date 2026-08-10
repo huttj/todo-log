@@ -17,7 +17,6 @@ import ProjectView from "./views/ProjectView";
 import TodoView from "./views/TodoView";
 import Logs from "./views/Logs";
 import LogView from "./views/LogView";
-import ActionView from "./views/ActionView";
 import { Sessions, SessionView } from "./views/Sessions";
 import Landing from "./views/Landing";
 import Capture, { type CaptureContext } from "./Capture";
@@ -168,7 +167,6 @@ export default function App() {
           <Route path="/todos/:id" element={<TodoView {...viewProps} />} />
           <Route path="/logs" element={<Logs {...viewProps} />} />
           <Route path="/logs/:id" element={<LogView {...viewProps} />} />
-          <Route path="/actions/:id" element={<ActionView {...viewProps} />} />
           <Route path="/sessions" element={<Sessions {...viewProps} />} />
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />

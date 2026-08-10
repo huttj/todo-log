@@ -163,6 +163,22 @@ export async function listTodos(
   return r.results;
 }
 
+/** Todos scheduled inside a time range (the Today/schedule surface). */
+export async function listScheduledTodos(
+  env: Env,
+  userId: number,
+  range: { from: number; to: number },
+): Promise<TodoRow[]> {
+  const r = await env.DB.prepare(
+    `SELECT * FROM todos WHERE user_id = ? AND scheduled_start IS NOT NULL
+     AND scheduled_start >= ? AND scheduled_start < ?
+     ORDER BY all_day DESC, scheduled_start`,
+  )
+    .bind(userId, range.from, range.to)
+    .all<TodoRow>();
+  return r.results;
+}
+
 export async function listTodosForProject(env: Env, userId: number, projectId: number): Promise<TodoRow[]> {
   const r = await env.DB.prepare(
     `SELECT * FROM todos WHERE user_id = ? AND project_id = ? ORDER BY updated_at DESC LIMIT 100`,
@@ -241,9 +257,24 @@ export async function listLogs(
 ): Promise<LogRow[]> {
   const conds = ["user_id = ?"];
   const binds: unknown[] = [userId];
-  if (filter.todoId) (conds.push("todo_id = ?"), binds.push(filter.todoId));
+  // Entity pages also surface logs from turns that touched the entity (via the
+  // audit trail) — with one log per utterance, direct attachment alone would
+  // hide the story from every entity but the one the log attached to.
+  if (filter.todoId) {
+    conds.push(
+      `(todo_id = ? OR (message_id IS NOT NULL AND message_id IN
+        (SELECT message_id FROM events WHERE entity_type = 'todo' AND entity_id = ? AND message_id IS NOT NULL)))`,
+    );
+    binds.push(filter.todoId, filter.todoId);
+  }
   if (filter.actionId) (conds.push("action_id = ?"), binds.push(filter.actionId));
-  if (filter.projectId) (conds.push("project_id = ?"), binds.push(filter.projectId));
+  if (filter.projectId) {
+    conds.push(
+      `(project_id = ? OR (message_id IS NOT NULL AND message_id IN
+        (SELECT message_id FROM events WHERE entity_type = 'project' AND entity_id = ? AND message_id IS NOT NULL)))`,
+    );
+    binds.push(filter.projectId, filter.projectId);
+  }
   if (filter.from) (conds.push("occurred_at >= ?"), binds.push(filter.from));
   if (filter.to) (conds.push("occurred_at < ?"), binds.push(filter.to));
   const r = await env.DB.prepare(

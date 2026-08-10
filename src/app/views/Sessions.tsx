@@ -18,10 +18,16 @@ import EventFeed from "../components/EventFeed";
 import type { CaptureContext } from "../Capture";
 
 function contextLabel(
-  s: { context_type: string | null; context_id: number | null; about_session_id?: number | null },
+  s: {
+    context_type: string | null;
+    context_id: number | null;
+    about_session_id?: number | null;
+    mode?: string | null;
+  },
   todos: Todo[],
   projects: Project[],
 ): string | null {
+  if (s.mode === "plan") return "planning the day";
   if (s.about_session_id) return `about chat #${s.about_session_id}`;
   if (!s.context_type || !s.context_id) return null;
   if (s.context_type === "todo") {

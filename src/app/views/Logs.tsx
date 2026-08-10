@@ -138,9 +138,7 @@ export default function Logs(props: {
                   ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
                   : l.project_id
                     ? { label: `project: ${projectName.get(l.project_id) ?? l.project_id}`, to: `/projects/${l.project_id}` }
-                    : l.action_id
-                      ? { label: `action #${l.action_id}`, to: `/actions/${l.action_id}` }
-                      : null
+                    : null
               }
             />
           ))}

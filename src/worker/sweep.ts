@@ -1,7 +1,7 @@
 // Cron sweep (Cyborgy pattern): heal untranscribed audio segments, then
 // distill pending corrections into each user's learnings doc.
 import Anthropic from "@anthropic-ai/sdk";
-import type { Env, UserRow, ActionRow, TodoRow } from "./types";
+import type { Env, UserRow, TodoRow } from "./types";
 import {
   now,
   stuckSegments,
@@ -11,7 +11,7 @@ import {
   getLearnings,
   setLearnings,
   enabledUsers,
-  listActions,
+  listScheduledTodos,
   listTodos,
   listMemories,
   setNotification,
@@ -167,23 +167,25 @@ async function runCheckins(env: Env): Promise<void> {
 }
 
 async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void> {
-  const [actions, todos, memories] = await Promise.all([
-    listActions(env, user.id, { from: t - 2 * DAY, to: t + DAY }),
+  const [scheduled, todos, memories] = await Promise.all([
+    listScheduledTodos(env, user.id, { from: t - 2 * DAY, to: t + DAY }),
     listTodos(env, user.id),
     listMemories(env, user.id),
   ]);
-  const open = actions.filter((a) => a.status === "scheduled" || a.status === "in_progress");
-  const inFlight = todos.filter((td) => td.status === "in_progress" || td.status === "scheduled");
+  const open = scheduled.filter((td) => td.status === "scheduled" || td.status === "in_progress");
+  const inFlight = todos.filter(
+    (td) => (td.status === "in_progress" || td.status === "scheduled") && !open.some((o) => o.id === td.id),
+  );
   if (open.length === 0 && inFlight.length === 0) return;
 
   const tz = user.timezone ?? env.TIMEZONE;
-  const line = (a: ActionRow) => {
-    const when = a.scheduled_start
-      ? a.all_day
-        ? `${new Date(a.scheduled_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })} (all day)`
-        : new Date(a.scheduled_start * 1000).toLocaleString("en-US", { timeZone: tz })
+  const line = (td: TodoRow) => {
+    const when = td.scheduled_start
+      ? td.all_day
+        ? `${new Date(td.scheduled_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })} (any time)`
+        : new Date(td.scheduled_start * 1000).toLocaleString("en-US", { timeZone: tz })
       : "unscheduled";
-    return `- action “${a.title ?? "untitled"}” [${a.status}] ${when}`;
+    return `- todo “${td.title}” [${td.status}] ${when}`;
   };
   const todoLine = (td: TodoRow) => `- todo “${td.title}” [${td.status}]`;
 
@@ -196,14 +198,16 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
       "You are warm, brief, and specific — a good coworker glancing at the board, never a nag. " +
       "Given what's open, either write a short check-in (title ≤ 8 words; body 1-3 sentences naming " +
       "SPECIFIC items and asking 1-2 concrete questions — a progress update, or what's making something " +
-      "hard) or decide none is warranted right now. Reply with ONLY JSON: " +
-      '{"title": "...", "body": "..."} or {"skip": true}.',
+      "hard) or decide none is warranted right now. Mirror the user's own words and commitment level " +
+      "(never escalate \"look into\" to \"do\"); when a state is assumed rather than known, ask rather than " +
+      "assert; banned register: \"finally\", \"you keep postponing\", \"still hanging\", \"no action yet\". " +
+      'Reply with ONLY JSON: {"title": "...", "body": "..."} or {"skip": true}.',
     messages: [
       {
         role: "user",
         content: [
           `Local time: ${new Date(t * 1000).toLocaleString("en-US", { timeZone: tz })}`,
-          `Open/scheduled actions (last 2 days → tomorrow):\n${open.map(line).join("\n") || "(none)"}`,
+          `Scheduled todos (last 2 days → tomorrow):\n${open.map(line).join("\n") || "(none)"}`,
           `Todos in flight:\n${inFlight.slice(0, 15).map(todoLine).join("\n") || "(none)"}`,
           memories.length
             ? `Your memory notes:\n${memories.map((m) => `[${m.key}] ${m.content}`).join("\n")}`

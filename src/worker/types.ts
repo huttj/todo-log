@@ -53,6 +53,10 @@ export interface TodoRow {
   outcome: string | null;
   details: string | null;
   status: TodoStatus;
+  /** When scheduled: epoch ts; local midnight when all_day. */
+  scheduled_start: number | null;
+  /** 1 = day-level ("any time" that day), no specific hour. */
+  all_day: number;
   created_at: number;
   updated_at: number;
 }
@@ -168,10 +172,11 @@ export interface EventRow {
   created_at: number;
 }
 
-/** One line of the post-utterance change feed shown to the user. */
+/** One line of the post-utterance change feed shown to the user.
+ * event_id 0 = synthetic (no audit row, not undoable — e.g. briefing update). */
 export interface ChangeFeedItem {
   event_id: number;
-  entity_type: EntityType;
+  entity_type: EntityType | "briefing";
   entity_id: number;
   kind: string;
   label: string;

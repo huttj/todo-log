@@ -17,7 +17,7 @@ const MAX_SEGMENT_MS = 25_000;
 const DRAFT_KEY = "todolog.draft";
 
 export interface CaptureContext {
-  type: "project" | "todo" | "action" | "log" | "session";
+  type: "project" | "todo" | "action" | "log" | "session" | "today";
   id: number;
   label: string;
 }
@@ -35,6 +35,8 @@ interface ChatEntry {
   /** User voice note whose transcript hasn't landed yet. */
   transcribing?: boolean;
   showThinking?: boolean;
+  /** Long change feeds collapse behind "+N more changes". */
+  showFeed?: boolean;
 }
 
 interface QueuedSend {
@@ -630,7 +632,7 @@ export default function Capture(props: {
             <>
               re: <strong>{props.replyTo.title.slice(0, 48)}</strong>
             </>
-          ) : props.mode === "plan" ? (
+          ) : props.mode === "plan" || ctx?.type === "today" ? (
             <strong>Planning the day</strong>
           ) : ctx ? (
             <>
@@ -678,14 +680,31 @@ export default function Capture(props: {
                 )}
                 {entry.feed && entry.feed.length > 0 && (
                   <ul className="feed">
-                    {entry.feed.map((f) => (
-                      <li key={f.event_id} className={f.kind === "undone" ? "undone" : ""}>
+                    {(entry.feed.length > 5 && !entry.showFeed
+                      ? entry.feed.slice(0, 4)
+                      : entry.feed
+                    ).map((f, fi) => (
+                      <li key={`${f.event_id}-${fi}`} className={f.kind === "undone" ? "undone" : ""}>
                         <span>{f.label}</span>
-                        {f.kind !== "undone" && !entry.live && (
+                        {f.kind !== "undone" && !entry.live && f.event_id !== 0 && (
                           <button onClick={() => undo(f.event_id)}>undo</button>
                         )}
                       </li>
                     ))}
+                    {entry.feed.length > 5 && (
+                      <li className="feed-toggle">
+                        <button
+                          className="link"
+                          onClick={() =>
+                            updateEntry(entry.id, (e) => ({ ...e, showFeed: !e.showFeed }))
+                          }
+                        >
+                          {entry.showFeed
+                            ? "show fewer"
+                            : `+${entry.feed.length - 4} more changes`}
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 )}
               </div>

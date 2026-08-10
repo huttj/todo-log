@@ -10,11 +10,11 @@ import type {
   SessionRow,
   ProjectRow,
   TodoRow,
-  ActionRow,
   LogRow,
   ChangeFeedItem,
   EntityType,
 } from "./types";
+import { BRIEFING_STYLE } from "./briefing";
 import {
   now,
   insertRow,
@@ -24,8 +24,7 @@ import {
   listProjects,
   listTodos,
   listTodosForProject,
-  actionsForTodo,
-  listActions,
+  listScheduledTodos,
   listLogs,
   searchAll,
   insertEvent,
@@ -137,7 +136,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "create_todo",
     description:
-      "Create a todo. `outcome` is what done looks like; `details` holds constraints, fears, dependencies. `project_id` is optional — standalone todos are normal; never skip creating a stated task just because no project fits.",
+      "Create a todo. `title` is an imperative verb phrase ('Walk the dog' — never 'Walked' or 'Walking'). `outcome` is what done looks like; `details` holds constraints, fears, dependencies. `project_id` is optional — standalone todos are normal; never skip creating a stated task just because no project fits. Scheduling lives here too: `scheduled_date` (YYYY-MM-DD) for a day-level plan when the user names a day but no time — never invent an hour; `scheduled_start` (ISO with offset) only when they give an actual time.",
     input_schema: {
       type: "object",
       properties: {
@@ -145,6 +144,8 @@ const TOOLS: Anthropic.Tool[] = [
         outcome: { type: ["string", "null"] },
         details: { type: ["string", "null"] },
         project_id: ID,
+        scheduled_date: { type: ["string", "null"], description: "YYYY-MM-DD, day-level (\"any time\" that day)" },
+        scheduled_start: WHEN,
         status: {
           type: ["string", "null"],
           enum: ["idea", "scheduled", "in_progress", "done", "abandoned", null],
@@ -156,7 +157,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_todo",
     description:
-      "Update a todo. Only include fields that change. Status transitions should reflect reality (user started → in_progress, finished → done).",
+      "Update a todo. Only include fields that change. Status transitions should reflect reality (user started → in_progress, finished → done). Scheduling: `scheduled_date` (day-level) or `scheduled_start` (timed); set both null via scheduled_start=null to unschedule.",
     input_schema: {
       type: "object",
       properties: {
@@ -165,6 +166,8 @@ const TOOLS: Anthropic.Tool[] = [
         outcome: { type: ["string", "null"] },
         details: { type: ["string", "null"] },
         project_id: ID,
+        scheduled_date: { type: ["string", "null"], description: "YYYY-MM-DD, day-level" },
+        scheduled_start: WHEN,
         status: {
           type: ["string", "null"],
           enum: ["idea", "scheduled", "in_progress", "done", "abandoned", null],
@@ -174,69 +177,15 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
-    name: "create_action",
-    description:
-      "Create an action: an attempt at a todo, scheduled (future) or impromptu (happening now / already happened). Impromptu actions may have no todo. `title` is an imperative verb phrase ('Walk the dog' — not 'Walked' or 'Walking') — completion is expressed via status/ended_at, never the title.",
-    input_schema: {
-      type: "object",
-      properties: {
-        todo_id: ID,
-        project_id: ID,
-        title: { type: ["string", "null"], description: "Defaults to the todo's title" },
-        scheduled_date: {
-          type: ["string", "null"],
-          description:
-            "YYYY-MM-DD for day-level (all-day) scheduling. Use when the user names a day but no time — do NOT invent a time of day.",
-        },
-        scheduled_start: WHEN,
-        scheduled_end: WHEN,
-        started_at: WHEN,
-        ended_at: WHEN,
-        status: {
-          type: ["string", "null"],
-          enum: ["scheduled", "in_progress", "done", "skipped", "canceled", null],
-        },
-      },
-      required: [],
-    },
-  },
-  {
-    name: "update_action",
-    description: "Update an action. Only include fields that change.",
-    input_schema: {
-      type: "object",
-      properties: {
-        action_id: { type: "integer" },
-        todo_id: ID,
-        project_id: ID,
-        title: { type: ["string", "null"] },
-        scheduled_date: {
-          type: ["string", "null"],
-          description: "YYYY-MM-DD to (re)schedule day-level, without a time of day",
-        },
-        scheduled_start: WHEN,
-        scheduled_end: WHEN,
-        started_at: WHEN,
-        ended_at: WHEN,
-        status: {
-          type: ["string", "null"],
-          enum: ["scheduled", "in_progress", "done", "skipped", "canceled", null],
-        },
-      },
-      required: ["action_id"],
-    },
-  },
-  {
     name: "create_log",
     description:
-      "File a journal log from what the user said. The default action for almost every utterance. `summary` is a short paraphrase; `quotes` are 0-3 verbatim sentences from the user worth preserving exactly. Attach to the todo/action/project it concerns when clear.",
+      "File THE journal log for this utterance — one log per recording, covering everything said. `summary` is a compact paraphrase of all of it; `quotes` are 0-3 verbatim sentences worth preserving exactly. Attach to the single most central todo/project (entity pages also surface logs from turns that touched them, so one attachment is enough).",
     input_schema: {
       type: "object",
       properties: {
         summary: { type: "string" },
         kind: { type: ["string", "null"], enum: ["log", "reflection", null] },
         todo_id: ID,
-        action_id: ID,
         project_id: ID,
         quotes: { type: ["array", "null"], items: { type: "string" } },
         delivery_tags: {
@@ -253,7 +202,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_log",
     description:
-      "Update or re-file an existing log: fix the summary/kind, or attach it to the right todo/action/project (e.g. after the user answers a clarifying question). Only include fields that change.",
+      "Update or re-file an existing log: fix the summary/kind, or attach it to the right todo/project (e.g. after the user answers a clarifying question). Only include fields that change.",
     input_schema: {
       type: "object",
       properties: {
@@ -261,7 +210,6 @@ const TOOLS: Anthropic.Tool[] = [
         summary: { type: ["string", "null"] },
         kind: { type: ["string", "null"], enum: ["log", "reflection", null] },
         todo_id: ID,
-        action_id: ID,
         project_id: ID,
       },
       required: ["log_id"],
@@ -270,11 +218,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "fetch",
     description:
-      "Fetch full detail for one entity: the record plus its related todos/actions and recent logs. Use when the context snapshot isn't enough.",
+      "Fetch full detail for one entity: the record plus its related todos and recent logs. Use when the context snapshot isn't enough.",
     input_schema: {
       type: "object",
       properties: {
-        entity_type: { type: "string", enum: ["project", "todo", "action", "log"] },
+        entity_type: { type: "string", enum: ["project", "todo", "log"] },
         id: { type: "integer" },
       },
       required: ["entity_type", "id"],
@@ -293,13 +241,22 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_briefing",
     description:
-      "Rewrite the Today-view briefing (replaces it whole — include every section, not just what changed). Call when this conversation meaningfully changes what today or the week looks like: new plans, finished/dropped items, a shifted picture of a project. Don't call for minor bookkeeping. Ground every line in real data; second person; plain and honest.",
+      "Rewrite the Today-view briefing (replaces it whole — include every section, not just what changed). Call when this conversation meaningfully changes what today or the week looks like: new plans, finished/dropped items, a shifted picture of a project, or an answered question in it. Don't call for minor bookkeeping. Main lists hold only what deserves attention; the rest goes in the _more lists (behind \"see more\").\n" +
+      BRIEFING_STYLE,
     input_schema: {
       type: "object",
       properties: {
         headline: { type: "string", description: "One honest line about what today looks like" },
-        today: { type: "array", items: { type: "string" }, description: "Plans/commitments for today and tonight" },
-        tomorrow: { type: "array", items: { type: "string" } },
+        today: { type: "array", items: { type: "string" }, description: "Actionable plans/commitments for today and tonight" },
+        today_more: { type: "array", items: { type: "string" } },
+        oneoffs: {
+          type: "array",
+          items: { type: "string" },
+          description: "Loose threads: commitments living only in logs — phrase assumed states as questions",
+        },
+        oneoffs_more: { type: "array", items: { type: "string" } },
+        coming: { type: "array", items: { type: "string" }, description: "Tomorrow and the days ahead; also pure timing/status info" },
+        coming_more: { type: "array", items: { type: "string" } },
         projects: {
           type: "array",
           items: {
@@ -312,12 +269,18 @@ const TOOLS: Anthropic.Tool[] = [
             required: ["name", "line"],
           },
         },
-        oneoffs: {
+        projects_more: {
           type: "array",
-          items: { type: "string" },
-          description: "Commitments living only in logs — not tracked as todos/actions",
+          items: {
+            type: "object",
+            properties: {
+              project_id: { type: ["integer", "null"] },
+              name: { type: "string" },
+              line: { type: "string" },
+            },
+            required: ["name", "line"],
+          },
         },
-        week: { type: "array", items: { type: "string" } },
       },
       required: ["headline"],
     },
@@ -473,28 +436,51 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       return "ok";
     }
     case "create_todo": {
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const dayStart = str(input.scheduled_date) ? dayStartInZone(tz, str(input.scheduled_date)!) : null;
+      const scheduledStart = dayStart ?? parseWhen(input.scheduled_start);
       const row = await insertRow<TodoRow>(s.env, "todos", {
         user_id: s.user.id,
         project_id: num(input.project_id),
         title: str(input.title) ?? "Untitled",
         outcome: str(input.outcome),
         details: str(input.details),
-        status: str(input.status) ?? "idea",
+        status: str(input.status) ?? (scheduledStart ? "scheduled" : "idea"),
+        scheduled_start: scheduledStart,
+        all_day: dayStart ? 1 : 0,
         created_at: t,
         updated_at: t,
       });
-      await feedEvent(s, "todo", row.id, "created", `Created todo “${row.title}” (${row.status})`);
+      const when = row.scheduled_start
+        ? ` @ ${new Date(row.scheduled_start * 1000).toLocaleString("en-US", {
+            timeZone: tz,
+            ...(row.all_day ? { weekday: "short", month: "short", day: "numeric" } : {}),
+          })}${row.all_day ? " (any time)" : ""}`
+        : "";
+      await feedEvent(s, "todo", row.id, "created", `Created todo “${row.title}” (${row.status})${when}`);
       return JSON.stringify({ todo_id: row.id });
     }
     case "update_todo": {
       const id = num(input.todo_id);
       const current = id && (await getEntity<TodoRow>(s.env, "todo", s.user.id, id));
       if (!current) return "error: todo not found";
+      // Day-level rescheduling arrives as scheduled_date; fold into columns.
+      const sd = str(input.scheduled_date);
+      if (sd) {
+        const dayStart = dayStartInZone(s.user.timezone ?? s.env.TIMEZONE, sd);
+        if (dayStart == null) return "error: scheduled_date must be YYYY-MM-DD";
+        input.scheduled_start = new Date(dayStart * 1000).toISOString();
+        input.all_day = 1;
+      } else if (input.scheduled_start != null) {
+        input.all_day = 0;
+      }
       const { cols, before, after } = collectUpdates(input, current as never, [
         { name: "title" },
         { name: "outcome" },
         { name: "details" },
         { name: "project_id" },
+        { name: "scheduled_start", parse: parseWhen },
+        { name: "all_day" },
         { name: "status" },
       ]);
       if (Object.keys(cols).length === 0) return "no changes";
@@ -506,79 +492,6 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           ? `Todo “${current.title}”: ${current.status} → ${cols.status}`
           : `Updated todo “${current.title}” (${Object.keys(after).join(", ")})`;
       await feedEvent(s, "todo", current.id, kind, label, { before, after });
-      return "ok";
-    }
-    case "create_action": {
-      let title = str(input.title);
-      const todoId = num(input.todo_id);
-      if (!title && todoId) {
-        const todo = await getEntity<TodoRow>(s.env, "todo", s.user.id, todoId);
-        title = todo?.title ?? null;
-      }
-      const tz = s.user.timezone ?? s.env.TIMEZONE;
-      const dayStart = str(input.scheduled_date) ? dayStartInZone(tz, str(input.scheduled_date)!) : null;
-      const startedAt = parseWhen(input.started_at);
-      const row = await insertRow<ActionRow>(s.env, "actions", {
-        user_id: s.user.id,
-        todo_id: todoId,
-        project_id: num(input.project_id),
-        title,
-        scheduled_start: dayStart ?? parseWhen(input.scheduled_start),
-        scheduled_end: dayStart ? null : parseWhen(input.scheduled_end),
-        started_at: startedAt,
-        ended_at: parseWhen(input.ended_at),
-        status: str(input.status) ?? (startedAt ? "in_progress" : "scheduled"),
-        all_day: dayStart ? 1 : 0,
-        gcal_event_id: null,
-        created_at: t,
-        updated_at: t,
-      });
-      const when = row.scheduled_start
-        ? ` @ ${new Date(row.scheduled_start * 1000).toLocaleString("en-US", {
-            timeZone: tz,
-            ...(row.all_day
-              ? { weekday: "short", month: "short", day: "numeric" }
-              : {}),
-          })}${row.all_day ? " (all day)" : ""}`
-        : "";
-      await feedEvent(s, "action", row.id, "created", `Created action “${row.title ?? "untitled"}” (${row.status})${when}`);
-      return JSON.stringify({ action_id: row.id });
-    }
-    case "update_action": {
-      const id = num(input.action_id);
-      const current = id && (await getEntity<ActionRow>(s.env, "action", s.user.id, id));
-      if (!current) return "error: action not found";
-      // Day-level rescheduling arrives as scheduled_date; fold it into the
-      // regular columns before diffing.
-      const sd = str(input.scheduled_date);
-      if (sd) {
-        const dayStart = dayStartInZone(s.user.timezone ?? s.env.TIMEZONE, sd);
-        if (dayStart == null) return "error: scheduled_date must be YYYY-MM-DD";
-        input.scheduled_start = new Date(dayStart * 1000).toISOString();
-        input.all_day = 1;
-      } else if (input.scheduled_start != null) {
-        input.all_day = 0;
-      }
-      const { cols, before, after } = collectUpdates(input, current as never, [
-        { name: "all_day" },
-        { name: "todo_id" },
-        { name: "project_id" },
-        { name: "title" },
-        { name: "scheduled_start", parse: parseWhen },
-        { name: "scheduled_end", parse: parseWhen },
-        { name: "started_at", parse: parseWhen },
-        { name: "ended_at", parse: parseWhen },
-        { name: "status" },
-      ]);
-      if (Object.keys(cols).length === 0) return "no changes";
-      cols.updated_at = t;
-      await updateRow(s.env, "actions", s.user.id, current.id, cols);
-      const kind = "status" in cols ? "status_changed" : "updated";
-      const label =
-        "status" in cols
-          ? `Action “${current.title ?? current.id}”: ${current.status} → ${cols.status}`
-          : `Updated action “${current.title ?? current.id}” (${Object.keys(after).join(", ")})`;
-      await feedEvent(s, "action", current.id, kind, label, { before, after });
       return "ok";
     }
     case "create_log": {
@@ -595,7 +508,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         user_id: s.user.id,
         message_id: s.messageId,
         todo_id: num(input.todo_id),
-        action_id: num(input.action_id),
+        action_id: null,
         project_id: num(input.project_id),
         kind: input.kind === "reflection" ? "reflection" : "log",
         summary: str(input.summary) ?? "(empty)",
@@ -616,12 +529,11 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         { name: "summary" },
         { name: "kind" },
         { name: "todo_id" },
-        { name: "action_id" },
         { name: "project_id" },
       ]);
       if (Object.keys(cols).length === 0) return "no changes";
       await updateRow(s.env, "logs", s.user.id, current.id, cols);
-      const attachChanged = "todo_id" in cols || "action_id" in cols || "project_id" in cols;
+      const attachChanged = "todo_id" in cols || "project_id" in cols;
       const label = attachChanged
         ? `Re-filed log: ${(cols.summary as string) ?? current.summary}`
         : `Updated log (${Object.keys(after).join(", ")})`;
@@ -631,7 +543,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
     case "fetch": {
       const type = str(input.entity_type) as EntityType | null;
       const id = num(input.id);
-      if (!type || !id || !["project", "todo", "action", "log"].includes(type)) {
+      if (!type || !id || !["project", "todo", "log"].includes(type)) {
         return "error: entity_type and id required";
       }
       const entity = await getEntity<Record<string, unknown>>(s.env, type, s.user.id, id);
@@ -641,10 +553,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         related.todos = (await listTodosForProject(s.env, s.user.id, id)).slice(0, 30);
         related.recent_logs = await listLogs(s.env, s.user.id, { projectId: id, limit: 10 });
       } else if (type === "todo") {
-        related.actions = await actionsForTodo(s.env, s.user.id, id);
         related.recent_logs = await listLogs(s.env, s.user.id, { todoId: id, limit: 10 });
-      } else if (type === "action") {
-        related.recent_logs = await listLogs(s.env, s.user.id, { actionId: id, limit: 10 });
       }
       return JSON.stringify(related);
     }
@@ -658,27 +567,40 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!headline) return "error: headline required";
       const arr = (v: unknown) =>
         Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : [];
-      const projects = Array.isArray(input.projects)
-        ? (input.projects as Record<string, unknown>[])
-            .filter((p) => typeof p.name === "string" && typeof p.line === "string")
-            .map((p) => ({
-              project_id: typeof p.project_id === "number" ? p.project_id : null,
-              name: p.name as string,
-              line: p.line as string,
-            }))
-        : [];
+      const projArr = (v: unknown) =>
+        Array.isArray(v)
+          ? (v as Record<string, unknown>[])
+              .filter((p) => typeof p.name === "string" && typeof p.line === "string")
+              .map((p) => ({
+                project_id: typeof p.project_id === "number" ? p.project_id : null,
+                name: p.name as string,
+                line: p.line as string,
+              }))
+          : [];
       await setBriefing(
         s.env,
         s.user.id,
         JSON.stringify({
           headline,
           today: arr(input.today),
-          tomorrow: arr(input.tomorrow),
-          projects,
+          today_more: arr(input.today_more),
           oneoffs: arr(input.oneoffs),
-          week: arr(input.week),
+          oneoffs_more: arr(input.oneoffs_more),
+          coming: arr(input.coming),
+          coming_more: arr(input.coming_more),
+          projects: projArr(input.projects),
+          projects_more: projArr(input.projects_more),
         }),
       );
+      const item: ChangeFeedItem = {
+        event_id: 0,
+        entity_type: "briefing",
+        entity_id: 0,
+        kind: "briefing_updated",
+        label: "Updated today's briefing",
+      };
+      s.feed.push(item);
+      s.onEvent?.({ type: "feed", item });
       return "briefing updated";
     }
     case "save_memory": {
@@ -768,11 +690,11 @@ async function resolveQuotes(
 
 const SYSTEM_PROMPT = `You are the agent inside Todo Log, a todo list that doubles as a journal. The user talks to you — often rambling voice notes recorded mid-task, the way they'd rant to a coworker — and you keep their system up to date.
 
-Ontology: PROJECTS are areas of focus (bounded = has an end state; ongoing = never completes). TODOS are tasks with a describable outcome, optionally under a project. ACTIONS are attempts at todos — scheduled or impromptu. LOGS are the journal: anything the user said, attached to the todo/action/project it concerns. A "reflection" is a log about how it's going (feelings, worth, direction), not just what happened.
+Ontology: PROJECTS are areas of focus (bounded = has an end state; ongoing = never completes). TODOS are tasks with a describable outcome, optionally under a project — a todo can carry a schedule (a day, or a specific time). LOGS are the journal and the record of what actually happened, attached to the todo/project they concern. A "reflection" is a log about how it's going (feelings, worth, direction), not just what happened.
 
 How you behave:
 - APPLY CHANGES IMMEDIATELY via tools. There is no confirmation step — the user corrects you by talking more. When corrected: apply the fix AND call file_correction.
-- The default for nearly every utterance is create_log. Rants while working become logs on the current context entity. Also update statuses to match reality: user says they're starting → action in_progress, todo in_progress; finished → done and set ended_at.
+- ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said — never split one utterance into multiple topical logs. Attach it to the single most central todo/project (entity pages also surface logs from any turn that touched them, so one attachment covers the rest). Also update statuses to match reality: starting → in_progress, finished → done.
 - Be silent-by-default in spirit: NO advice, opinions, or coaching unless the user directly asks. When asked, answer concisely using the context below.
 - Your reply is a terse confirmation, 1-2 short sentences. The UI already shows a change feed of your tool calls — don't enumerate them again. If nothing needed doing, say so briefly.
 - NEVER claim an action you didn't take. The reply may only reference changes actually made through tool calls this turn — if you logged something but created no todo, don't say you created a todo.
@@ -782,12 +704,12 @@ How you behave:
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
 - Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND end your reply with ONE short clarifying question; their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
 - Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask ("Which project is this for — X or Y?"). When the user answers, re-file it with update_log.
-- When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — create the todo AND a scheduled action for that window, and set the todo's status to scheduled. A day without a time is a DAY-LEVEL schedule: use scheduled_date (all-day), never invent an hour. Use scheduled_start only when the user gives an actual time. Intentions with no time cue stay unscheduled todos.
-- When the user reports having DONE something concrete (worked on it, made the call, finished it), record it as an action: impromptu, status done, started_at/ended_at resolved from time cues (or roughly now, with a plausible duration). Link it to its todo/project when one fits, but an action does NOT need a todo — one-off things still become (todo-less) actions; don't invent a retroactive todo just to hold one. Actions are what show up on the calendar.
-- When one utterance reports several distinct done things, create a separate action for EACH — then a separate log per action, attached via action_id (create the action first so you have the id). A log about an action must never be left dangling without its action_id. One extra general log is fine only for leftover narrative that belongs to none of them.
-- Action titles are imperative verb phrases ("Walk the dog", "Call the dentist") — never past tense ("Walked the dog") and never gerunds ("Walking the dog"). Whether it happened or is finished lives in status/started_at/ended_at, not in the title's wording.
-- After recording a done action, if the user hasn't said how it went, end your reply with ONE brief reflective question (what happened / how did it feel / was it worthwhile?). Their answer becomes a reflection log attached to that action. Never more than one question per turn, and drop it if they clearly don't want to reflect.
-- When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create todos or actions, re-file or split the log, fix the summary — don't limit yourself to re-attaching.
+- When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — schedule the todo: scheduled_date for a day without a time (day-level, "any time" — never invent an hour), scheduled_start only when they give an actual time. Status becomes scheduled. Intentions with no time cue stay unscheduled todos.
+- When the user reports having DONE something concrete, the log IS the record (occurred_at resolved from time cues). If it corresponds to a todo, mark that todo done; one-off done things need no todo — the log alone is the right artifact, and it shows on the day it happened.
+- LINKAGE: when the turn creates a todo from what the user said, prefer attaching the utterance's log to that todo (create it first so the id exists), unless a different entity is clearly more central.
+- Todo titles are imperative verb phrases ("Walk the dog", "Call the dentist") — never past tense ("Walked the dog") and never gerunds ("Walking the dog"). Whether it happened or is finished lives in status, not in the title's wording.
+- After recording that something got done, if the user hasn't said how it went, end your reply with ONE brief reflective question (what happened / how did it feel / was it worthwhile?). Their answer becomes a reflection log. Never more than one question per turn, and drop it if they clearly don't want to reflect.
+- When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create or reschedule todos, re-file the log, fix the summary — don't limit yourself to re-attaching.
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
@@ -799,9 +721,9 @@ const PLAN_ADDENDUM = `
 
 THIS IS A PLANNING SESSION. The user wants help deciding what to do today. Different rules apply:
 - Be conversational and proactive — the silent-by-default rule is suspended. You're a thinking partner, not a stenographer.
-- Start from the evidence in the context: today's scheduled actions, overdue/stalled items, in-progress todos, what recent logs say they've been working on or avoiding. Weigh energy and mood if their words hint at it.
+- Start from the evidence in the context: today's scheduled todos, slipped/stalled items, what recent logs say they've been working on or avoiding. Weigh energy and mood if their words hint at it.
 - Propose a SHORT candidate plan (3-5 items max, less is fine) with one line of reasoning each, then ask what resonates. One question at a time; iterate.
-- As items are agreed, schedule them: all-day actions via scheduled_date for "today"-level commitments, timed only if the user names a time. Update todo statuses to scheduled.
+- As items are agreed, schedule the todos: scheduled_date for "today"-level commitments (any time that day), scheduled_start only if the user names a time.
 - If something on the list has been repeatedly deferred, gently name it and ask what's making it hard — that answer is worth a log.
 - Still file logs for anything notable the user says along the way.`;
 
@@ -812,7 +734,7 @@ function contextBlock(data: {
   notifications: { slot: string; title: string; body: string | null }[];
   projects: ProjectRow[];
   todos: TodoRow[];
-  actions: ActionRow[];
+  scheduled: TodoRow[];
   recentLogs: LogRow[];
   contextEntity: string;
   changeFeedSoFar: string;
@@ -823,13 +745,14 @@ function contextBlock(data: {
   const todos = data.todos
     .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}`)
     .join("\n");
-  const actions = data.actions
-    .map((a) => {
-      const when = a.scheduled_start ?? a.started_at;
-      const at = when
-        ? ` @ ${a.all_day ? new Date(when * 1000).toISOString().slice(0, 10) + " (all day)" : new Date(when * 1000).toISOString()}`
+  const scheduled = data.scheduled
+    .map((td) => {
+      const when = td.scheduled_start
+        ? td.all_day
+          ? `${new Date(td.scheduled_start * 1000).toISOString().slice(0, 10)} (any time)`
+          : new Date(td.scheduled_start * 1000).toISOString()
         : "";
-      return `#${a.id} ${a.title ?? "untitled"} [${a.status}]${at}${a.todo_id ? ` (todo #${a.todo_id})` : ""}`;
+      return `#${td.id} ${td.title} [${td.status}] @ ${when}`;
     })
     .join("\n");
   const memories = data.memories.map((m) => `[${m.key}] ${m.content}`).join("\n");
@@ -847,7 +770,7 @@ function contextBlock(data: {
     data.contextEntity ? `The user is currently looking at:\n${data.contextEntity}` : "",
     `Projects:\n${projects || "(none)"}`,
     `Open todos:\n${todos || "(none)"}`,
-    `Actions (yesterday → next 7 days):\n${actions || "(none)"}`,
+    `Scheduled todos (yesterday → next 7 days):\n${scheduled || "(none)"}`,
     logs ? `Recent logs (newest first):\n${logs}` : "",
     data.changeFeedSoFar ? `Changes already made earlier in this conversation:\n${data.changeFeedSoFar}` : "",
   ]
@@ -937,14 +860,14 @@ export async function runTurn(
   const t = now();
 
   const planMode = session.mode === "plan";
-  const [learnings, memories, notifications, projects, todos, actions, recentLogs, briefingRow, contextEntity, priorMessages, priorEvents] =
+  const [learnings, memories, notifications, projects, todos, scheduled, recentLogs, briefingRow, contextEntity, priorMessages, priorEvents] =
     await Promise.all([
       getLearnings(env, user.id),
       listMemories(env, user.id),
       listNotifications(env, user.id),
       listProjects(env, user.id),
       listTodos(env, user.id),
-      listActions(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
+      listScheduledTodos(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
       // Planning wants the recent story; regular turns keep context lean.
       planMode ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
       getBriefing(env, user.id),
@@ -964,7 +887,7 @@ export async function runTurn(
       notifications,
       projects,
       todos,
-      actions,
+      scheduled,
       recentLogs,
       contextEntity,
       changeFeedSoFar: priorEvents

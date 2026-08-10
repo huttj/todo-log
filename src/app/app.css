@@ -2022,3 +2022,44 @@ header {
   justify-content: flex-end;
   margin-bottom: 0.5rem;
 }
+
+/* -- briefing split cards -- */
+.brief-card {
+  margin-bottom: 0.6rem;
+}
+
+.brief-card .brief-section h2 {
+  margin-top: 0;
+}
+
+.brief-card .headline {
+  margin-bottom: 0;
+}
+
+.brief-ref {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid #c9c6bc;
+}
+
+.brief-ref:hover {
+  border-bottom-color: #1a1a1a;
+}
+
+.see-more {
+  padding: 0.35rem 0 0;
+  font-size: 0.8rem;
+}
+
+.brief-list .more-item {
+  color: #666;
+}
+
+.brief-refresh {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.1rem 0 0.75rem;
+}
