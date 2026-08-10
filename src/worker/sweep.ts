@@ -19,6 +19,7 @@ import {
 } from "./db";
 import { transcribe } from "./transcribe";
 import { generateBriefing } from "./briefing";
+import { emptyUsage, addUsage, recordUsage } from "./usage";
 
 const DISTILL_MODEL = "claude-opus-5";
 const CHECKIN_MODEL = "claude-sonnet-5";
@@ -102,6 +103,9 @@ async function distillCorrections(env: Env): Promise<void> {
           },
         ],
       });
+      const usage = emptyUsage();
+      addUsage(usage, response.usage);
+      await recordUsage(env, { userId, kind: "distill", model: DISTILL_MODEL, usage });
       const text = response.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { text: string }).text)
@@ -199,7 +203,9 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
       "hard) or decide none is warranted right now. Mirror the user's own words and commitment level " +
       "(never escalate \"look into\" to \"do\"); when a state is assumed rather than known, ask rather than " +
       "assert; banned register: \"finally\", \"you keep postponing\", \"still hanging\", \"no action yet\". " +
-      'Reply with ONLY JSON: {"title": "...", "body": "..."} or {"skip": true}.',
+      "If the day's picture has clearly shifted since the briefing would have been computed, you may also " +
+      'set "refresh_briefing": true to recompute the Today overview. ' +
+      'Reply with ONLY JSON: {"title": "...", "body": "...", "refresh_briefing": false} or {"skip": true}.',
     messages: [
       {
         role: "user",
@@ -216,6 +222,10 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
       },
     ],
   });
+  const usage = emptyUsage();
+  addUsage(usage, response.usage);
+  await recordUsage(env, { userId: user.id, kind: "checkin", model: CHECKIN_MODEL, usage });
+
   const text = response.content
     .filter((b) => b.type === "text")
     .map((b) => (b as { text: string }).text)
@@ -226,9 +236,15 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
       title?: string;
       body?: string;
       skip?: boolean;
+      refresh_briefing?: boolean;
     };
     if (parsed.skip || !parsed.title) return;
     await setNotification(env, user.id, "checkin", parsed.title, parsed.body ?? null);
+    if (parsed.refresh_briefing) {
+      await generateBriefing(env, user).catch((err) =>
+        console.error(`sweep: check-in-triggered briefing refresh failed for user ${user.id}:`, err),
+      );
+    }
   } catch {
     console.error(`sweep: unparseable check-in for user ${user.id}: ${text.slice(0, 200)}`);
   }

@@ -123,6 +123,22 @@ export interface SessionSummary extends CaptureSession {
   started_at: number;
   message_count: number;
   first_text: string | null;
+  cost_usd?: number;
+}
+
+export interface UsageSummary {
+  week: number;
+  all_time: number;
+  by_kind: {
+    kind: string;
+    model: string;
+    n: number;
+    input: number;
+    output: number;
+    cache_read: number;
+    cache_write: number;
+    cost: number;
+  }[];
 }
 
 export interface Message {

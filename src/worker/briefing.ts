@@ -4,6 +4,7 @@
 // cron refreshes it when stale; ↻ recomputes on demand.
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env, UserRow, ScheduleRow } from "./types";
+import { emptyUsage, addUsage, recordUsage } from "./usage";
 import {
   now,
   listProjects,
@@ -98,9 +99,45 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     .join("\n\n");
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  // Structured output guarantees parseable JSON (adaptive thinking previously
+  // ate into max_tokens and could truncate the raw-JSON reply mid-object).
+  const strArray = { type: "array", items: { type: "string" } };
+  const projArray = {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        project_id: { type: ["integer", "null"] },
+        name: { type: "string" },
+        line: { type: "string" },
+      },
+      required: ["project_id", "name", "line"],
+      additionalProperties: false,
+    },
+  };
+  const BRIEFING_SCHEMA = {
+    type: "object",
+    properties: {
+      headline: { type: "string" },
+      today: strArray,
+      today_more: strArray,
+      oneoffs: strArray,
+      oneoffs_more: strArray,
+      coming: strArray,
+      coming_more: strArray,
+      projects: projArray,
+      projects_more: projArray,
+    },
+    required: [
+      "headline", "today", "today_more", "oneoffs", "oneoffs_more",
+      "coming", "coming_more", "projects", "projects_more",
+    ],
+    additionalProperties: false,
+  };
   const response = await client.messages.create({
     model: BRIEFING_MODEL,
-    max_tokens: 2400,
+    max_tokens: 6000,
+    output_config: { format: { type: "json_schema", schema: BRIEFING_SCHEMA } },
     system:
       "You compute the daily briefing for Todo Log, a voice-first todo/journal app. From the data, " +
       "produce ONLY a JSON object (no fences, no prose) with keys:\n" +
@@ -115,16 +152,24 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     messages: [{ role: "user", content: input }],
   });
 
+  const usage = emptyUsage();
+  addUsage(usage, response.usage);
+  await recordUsage(env, { userId: user.id, kind: "briefing", model: BRIEFING_MODEL, usage });
+
   const text = response.content
     .filter((b) => b.type === "text")
     .map((b) => (b as { text: string }).text)
     .join("")
     .trim();
-  // Take the outermost JSON object regardless of any wrapping the model added.
+  // Structured output should be pure JSON; keep the outermost-object fallback.
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) {
-    console.error(`briefing: no JSON in output for user ${user.id}: ${text.slice(0, 200)}`);
+    console.error(
+      `briefing: no JSON for user ${user.id} — stop_reason=${response.stop_reason}, ` +
+        `blocks=[${response.content.map((b) => b.type).join(",")}], ` +
+        `output_tokens=${response.usage.output_tokens}, text="${text.slice(0, 200)}"`,
+    );
     return null;
   }
   try {

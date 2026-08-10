@@ -12,6 +12,7 @@ import {
   type Todo,
   type Project,
   type EventRecord,
+  type UsageSummary,
 } from "../api";
 import EventFeed from "../components/EventFeed";
 import TranscriptPlayer from "../components/TranscriptPlayer";
@@ -86,12 +87,14 @@ export function Sessions(props: {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const navigate = useNavigate();
 
   const load = () => {
     api<SessionSummary[]>("/sessions").then(setSessions).catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
     api<Project[]>("/projects").then(setProjects).catch(() => {});
+    api<UsageSummary>("/usage/summary").then(setUsage).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [props.refreshKey]);
@@ -122,8 +125,24 @@ export function Sessions(props: {
     return [...groups.entries()];
   }, [sessions]);
 
+  const fmtCost = (c: number) => (c >= 0.995 ? `$${c.toFixed(2)}` : `${Math.max(1, Math.round(c * 100))}¢`);
+
   return (
     <div className="sessions">
+      {usage && usage.all_time > 0 && (
+        <p className="usage-line">
+          Agent spend — 7 days: {fmtCost(usage.week)}
+          {usage.by_kind.length > 0 && (
+            <>
+              {" ("}
+              {usage.by_kind.map((k) => `${k.kind} ${fmtCost(k.cost)}`).join(" · ")}
+              {")"}
+            </>
+          )}
+          {" · all-time "}
+          {fmtCost(usage.all_time)}
+        </p>
+      )}
       {sessions.length === 0 && <p className="empty">No chats yet — tap Talk.</p>}
       {byDay.map(([day, list]) => (
         <section key={day}>
@@ -140,7 +159,10 @@ export function Sessions(props: {
                     })}
                   </span>
                   {label && <span className="attachment">{label}</span>}
-                  <span className="count">{s.message_count} msg</span>
+                  <span className="count">
+                    {s.message_count} msg
+                    {(s.cost_usd ?? 0) > 0 && ` · ${fmtCost(s.cost_usd!)}`}
+                  </span>
                   <button
                     className="link trash"
                     title="Delete chat"

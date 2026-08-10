@@ -200,6 +200,33 @@ crud.post("/briefing/refresh", async (c) => {
   return c.json({ briefing, generated_at: now() });
 });
 
+// -- LLM usage / cost instrumentation ---------------------------------------
+
+crud.get("/usage/summary", async (c) => {
+  const userId = c.get("user").id;
+  const weekAgo = now() - 7 * 86400;
+  const byKind = await c.env.DB.prepare(
+    `SELECT kind, model, COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output,
+            SUM(cache_read_tokens) AS cache_read, SUM(cache_write_tokens) AS cache_write,
+            SUM(cost_usd) AS cost
+     FROM llm_usage WHERE user_id = ? AND created_at > ? GROUP BY kind, model ORDER BY cost DESC`,
+  )
+    .bind(userId, weekAgo)
+    .all();
+  const totals = await c.env.DB.prepare(
+    `SELECT SUM(cost_usd) AS all_time,
+            SUM(CASE WHEN created_at > ? THEN cost_usd ELSE 0 END) AS week
+     FROM llm_usage WHERE user_id = ?`,
+  )
+    .bind(weekAgo, userId)
+    .first<{ all_time: number | null; week: number | null }>();
+  return c.json({
+    week: totals?.week ?? 0,
+    all_time: totals?.all_time ?? 0,
+    by_kind: byKind.results,
+  });
+});
+
 // Omni search across projects, todos, and logs.
 crud.get("/search", async (c) => {
   const q = c.req.query("q")?.trim();

@@ -62,6 +62,7 @@ capture.get("/sessions", async (c) => {
   const r = await c.env.DB.prepare(
     `SELECT s.*,
        (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id AND m.text IS NOT NULL) AS message_count,
+       (SELECT COALESCE(SUM(lu.cost_usd), 0) FROM llm_usage lu WHERE lu.session_id = s.id) AS cost_usd,
        (SELECT m.text FROM messages m WHERE m.session_id = s.id AND m.role = 'user' AND m.text IS NOT NULL
         ORDER BY m.id LIMIT 1) AS first_text
      FROM sessions s

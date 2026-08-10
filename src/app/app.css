@@ -2166,3 +2166,9 @@ header {
 .action-row .title a:hover {
   text-decoration: underline;
 }
+
+.usage-line {
+  font-size: 0.78rem;
+  color: #999;
+  margin: 0.25rem 0 0.75rem;
+}

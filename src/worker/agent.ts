@@ -16,6 +16,7 @@ import type {
   EntityType,
 } from "./types";
 import { BRIEFING_STYLE } from "./briefing";
+import { emptyUsage, addUsage, recordUsage } from "./usage";
 import {
   now,
   insertRow,
@@ -1009,11 +1010,13 @@ export async function runTurn(
       recentSessionEvents(env, session.id),
     ]);
 
-  const system =
-    SYSTEM_PROMPT +
-    (planMode ? PLAN_ADDENDUM : "") +
-    "\n\n" +
-    contextBlock({
+  // Prompt caching: tools + the static prompt form a stable prefix (cache
+  // breakpoints on the last tool and the static system block). The volatile
+  // context (current time, todos, briefing) sits after the breakpoints so a
+  // change there never invalidates the expensive prefix. Within one turn's
+  // tool iterations everything repeats and reads from cache.
+  const staticSystem = SYSTEM_PROMPT + (planMode ? PLAN_ADDENDUM : "");
+  const volatileSystem = contextBlock({
       clock: nowInZone(tz),
       learnings,
       memories,
@@ -1030,6 +1033,13 @@ export async function runTurn(
     (briefingRow
       ? `\n\nThe briefing currently shown on the Today view${planMode ? " (start from it — refine, don't recite)" : ""}:\n${briefingRow.content_json}`
       : "");
+  const system: Anthropic.TextBlockParam[] = [
+    { type: "text", text: staticSystem, cache_control: { type: "ephemeral" } },
+    { type: "text", text: volatileSystem, cache_control: { type: "ephemeral" } },
+  ];
+  const tools: Anthropic.Tool[] = TOOLS.map((t, i) =>
+    i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t,
+  );
 
   const messages: Anthropic.MessageParam[] = [
     ...conversationOrder(priorMessages)
@@ -1051,6 +1061,7 @@ export async function runTurn(
 
   let reply = "";
   let thinking = "";
+  const usage = emptyUsage();
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     onEvent?.({ type: "iteration" });
     if (thinking && !thinking.endsWith("\n\n")) thinking += "\n\n";
@@ -1059,7 +1070,7 @@ export async function runTurn(
       max_tokens: 8192,
       thinking: { type: "adaptive", display: "summarized" },
       system,
-      tools: TOOLS,
+      tools,
       messages,
     });
     for await (const event of stream) {
@@ -1073,6 +1084,7 @@ export async function runTurn(
       }
     }
     const response = await stream.finalMessage();
+    addUsage(usage, response.usage);
 
     if (response.stop_reason === "refusal") {
       reply = "I couldn't process that one — try rephrasing.";
@@ -1119,6 +1131,15 @@ export async function runTurn(
       .bind(state.createdLogIds[0], messageId)
       .run();
   }
+
+  await recordUsage(env, {
+    userId: user.id,
+    kind: "turn",
+    model: AGENT_MODEL,
+    sessionId: session.id,
+    messageId,
+    usage,
+  });
 
   return {
     reply: reply || "Noted.",
