@@ -113,6 +113,22 @@ export default function Capture(props: {
     };
   }, []);
 
+  // Scrolling over the dock must never scroll the page behind it. When the
+  // chat has scrollable overflow its own scrolling + overscroll-behavior
+  // handle it; otherwise swallow the wheel (except over the textarea and
+  // expanded-thinking, which scroll themselves).
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest("textarea, .thinking")) return;
+      const chat = el.querySelector(".chat");
+      if (!chat || chat.scrollHeight <= chat.clientHeight) e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat]);

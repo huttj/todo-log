@@ -5,7 +5,6 @@ import {
   faSun,
   faLayerGroup,
   faBookOpen,
-  faCalendarDays,
   faComments,
   faMagnifyingGlass,
 } from "@fortawesome/free-solid-svg-icons";
@@ -20,7 +19,6 @@ import Logs from "./views/Logs";
 import LogView from "./views/LogView";
 import ActionView from "./views/ActionView";
 import { Sessions, SessionView } from "./views/Sessions";
-import Calendar from "./views/Calendar";
 import Landing from "./views/Landing";
 import Capture, { type CaptureContext } from "./Capture";
 import { TALK_EVENT, type TalkRequest } from "./talk";
@@ -146,14 +144,6 @@ export default function App() {
             <span className="nav-label">Logs</span>
           </NavLink>
           <NavLink
-            to="/calendar"
-            className={({ isActive }) => (isActive ? "active" : "")}
-            title="Calendar"
-          >
-            <FontAwesomeIcon icon={faCalendarDays} />
-            <span className="nav-label">Calendar</span>
-          </NavLink>
-          <NavLink
             to="/sessions"
             className={({ isActive }) => (isActive ? "active" : "")}
             title="Chats"
@@ -181,7 +171,6 @@ export default function App() {
           <Route path="/actions/:id" element={<ActionView {...viewProps} />} />
           <Route path="/sessions" element={<Sessions {...viewProps} />} />
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
-          <Route path="/calendar" element={<Calendar {...viewProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

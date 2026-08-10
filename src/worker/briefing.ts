@@ -76,7 +76,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const response = await client.messages.create({
     model: BRIEFING_MODEL,
-    max_tokens: 1200,
+    max_tokens: 2400,
     system:
       "You compute the daily briefing for Todo Log, a voice-first todo/journal app. From the data, " +
       "produce ONLY a JSON object (no fences, no prose) with keys:\n" +
@@ -98,14 +98,27 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     .filter((b) => b.type === "text")
     .map((b) => (b as { text: string }).text)
     .join("")
-    .trim()
-    .replace(/^```(json)?|```$/g, "")
     .trim();
+  // Take the outermost JSON object regardless of any wrapping the model added.
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) {
+    console.error(`briefing: no JSON in output for user ${user.id}: ${text.slice(0, 200)}`);
+    return null;
+  }
   try {
-    const parsed = JSON.parse(text) as Briefing;
+    const parsed = JSON.parse(text.slice(start, end + 1)) as Briefing;
     if (!parsed.headline) return null;
-    await setBriefing(env, user.id, JSON.stringify(parsed));
-    return parsed;
+    const briefing: Briefing = {
+      headline: parsed.headline,
+      today: parsed.today ?? [],
+      tomorrow: parsed.tomorrow ?? [],
+      projects: parsed.projects ?? [],
+      oneoffs: parsed.oneoffs ?? [],
+      week: parsed.week ?? [],
+    };
+    await setBriefing(env, user.id, JSON.stringify(briefing));
+    return briefing;
   } catch {
     console.error(`briefing: unparseable output for user ${user.id}: ${text.slice(0, 200)}`);
     return null;

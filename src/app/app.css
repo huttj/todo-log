@@ -2007,3 +2007,18 @@ header {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Chat scroll stays inside the dock (no page scroll chaining). */
+.chat {
+  overscroll-behavior: contain;
+}
+
+.capture-dock {
+  overscroll-behavior: contain;
+}
+
+/* Today: tools row under the day nav */
+.today-tools.bar {
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+}

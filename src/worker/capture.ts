@@ -19,7 +19,6 @@ import {
 } from "./db";
 import { transcribe } from "./transcribe";
 import { runTurn } from "./agent";
-import { generateBriefing } from "./briefing";
 import type { AudioSegmentRow, LogRow, MessageRow, SessionRow } from "./types";
 
 export const capture = new Hono<AppContext>();
@@ -255,11 +254,6 @@ capture.post("/messages/:id/send", async (c) => {
         });
         await emit({ type: "done", reply: result.reply, feed: result.feed });
         await writer.close().catch(() => {});
-        // Every turn can change what today looks like — recompute the briefing
-        // (after closing the stream so the client never waits on it).
-        await generateBriefing(c.env, user).catch((err) =>
-          console.error("briefing regeneration after turn failed:", err),
-        );
       } catch (err) {
         await emit({ type: "error", error: err instanceof Error ? err.message : String(err) });
         await writer.close().catch(() => {});

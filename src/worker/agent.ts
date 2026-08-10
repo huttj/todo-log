@@ -36,6 +36,7 @@ import {
   listNotifications,
   getNotificationById,
   getBriefing,
+  setBriefing,
   saveMemory,
   listMemories,
   recentSessionEvents,
@@ -287,6 +288,38 @@ const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: { query: { type: "string" } },
       required: ["query"],
+    },
+  },
+  {
+    name: "update_briefing",
+    description:
+      "Rewrite the Today-view briefing (replaces it whole — include every section, not just what changed). Call when this conversation meaningfully changes what today or the week looks like: new plans, finished/dropped items, a shifted picture of a project. Don't call for minor bookkeeping. Ground every line in real data; second person; plain and honest.",
+    input_schema: {
+      type: "object",
+      properties: {
+        headline: { type: "string", description: "One honest line about what today looks like" },
+        today: { type: "array", items: { type: "string" }, description: "Plans/commitments for today and tonight" },
+        tomorrow: { type: "array", items: { type: "string" } },
+        projects: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              project_id: { type: ["integer", "null"] },
+              name: { type: "string" },
+              line: { type: "string", description: "Momentum + one suggested next step, ≤ 20 words" },
+            },
+            required: ["name", "line"],
+          },
+        },
+        oneoffs: {
+          type: "array",
+          items: { type: "string" },
+          description: "Commitments living only in logs — not tracked as todos/actions",
+        },
+        week: { type: "array", items: { type: "string" } },
+      },
+      required: ["headline"],
     },
   },
   {
@@ -620,6 +653,34 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!q) return "error: query required";
       return JSON.stringify(await searchAll(s.env, s.user.id, q));
     }
+    case "update_briefing": {
+      const headline = str(input.headline);
+      if (!headline) return "error: headline required";
+      const arr = (v: unknown) =>
+        Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : [];
+      const projects = Array.isArray(input.projects)
+        ? (input.projects as Record<string, unknown>[])
+            .filter((p) => typeof p.name === "string" && typeof p.line === "string")
+            .map((p) => ({
+              project_id: typeof p.project_id === "number" ? p.project_id : null,
+              name: p.name as string,
+              line: p.line as string,
+            }))
+        : [];
+      await setBriefing(
+        s.env,
+        s.user.id,
+        JSON.stringify({
+          headline,
+          today: arr(input.today),
+          tomorrow: arr(input.tomorrow),
+          projects,
+          oneoffs: arr(input.oneoffs),
+          week: arr(input.week),
+        }),
+      );
+      return "briefing updated";
+    }
     case "save_memory": {
       const key = str(input.key);
       if (!key) return "error: key required";
@@ -730,7 +791,8 @@ How you behave:
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
-- NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.`;
+- NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
+- BRIEFING: the Today view shows a precomputed briefing (included below when one exists). When this conversation meaningfully changes the shape of today or the week — plans made or finished, a project's picture shifting — rewrite it with update_briefing. Skip it for minor bookkeeping.`;
 
 /** Extra system prompt for 'plan' sessions ("what should I do today?"). */
 const PLAN_ADDENDUM = `
@@ -885,7 +947,7 @@ export async function runTurn(
       listActions(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
       // Planning wants the recent story; regular turns keep context lean.
       planMode ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
-      planMode ? getBriefing(env, user.id) : Promise.resolve(null),
+      getBriefing(env, user.id),
       describeContextEntity(env, session, user.id),
       sessionMessages(env, session.id),
       recentSessionEvents(env, session.id),
@@ -909,8 +971,8 @@ export async function runTurn(
         .map((e) => `- ${e.kind} ${e.entity_type} #${e.entity_id}`)
         .join("\n"),
     }) +
-    (planMode && briefingRow
-      ? `\n\nThe precomputed daily briefing currently shown to the user (start from it — refine, don't recite):\n${briefingRow.content_json}`
+    (briefingRow
+      ? `\n\nThe briefing currently shown on the Today view${planMode ? " (start from it — refine, don't recite)" : ""}:\n${briefingRow.content_json}`
       : "");
 
   const messages: Anthropic.MessageParam[] = [
