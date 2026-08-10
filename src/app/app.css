@@ -2227,3 +2227,15 @@ header {
   color: #b5b2a8;
   margin-top: 0.25rem;
 }
+
+/* Log card: pills on their own row under the time/cost/reprocess header. */
+.log-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.15rem 0 0.4rem;
+}
+
+.log-pills .attachment {
+  white-space: normal;
+}

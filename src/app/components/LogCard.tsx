@@ -44,20 +44,10 @@ export default function LogCard(props: {
         <Link className="time" to={`/logs/${log.id}`} onClick={(e) => e.stopPropagation()}>
           {time}
         </Link>
-        {log.kind === "reflection" && <span className="kind">reflection</span>}
         {(log.cost_usd ?? 0) > 0 && (
           <span className="log-cost" title="Cost of the agent turn behind this log">
             {fmtCost(log.cost_usd!)}
           </span>
-        )}
-        {props.attachment && (
-          <Link
-            className="attachment"
-            to={props.attachment.to}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {props.attachment.label}
-          </Link>
         )}
         <button
           className="link reprocess"
@@ -70,6 +60,20 @@ export default function LogCard(props: {
           <FontAwesomeIcon icon={faArrowsRotate} />
         </button>
       </div>
+      {(log.kind === "reflection" || props.attachment) && (
+        <div className="log-pills">
+          {log.kind === "reflection" && <span className="kind">reflection</span>}
+          {props.attachment && (
+            <Link
+              className="attachment"
+              to={props.attachment.to}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {props.attachment.label}
+            </Link>
+          )}
+        </div>
+      )}
       <p
         className="log-summary"
         onClick={(e) => {
