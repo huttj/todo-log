@@ -4,7 +4,7 @@
 // cron refreshes it when stale; ↻ recomputes on demand.
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env, UserRow, ScheduleRow } from "./types";
-import { emptyUsage, addUsage, recordUsage } from "./usage";
+import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
 import {
   now,
   listProjects,
@@ -191,7 +191,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       projects: parsed.projects ?? [],
       projects_more: parsed.projects_more ?? [],
     };
-    await setBriefing(env, user.id, JSON.stringify(briefing));
+    await setBriefing(env, user.id, JSON.stringify(briefing), computeCost(BRIEFING_MODEL, usage));
     return briefing;
   } catch {
     console.error(`briefing: unparseable output for user ${user.id}: ${text.slice(0, 200)}`);

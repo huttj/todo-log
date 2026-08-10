@@ -32,6 +32,7 @@ export default function Today(props: {
   const [dayOffset, setDayOffset] = useState(0);
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
+  const [briefCost, setBriefCost] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scheduled, setScheduled] = useState<ScheduleEntry[]>([]);
@@ -51,10 +52,16 @@ export default function Today(props: {
 
   const load = () => {
     if (isToday) {
-      api<{ briefing: Briefing | null; generated_at: number | null; has_prev?: boolean }>("/briefing")
+      api<{
+        briefing: Briefing | null;
+        generated_at: number | null;
+        cost_usd?: number | null;
+        has_prev?: boolean;
+      }>("/briefing")
         .then((r) => {
           setBriefing(r.briefing);
           setGeneratedAt(r.generated_at);
+          setBriefCost(r.cost_usd ?? null);
         })
         .catch(() => {});
       api<ScheduleEntry[]>(`/schedule?from=${dayStart - 7 * DAY}&to=${dayStart}`)
@@ -85,9 +92,12 @@ export default function Today(props: {
     setRefreshing(true);
     setError(null);
     try {
-      const r = await post<{ briefing: Briefing; generated_at: number }>("/briefing/refresh");
+      const r = await post<{ briefing: Briefing; generated_at: number; cost_usd?: number | null }>(
+        "/briefing/refresh",
+      );
       setBriefing(r.briefing);
       setGeneratedAt(r.generated_at);
+      setBriefCost(r.cost_usd ?? null);
     } catch (e) {
       setError(String((e as Error).message ?? e));
     } finally {
@@ -290,6 +300,11 @@ export default function Today(props: {
           )}
           <div className="brief-refresh">
             {error && <span className="error">Briefing refresh failed: {error}</span>}
+            {briefCost != null && briefCost > 0 && (
+              <span className="brief-cost" title="Cost of the last generation">
+                {briefCost >= 0.995 ? `$${briefCost.toFixed(2)}` : `${Math.max(1, Math.round(briefCost * 100))}¢`}
+              </span>
+            )}
             <button
               className={`h2-toggle refresh ${refreshing ? "spin" : ""}`}
               title={

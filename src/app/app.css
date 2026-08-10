@@ -2186,3 +2186,8 @@ header {
 .thread-talk:hover {
   opacity: 1;
 }
+
+.brief-cost {
+  font-size: 0.72rem;
+  color: #b5b2a8;
+}

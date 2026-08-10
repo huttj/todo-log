@@ -613,15 +613,21 @@ export async function getBriefing(env: Env, userId: number): Promise<BriefingRow
     .first<BriefingRow>();
 }
 
-export async function setBriefing(env: Env, userId: number, contentJson: string): Promise<void> {
+export async function setBriefing(
+  env: Env,
+  userId: number,
+  contentJson: string,
+  costUsd: number | null = null,
+): Promise<void> {
   await env.DB.prepare(
-    `INSERT INTO briefings (user_id, content_json, generated_at) VALUES (?, ?, ?)
+    `INSERT INTO briefings (user_id, content_json, generated_at, cost_usd) VALUES (?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        prev_content_json = briefings.content_json,
        content_json = excluded.content_json,
-       generated_at = excluded.generated_at`,
+       generated_at = excluded.generated_at,
+       cost_usd = excluded.cost_usd`,
   )
-    .bind(userId, contentJson, now())
+    .bind(userId, contentJson, now(), costUsd)
     .run();
 }
 

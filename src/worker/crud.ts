@@ -177,6 +177,7 @@ crud.get("/briefing", async (c) => {
     return c.json({
       briefing: JSON.parse(row.content_json),
       generated_at: row.generated_at,
+      cost_usd: row.cost_usd,
       has_prev: !!(row as { prev_content_json?: string | null }).prev_content_json,
     });
   } catch {
@@ -197,7 +198,8 @@ crud.post("/briefing/undo", async (c) => {
 crud.post("/briefing/refresh", async (c) => {
   const briefing = await generateBriefing(c.env, c.get("user"));
   if (!briefing) return c.json({ error: "briefing generation failed — try again" }, 502);
-  return c.json({ briefing, generated_at: now() });
+  const row = await getBriefing(c.env, c.get("user").id);
+  return c.json({ briefing, generated_at: now(), cost_usd: row?.cost_usd ?? null });
 });
 
 // -- LLM usage / cost instrumentation ---------------------------------------

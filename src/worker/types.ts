@@ -145,6 +145,7 @@ export interface BriefingRow {
   user_id: number;
   content_json: string;
   generated_at: number;
+  cost_usd: number | null;
 }
 
 export interface AgentMemoryRow {
