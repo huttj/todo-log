@@ -196,10 +196,16 @@ crud.post("/briefing/undo", async (c) => {
 });
 
 crud.post("/briefing/refresh", async (c) => {
-  const briefing = await generateBriefing(c.env, c.get("user"));
-  if (!briefing) return c.json({ error: "briefing generation failed — try again" }, 502);
-  const row = await getBriefing(c.env, c.get("user").id);
-  return c.json({ briefing, generated_at: now(), cost_usd: row?.cost_usd ?? null });
+  try {
+    const briefing = await generateBriefing(c.env, c.get("user"));
+    if (!briefing) return c.json({ error: "generation returned no usable briefing — try again" }, 502);
+    const row = await getBriefing(c.env, c.get("user").id);
+    return c.json({ briefing, generated_at: now(), cost_usd: row?.cost_usd ?? null });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("briefing refresh threw:", msg);
+    return c.json({ error: `briefing generation error: ${msg.slice(0, 300)}` }, 502);
+  }
 });
 
 // -- LLM usage / cost instrumentation ---------------------------------------

@@ -2214,3 +2214,8 @@ header {
   text-transform: none;
   letter-spacing: normal;
 }
+
+/* Cost line under the briefing section, across from the regenerate button. */
+.brief-refresh {
+  justify-content: space-between;
+}

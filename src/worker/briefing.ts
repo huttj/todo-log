@@ -112,7 +112,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     items: {
       type: "object",
       properties: {
-        project_id: { type: ["integer", "null"] },
+        project_id: { anyOf: [{ type: "integer" }, { type: "null" }] },
         name: { type: "string" },
         line: { type: "string" },
       },
@@ -139,10 +139,14 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     ],
     additionalProperties: false,
   };
+  const started = Date.now();
   const response = await client.messages.create({
     model: BRIEFING_MODEL,
     max_tokens: 6000,
-    output_config: { format: { type: "json_schema", schema: BRIEFING_SCHEMA } },
+    output_config: {
+      effort: "medium",
+      format: { type: "json_schema", schema: BRIEFING_SCHEMA },
+    },
     system:
       "You compute the daily briefing for Todo Log, a voice-first todo/journal app. From the data, " +
       "produce ONLY a JSON object (no fences, no prose) with keys:\n" +
@@ -157,6 +161,10 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     messages: [{ role: "user", content: input }],
   });
 
+  console.log(
+    `briefing: generated for user ${user.id} in ${Date.now() - started}ms, ` +
+      `stop=${response.stop_reason}, out=${response.usage.output_tokens}`,
+  );
   const usage = emptyUsage();
   addUsage(usage, response.usage);
   await recordUsage(env, { userId: user.id, kind: "briefing", model: BRIEFING_MODEL, usage });

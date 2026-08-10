@@ -259,14 +259,7 @@ export default function Today(props: {
             <>
               <div className="briefing brief-card">
                 <section className="brief-section">
-                  <h2>
-                    Overview
-                    {briefCost != null && briefCost > 0 && (
-                      <span className="brief-cost" title="Cost of the last generation">
-                        {fmtCost(briefCost)}
-                      </span>
-                    )}
-                  </h2>
+                  <h2>Overview</h2>
                   <p className="headline">{renderRefs(briefing.headline)}</p>
                 </section>
               </div>
@@ -317,6 +310,9 @@ export default function Today(props: {
             </>
           )}
           <div className="brief-refresh">
+            <span className="brief-cost" title="Cost of the last generation">
+              {briefCost != null && briefCost > 0 ? `generated for ${fmtCost(briefCost)}` : ""}
+            </span>
             {error && <span className="error">Briefing refresh failed: {error}</span>}
             <button
               className={`h2-toggle refresh ${refreshing ? "spin" : ""}`}
