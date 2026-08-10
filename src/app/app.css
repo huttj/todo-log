@@ -2219,3 +2219,11 @@ header {
 .brief-refresh {
   justify-content: space-between;
 }
+
+.turn-cost {
+  display: block;
+  text-align: right;
+  font-size: 0.68rem;
+  color: #b5b2a8;
+  margin-top: 0.25rem;
+}

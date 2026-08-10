@@ -97,7 +97,13 @@ capture.get("/sessions/:id", async (c) => {
     .bind(session.id)
     .all<{ message_id: number; n: number }>();
   const audio_message_ids = counts.results.filter((r) => r.n > 0).map((r) => r.message_id);
-  return c.json({ session, messages, events, audio_message_ids });
+  const costs = await c.env.DB.prepare(
+    `SELECT message_id, SUM(cost_usd) AS cost FROM llm_usage
+     WHERE session_id = ? AND message_id IS NOT NULL GROUP BY message_id`,
+  )
+    .bind(session.id)
+    .all<{ message_id: number; cost: number }>();
+  return c.json({ session, messages, events, audio_message_ids, message_costs: costs.results });
 });
 
 // Delete a chat: messages, audio, and its events links go; journal logs stay
@@ -273,7 +279,7 @@ capture.post("/messages/:id/send", async (c) => {
           questions_json: result.questions.length ? JSON.stringify(result.questions) : null,
           created_at: now(),
         });
-        await emit({ type: "done", reply: result.reply, feed: result.feed });
+        await emit({ type: "done", reply: result.reply, feed: result.feed, cost_usd: result.costUsd });
         await writer.close().catch(() => {});
       } catch (err) {
         await emit({ type: "error", error: err instanceof Error ? err.message : String(err) });

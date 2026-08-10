@@ -16,7 +16,7 @@ import type {
   EntityType,
 } from "./types";
 import { BRIEFING_STYLE } from "./briefing";
-import { emptyUsage, addUsage, recordUsage } from "./usage";
+import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
 import {
   now,
   insertRow,
@@ -827,6 +827,7 @@ Ontology: PROJECTS are areas of focus (bounded = has an end state; ongoing = nev
 
 How you behave:
 - APPLY CHANGES IMMEDIATELY via tools. There is no confirmation step — the user corrects you by talking more. When corrected: apply the fix AND call file_correction.
+- Thinking adds latency and cost. Most utterances are routine filing — one log, a status change, an obvious attachment — handle those directly with minimal deliberation. Reserve longer thinking for genuinely ambiguous restructuring or planning.
 - ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said — never split one utterance into multiple topical logs. Attach it to the single most central todo/project (entity pages also surface logs from any turn that touched them, so one attachment covers the rest). Also update statuses to match reality: starting → in_progress, finished → done.
 - Be silent-by-default in spirit: NO advice, opinions, or coaching unless the user directly asks. When asked, answer concisely using the context below.
 - Your reply is a terse confirmation, 1-2 short sentences. The UI already shows a change feed of your tool calls — don't enumerate them again. If nothing needed doing, say so briefly.
@@ -975,6 +976,7 @@ export interface TurnResult {
   /** Accumulated (summarized) thinking across all iterations, for replay. */
   thinking: string;
   questions: AskedQuestion[];
+  costUsd: number;
 }
 
 /** Live progress events emitted while the turn runs, for SSE streaming. */
@@ -1076,6 +1078,8 @@ export async function runTurn(
       model: AGENT_MODEL,
       max_tokens: 8192,
       thinking: { type: "adaptive", display: "summarized" },
+      // Routine filing doesn't need deep deliberation; planning gets more.
+      output_config: { effort: planMode ? "high" : "medium" },
       system,
       tools,
       messages,
@@ -1153,5 +1157,6 @@ export async function runTurn(
     feed: state.feed,
     thinking: thinking.trim(),
     questions: state.questions,
+    costUsd: computeCost(AGENT_MODEL, usage),
   };
 }

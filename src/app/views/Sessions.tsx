@@ -193,6 +193,7 @@ export function SessionView(props: {
     messages: Message[];
     events?: EventRecord[];
     audio_message_ids?: number[];
+    message_costs?: { message_id: number; cost: number }[];
   } | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -215,6 +216,7 @@ export function SessionView(props: {
       messages: Message[];
       events: EventRecord[];
       audio_message_ids: number[];
+      message_costs?: { message_id: number; cost: number }[];
     }>(`/sessions/${sessionId}`)
       .then(setData)
       .catch(() => {});
@@ -325,6 +327,10 @@ export function SessionView(props: {
       <div className="chat replay">
         {ordered.map(({ msg: m, userMsgId }) => {
           const feed = userMsgId != null ? feedByUserMsg.get(userMsgId) : undefined;
+          const turnCost =
+            userMsgId != null
+              ? (data.message_costs ?? []).find((x) => x.message_id === userMsgId)?.cost
+              : undefined;
           return (
             <div key={m.id} className={`bubble ${m.role}`}>
               {m.role === "assistant" && m.thinking && (
@@ -359,6 +365,11 @@ export function SessionView(props: {
               )}
               {feed && feed.length > 0 && (
                 <EventFeed events={feed} todos={todos} projects={projects} />
+              )}
+              {m.role === "assistant" && (turnCost ?? 0) > 0 && (
+                <span className="turn-cost" title="Cost of this turn">
+                  {fmtCost(turnCost!)}
+                </span>
               )}
             </div>
           );

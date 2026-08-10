@@ -11,6 +11,7 @@ import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
 import { renderEntityRefs } from "./refs";
+import { fmtCost } from "./fmt";
 import TranscriptPlayer from "./components/TranscriptPlayer";
 
 // Short segments transcribe reliably (Workers AI Whisper degrades on long
@@ -41,6 +42,7 @@ interface ChatEntry {
   showFeed?: boolean;
   questions?: { question: string; suggestions?: string[] }[];
   questionsAnswered?: boolean;
+  cost?: number;
   /** Voice message's server id — enables the transcript player. */
   msgId?: number;
   hasAudio?: boolean;
@@ -456,7 +458,7 @@ export default function Capture(props: {
             | { type: "delta"; text: string }
             | { type: "feed"; item: FeedItem }
             | { type: "questions"; questions: { question: string; suggestions?: string[] }[] }
-            | { type: "done"; reply: string; feed: FeedItem[] }
+            | { type: "done"; reply: string; feed: FeedItem[]; cost_usd?: number }
             | { type: "error"; error: string };
           switch (evt.type) {
             case "text":
@@ -496,6 +498,7 @@ export default function Capture(props: {
                 ...e,
                 text: evt.reply,
                 feed: evt.feed,
+                cost: evt.cost_usd,
                 live: false,
               }));
               props.onChanged();
@@ -766,6 +769,11 @@ export default function Capture(props: {
                 {entry.role === "user" && entry.transcribing && (
                   <span className="transcribing-note">
                     <TypingDots /> transcribing
+                  </span>
+                )}
+                {entry.role === "assistant" && !entry.live && (entry.cost ?? 0) > 0 && (
+                  <span className="turn-cost" title="Cost of this turn">
+                    {fmtCost(entry.cost!)}
                   </span>
                 )}
                 {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
