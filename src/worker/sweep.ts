@@ -66,6 +66,12 @@ async function healSegments(env: Env): Promise<void> {
       await setSegmentTranscript(env, seg.id, text, words);
     } catch (err) {
       console.error(`sweep: segment ${seg.id} still failing:`, err);
+      await env.DB.prepare(
+        `UPDATE audio_segments SET transcribe_failures = transcribe_failures + 1 WHERE id = ?`,
+      )
+        .bind(seg.id)
+        .run()
+        .catch(() => {});
     }
   }
 }

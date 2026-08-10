@@ -458,7 +458,8 @@ export async function setSegmentTranscript(
 /** Untranscribed segments past a grace period — the cron sweep's worklist. */
 export async function stuckSegments(env: Env, olderThan: number, limit = 5): Promise<AudioSegmentRow[]> {
   const r = await env.DB.prepare(
-    `SELECT * FROM audio_segments WHERE transcript IS NULL AND created_at < ? ORDER BY id LIMIT ?`,
+    `SELECT * FROM audio_segments WHERE transcript IS NULL AND transcribe_failures < 5
+     AND created_at < ? ORDER BY id LIMIT ?`,
   )
     .bind(olderThan, limit)
     .all<AudioSegmentRow>();
