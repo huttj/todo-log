@@ -73,6 +73,8 @@ export interface Log {
   quotes_json: string | null;
   delivery_json: string | null;
   occurred_at: number;
+  /** Cost of the agent turn that produced this log. */
+  cost_usd?: number | null;
 }
 
 export interface Quote {

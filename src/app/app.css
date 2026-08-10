@@ -2202,3 +2202,15 @@ header {
 .bubble p {
   white-space: pre-line;
 }
+
+.log-cost {
+  font-size: 0.7rem;
+  color: #b5b2a8;
+}
+
+.brief-section h2 .brief-cost {
+  margin-left: auto;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}

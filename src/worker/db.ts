@@ -323,7 +323,9 @@ export async function listLogs(
   if (filter.from) (conds.push("occurred_at >= ?"), binds.push(filter.from));
   if (filter.to) (conds.push("occurred_at < ?"), binds.push(filter.to));
   const r = await env.DB.prepare(
-    `SELECT * FROM logs WHERE ${conds.join(" AND ")} ORDER BY occurred_at DESC LIMIT ?`,
+    `SELECT logs.*,
+       (SELECT SUM(lu.cost_usd) FROM llm_usage lu WHERE lu.message_id = logs.message_id) AS cost_usd
+     FROM logs WHERE ${conds.join(" AND ")} ORDER BY occurred_at DESC LIMIT ?`,
   )
     .bind(...binds, filter.limit ?? 100)
     .all<LogRow>();

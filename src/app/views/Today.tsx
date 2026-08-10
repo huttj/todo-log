@@ -20,6 +20,7 @@ import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
 import { renderEntityRefs } from "../refs";
 import { requestTalk } from "../talk";
+import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 
 const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
@@ -258,7 +259,14 @@ export default function Today(props: {
             <>
               <div className="briefing brief-card">
                 <section className="brief-section">
-                  <h2>Overview</h2>
+                  <h2>
+                    Overview
+                    {briefCost != null && briefCost > 0 && (
+                      <span className="brief-cost" title="Cost of the last generation">
+                        {fmtCost(briefCost)}
+                      </span>
+                    )}
+                  </h2>
                   <p className="headline">{renderRefs(briefing.headline)}</p>
                 </section>
               </div>
@@ -310,11 +318,6 @@ export default function Today(props: {
           )}
           <div className="brief-refresh">
             {error && <span className="error">Briefing refresh failed: {error}</span>}
-            {briefCost != null && briefCost > 0 && (
-              <span className="brief-cost" title="Cost of the last generation">
-                {briefCost >= 0.995 ? `$${briefCost.toFixed(2)}` : `${Math.max(1, Math.round(briefCost * 100))}¢`}
-              </span>
-            )}
             <button
               className={`h2-toggle refresh ${refreshing ? "spin" : ""}`}
               title={

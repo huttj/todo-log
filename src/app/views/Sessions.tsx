@@ -17,6 +17,7 @@ import {
 import EventFeed from "../components/EventFeed";
 import TranscriptPlayer from "../components/TranscriptPlayer";
 import { renderEntityRefs } from "../refs";
+import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 
 function QuestionChips(props: { questionsJson: string }) {
@@ -124,8 +125,6 @@ export function Sessions(props: {
     }
     return [...groups.entries()];
   }, [sessions]);
-
-  const fmtCost = (c: number) => (c >= 0.995 ? `$${c.toFixed(2)}` : `${Math.max(1, Math.round(c * 100))}¢`);
 
   return (
     <div className="sessions">

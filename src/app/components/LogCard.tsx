@@ -9,6 +9,7 @@ import { api, type Log, type Quote, type SegmentDetail, type TranscriptWord } fr
 import { requestTalk } from "../talk";
 import TranscriptPlayer from "./TranscriptPlayer";
 import { getSpeed, setGlobalSpeed, nextSpeed } from "../audio";
+import { fmtCost } from "../fmt";
 
 export interface LogAttachment {
   label: string;
@@ -44,6 +45,11 @@ export default function LogCard(props: {
           {time}
         </Link>
         {log.kind === "reflection" && <span className="kind">reflection</span>}
+        {(log.cost_usd ?? 0) > 0 && (
+          <span className="log-cost" title="Cost of the agent turn behind this log">
+            {fmtCost(log.cost_usd!)}
+          </span>
+        )}
         {props.attachment && (
           <Link
             className="attachment"
