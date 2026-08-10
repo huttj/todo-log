@@ -194,6 +194,12 @@ export default function Capture(props: {
             });
           }
         }
+        // Chips stay tappable when the chat ends on an unanswered question —
+        // only questions that already got a reply after them are inert.
+        const last = entries[entries.length - 1];
+        if (last && last.role === "assistant" && last.questions?.length) {
+          last.questionsAnswered = false;
+        }
         setChat(entries);
       })
       .catch(() => setError("couldn't load the chat — try again"));
