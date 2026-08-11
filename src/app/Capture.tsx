@@ -811,6 +811,11 @@ export default function Capture(props: {
         <div className="chat">
           {chat.map((entry) => {
             if (entry.role === "assistant" && entry.pending) return null;
+            // Open player replaces the bubble text — the transcript IS the
+            // text (highlighted, seekable); no second copy.
+            const playerOpen = Boolean(
+              entry.role === "user" && entry.showPlayer && entry.hasAudio && entry.msgId && !entry.transcribing,
+            );
             return (
               <div key={entry.id} className={`bubble ${entry.role}`}>
                 {entry.live && entry.thinking && <p className="thinking">{entry.thinking}</p>}
@@ -827,7 +832,7 @@ export default function Capture(props: {
                     {entry.showThinking && <p className="thinking expanded">{entry.thinking}</p>}
                   </>
                 )}
-                {entry.text ? (
+                {entry.text && !playerOpen ? (
                   entry.role === "assistant" ? (
                     <Markdown text={entry.text} />
                   ) : (
@@ -871,16 +876,16 @@ export default function Capture(props: {
                 )}
                 {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
                   <>
+                    {playerOpen && <TranscriptPlayer messageId={entry.msgId} autoPlay />}
                     <button
                       className="msg-play"
-                      title="Play the recording"
+                      title={playerOpen ? "Back to plain text" : "Play the recording"}
                       onClick={() =>
                         updateEntry(entry.id, (e) => ({ ...e, showPlayer: !e.showPlayer }))
                       }
                     >
-                      {entry.showPlayer ? "⏹" : "▶"}
+                      {playerOpen ? "⏹" : "▶"}
                     </button>
-                    {entry.showPlayer && <TranscriptPlayer messageId={entry.msgId} autoPlay />}
                   </>
                 )}
                 {entry.feed && entry.feed.length > 0 && (

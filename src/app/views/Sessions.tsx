@@ -327,6 +327,8 @@ export function SessionView(props: {
             userMsgId != null
               ? (data.message_costs ?? []).find((x) => x.message_id === userMsgId)?.cost
               : undefined;
+          const playerOpen =
+            m.role === "user" && openPlayers.has(m.id) && (data.audio_message_ids ?? []).includes(m.id);
           return (
             <div key={m.id} className={`bubble ${m.role}`}>
               {m.role === "assistant" && m.thinking && (
@@ -337,26 +339,30 @@ export function SessionView(props: {
                   {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
                 </>
               )}
-              {m.role === "assistant" ? <Markdown text={m.text ?? ""} /> : <p>{m.text}</p>}
+              {m.role === "assistant" ? (
+                <Markdown text={m.text ?? ""} />
+              ) : playerOpen ? null : (
+                <p>{m.text}</p>
+              )}
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />
               )}
               {m.role === "user" && (data.audio_message_ids ?? []).includes(m.id) && (
                 <>
-                  <button
-                    className="msg-play"
-                    title="Play the recording"
-                    onClick={() => togglePlayer(m.id)}
-                  >
-                    <FontAwesomeIcon icon={openPlayers.has(m.id) ? faStop : faPlay} />
-                  </button>
-                  {openPlayers.has(m.id) && (
+                  {playerOpen && (
                     <TranscriptPlayer
                       messageId={m.id}
                       autoPlay
                       emptyNote="No audio for this message (typed)."
                     />
                   )}
+                  <button
+                    className="msg-play"
+                    title={playerOpen ? "Back to plain text" : "Play the recording"}
+                    onClick={() => togglePlayer(m.id)}
+                  >
+                    <FontAwesomeIcon icon={playerOpen ? faStop : faPlay} />
+                  </button>
                 </>
               )}
               {feed && feed.length > 0 && (
