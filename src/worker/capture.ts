@@ -103,7 +103,22 @@ capture.get("/sessions/:id", async (c) => {
   )
     .bind(session.id)
     .all<{ message_id: number; cost: number }>();
-  return c.json({ session, messages, events, audio_message_ids, message_costs: costs.results });
+  // Titles for the entities the feed touched — labels beat raw #ids.
+  const titleQueries: Record<string, string> = {
+    todo: "SELECT id, title AS label FROM todos WHERE user_id = ?1 AND id IN",
+    project: "SELECT id, name AS label FROM projects WHERE user_id = ?1 AND id IN",
+    log: "SELECT id, COALESCE(title, substr(summary, 1, 60)) AS label FROM logs WHERE user_id = ?1 AND id IN",
+  };
+  const entity_titles: Record<string, Record<number, string>> = {};
+  for (const [type, sql] of Object.entries(titleQueries)) {
+    const ids = [...new Set(events.filter((e) => e.entity_type === type).map((e) => e.entity_id))];
+    if (ids.length === 0) continue;
+    const r = await c.env.DB.prepare(`${sql} (${ids.map(() => "?").join(",")})`)
+      .bind(c.get("user").id, ...ids)
+      .all<{ id: number; label: string }>();
+    entity_titles[type] = Object.fromEntries(r.results.map((x) => [x.id, x.label]));
+  }
+  return c.json({ session, messages, events, audio_message_ids, message_costs: costs.results, entity_titles });
 });
 
 // Delete a chat: messages, audio, and its events links go; journal logs stay

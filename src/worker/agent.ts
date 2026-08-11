@@ -270,6 +270,10 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
+        title: {
+          type: "string",
+          description: "Short label, 2-6 words — the log's gist ('Van talk with mom'). Always provide one.",
+        },
         summary: { type: "string" },
         kind: { type: ["string", "null"], enum: ["log", "reflection", null] },
         todo_id: ID,
@@ -294,6 +298,7 @@ const TOOLS: Anthropic.Tool[] = [
       type: "object",
       properties: {
         log_id: { type: "integer" },
+        title: { type: ["string", "null"] },
         summary: { type: ["string", "null"] },
         kind: { type: ["string", "null"], enum: ["log", "reflection", null] },
         todo_id: ID,
@@ -636,6 +641,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         action_id: null,
         project_id: num(input.project_id),
         kind: input.kind === "reflection" ? "reflection" : "log",
+        title: str(input.title),
         summary: str(input.summary) ?? "(empty)",
         quotes_json: quotesJson,
         delivery_json: tags.length ? JSON.stringify({ tags }) : null,
@@ -643,7 +649,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         created_at: t,
       });
       s.createdLogIds.push(row.id);
-      await feedEvent(s, "log", row.id, "created", `Logged ${row.kind}: ${row.summary}`);
+      await feedEvent(s, "log", row.id, "created", `Logged ${row.kind}: ${row.title ?? row.summary}`);
       return JSON.stringify({ log_id: row.id });
     }
     case "update_log": {
@@ -651,6 +657,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const current = id && (await getEntity<LogRow>(s.env, "log", s.user.id, id));
       if (!current) return "error: log not found";
       const { cols, before, after } = collectUpdates(input, current as never, [
+        { name: "title" },
         { name: "summary" },
         { name: "kind" },
         { name: "todo_id" },
@@ -852,7 +859,7 @@ Ontology: PROJECTS are areas of focus (bounded = has an end state; ongoing = nev
 How you behave:
 - APPLY CHANGES IMMEDIATELY via tools. There is no confirmation step — the user corrects you by talking more. When corrected: apply the fix AND call file_correction.
 - Thinking adds latency and cost. Most utterances are routine filing — one log, a status change, an obvious attachment — handle those directly with minimal deliberation. Reserve longer thinking for genuinely ambiguous restructuring or planning.
-- ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said — never split one utterance into multiple topical logs. Attach it to the single most central todo/project (entity pages also surface logs from any turn that touched them, so one attachment covers the rest). Also update statuses to match reality: starting → in_progress, finished → done.
+- ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said, with a short title (its gist in 2-6 words) — never split one utterance into multiple topical logs. Attach it to the single most central todo/project (entity pages also surface logs from any turn that touched them, so one attachment covers the rest). Also update statuses to match reality: starting → in_progress, finished → done.
 - Be silent-by-default in spirit: NO advice, opinions, or coaching unless the user directly asks. When asked, answer concisely using the context below.
 - Your reply is a terse confirmation, 1-2 short sentences. The UI already shows a change feed of your tool calls — don't enumerate them again. If nothing needed doing, say so briefly.
 - LINKS IN REPLIES: when your reply mentions a todo/project/log, wrap the words of YOUR sentence markdown-style — "filed it under [the kitchen project](project:3)" — and the app renders them as links. Never bare tokens like [todo:22], never pasted entity titles as citations.

@@ -54,7 +54,7 @@ export default function LogCard(props: {
           title="Talk about / reprocess this log"
           onClick={(e) => {
             e.stopPropagation();
-            requestTalk({ type: "log", id: log.id, label: log.summary.slice(0, 40) });
+            requestTalk({ type: "log", id: log.id, label: log.title ?? log.summary.slice(0, 40) });
           }}
         >
           <FontAwesomeIcon icon={faArrowsRotate} />
@@ -74,6 +74,7 @@ export default function LogCard(props: {
           )}
         </div>
       )}
+      {log.title && <p className="log-title">{log.title}</p>}
       <p
         className="log-summary"
         onClick={(e) => {

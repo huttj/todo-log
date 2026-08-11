@@ -64,6 +64,7 @@ export interface Briefing {
 
 export interface Log {
   id: number;
+  title?: string | null;
   message_id: number | null;
   todo_id: number | null;
   action_id: number | null;

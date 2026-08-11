@@ -1,7 +1,7 @@
 // Markdown for agent-authored chat text. Entity links use the markdown link
 // syntax with a `type:id` href ([my words](todo:12)) and route internally;
 // real URLs open in a new tab. HTML is escaped by react-markdown's default.
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import { Link } from "react-router-dom";
 
 const ENTITY = /^(todo|project|log):(\d+)$/;
@@ -16,6 +16,9 @@ export default function Markdown(props: { text: string }) {
   return (
     <div className="md">
       <ReactMarkdown
+        // react-markdown's sanitizer drops unknown protocols, turning
+        // todo:12 hrefs into "" (which navigates to the current page).
+        urlTransform={(u) => (ENTITY.test(u) ? u : defaultUrlTransform(u))}
         components={{
           a: ({ href, children }) => {
             const m = (href ?? "").match(ENTITY);

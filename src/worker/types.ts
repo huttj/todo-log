@@ -89,6 +89,7 @@ export interface LogRow {
   action_id: number | null;
   project_id: number | null;
   kind: LogKind;
+  title: string | null;
   summary: string;
   quotes_json: string | null;
   delivery_json: string | null;

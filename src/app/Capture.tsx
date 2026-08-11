@@ -6,6 +6,7 @@
 // for outstanding transcripts and send the final text. Nothing is lost:
 // segments upload as they close and the draft persists until sent.
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
@@ -144,6 +145,7 @@ export default function Capture(props: {
       events?: { id: number; message_id?: number | null; entity_type: string; entity_id: number; kind: string }[];
       audio_message_ids?: number[];
       message_costs?: { message_id: number; cost: number }[];
+      entity_titles?: Record<string, Record<number, string>>;
     }>(`/sessions/${resume.id}`)
       .then((data) => {
         if (!alive) return;
@@ -161,13 +163,18 @@ export default function Capture(props: {
         const feedFor = (userMsgId: number): FeedItem[] =>
           (data.events ?? [])
             .filter((e) => e.message_id === userMsgId)
-            .map((e) => ({
-              event_id: e.id,
-              entity_type: e.entity_type,
-              entity_id: e.entity_id,
-              kind: e.kind,
-              label: `${e.kind.replace("_", " ")} ${e.entity_type} #${e.entity_id}`,
-            }));
+            .map((e) => {
+              const title = data.entity_titles?.[e.entity_type]?.[e.entity_id];
+              return {
+                event_id: e.id,
+                entity_type: e.entity_type,
+                entity_id: e.entity_id,
+                kind: e.kind,
+                label: title
+                  ? `${e.kind.replace("_", " ")}: ${title}`
+                  : `${e.kind.replace("_", " ")} ${e.entity_type} #${e.entity_id}`,
+              };
+            });
         const costFor = (userMsgId: number) =>
           (data.message_costs ?? []).find((x) => x.message_id === userMsgId)?.cost;
         const entries: ChatEntry[] = [];
@@ -893,9 +900,17 @@ export default function Capture(props: {
                     {(entry.feed.length > 5 && !entry.showFeed
                       ? entry.feed.slice(0, 4)
                       : entry.feed
-                    ).map((f, fi) => (
+                    ).map((f, fi) => {
+                      const base = { todo: "todos", project: "projects", log: "logs" }[f.entity_type];
+                      return (
                       <li key={`${f.event_id}-${fi}`} className={f.kind === "undone" ? "undone" : ""}>
-                        <span>{f.label}</span>
+                        {base && f.entity_id > 0 ? (
+                          <Link className="feed-link" to={`/${base}/${f.entity_id}`}>
+                            {f.label}
+                          </Link>
+                        ) : (
+                          <span>{f.label}</span>
+                        )}
                         {f.kind !== "undone" &&
                           !entry.live &&
                           (f.event_id !== 0 || f.kind === "briefing_updated") && (
@@ -910,7 +925,8 @@ export default function Capture(props: {
                             </button>
                           )}
                       </li>
-                    ))}
+                      );
+                    })}
                     {entry.feed.length > 5 && (
                       <li className="feed-toggle">
                         <button
