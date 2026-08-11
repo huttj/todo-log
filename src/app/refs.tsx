@@ -14,6 +14,9 @@ export function renderEntityRefs(
   text: string,
   titles?: { todo?: Map<number, string>; project?: Map<number, string> },
 ): ReactNode[] {
+  // A malformed ref ("[return the key](todo:unclear)") reads as its words,
+  // never as raw markdown.
+  text = text.replace(/\[([^\]]+)\]\((?:todo|project|log):(?!\d+\))[^)]*\)/g, "$1");
   const out: ReactNode[] = [];
   const re = /\[([^\]]+)\]\((todo|project|log):(\d+)\)|\[(todo|project|log):(\d+)\]/g;
   let last = 0;

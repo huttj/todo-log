@@ -62,7 +62,7 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
 - Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. The words inside that first link are the project's NAME, nothing else.
   BAD: "[Moving](project:3). Next: ..." (momentum word linked instead of the name — the reader can't tell which project this is)
   GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
-- The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more").
+- The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more"). Be strict: 3-5 main items per list is the ceiling. For coming, prioritize by imminence and prep-need — the long tail of someday-items always goes in coming_more.
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
 /** Map re-hidden output lines back to the Today view's dismissal keys. */
@@ -85,7 +85,11 @@ export function rehiddenEntries(
   return out;
 }
 
-export async function generateBriefing(env: Env, user: UserRow): Promise<Briefing | null> {
+export async function generateBriefing(
+  env: Env,
+  user: UserRow,
+  onDelta?: (text: string) => void,
+): Promise<Briefing | null> {
   const t = now();
   const tz = user.timezone ?? env.TIMEZONE;
   // Today's date string in the user's timezone — dismissals are keyed by it.
@@ -178,7 +182,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     thinking?: Anthropic.ThinkingConfigParam;
     output_config?: Record<string, unknown>;
   };
-  const response = await client.messages.create({
+  const stream = client.messages.stream({
     model: resolved.modelId,
     max_tokens: 6000,
     ...(params.thinking ? { thinking: params.thinking } : {}),
@@ -202,6 +206,8 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       BRIEFING_STYLE,
     messages: [{ role: "user", content: input }],
   });
+  if (onDelta) stream.on("text", (t) => onDelta(t));
+  const response = await stream.finalMessage();
 
   console.log(
     `briefing: generated for user ${user.id} in ${Date.now() - started}ms, ` +

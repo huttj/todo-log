@@ -197,17 +197,39 @@ crud.post("/briefing/undo", async (c) => {
   }
 });
 
+// Streams the generation: raw JSON deltas as they're written, then a done
+// frame with the parsed briefing. Generation runs under waitUntil, so it
+// completes and persists even if the tab disconnects mid-stream.
 crud.post("/briefing/refresh", async (c) => {
-  try {
-    const briefing = await generateBriefing(c.env, c.get("user"));
-    if (!briefing) return c.json({ error: "generation returned no usable briefing — try again" }, 502);
-    const row = await getBriefing(c.env, c.get("user").id);
-    return c.json({ briefing, generated_at: now(), cost_usd: row?.cost_usd ?? null });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("briefing refresh threw:", msg);
-    return c.json({ error: `briefing generation error: ${msg.slice(0, 300)}` }, 502);
-  }
+  const user = c.get("user");
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const emit = (obj: unknown) =>
+    writer.write(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`)).catch(() => {});
+
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        const briefing = await generateBriefing(c.env, user, (text) => void emit({ type: "delta", text }));
+        if (!briefing) {
+          await emit({ type: "error", error: "generation returned no usable briefing — try again" });
+        } else {
+          const row = await getBriefing(c.env, user.id);
+          await emit({ type: "done", briefing, generated_at: now(), cost_usd: row?.cost_usd ?? null });
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("briefing refresh threw:", msg);
+        await emit({ type: "error", error: `briefing generation error: ${msg.slice(0, 300)}` });
+      }
+      await writer.close().catch(() => {});
+    })(),
+  );
+
+  return new Response(readable, {
+    headers: { "content-type": "text/event-stream", "cache-control": "no-cache" },
+  });
 });
 
 // -- LLM usage / cost instrumentation ---------------------------------------

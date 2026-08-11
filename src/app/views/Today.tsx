@@ -30,6 +30,56 @@ import type { CaptureContext } from "../Capture";
 const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
 const DAY = 86400;
 
+// Progressive parse of the streamed briefing JSON: cut back to a structural
+// boundary, close open brackets, and try to parse. Cheap at briefing sizes.
+function closeAndParse(fragment: string): Partial<Briefing> | null {
+  let inStr = false;
+  let esc = false;
+  const stack: string[] = [];
+  for (const ch of fragment) {
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (inStr) {
+      if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+  if (inStr) return null;
+  const s = fragment.replace(/[,\s]+$/, "");
+  if (s.endsWith(":")) return null;
+  const closers = stack
+    .reverse()
+    .map((c) => (c === "{" ? "}" : "]"))
+    .join("");
+  try {
+    return JSON.parse(s + closers) as Partial<Briefing>;
+  } catch {
+    return null;
+  }
+}
+
+function parsePartialBriefing(text: string): Partial<Briefing> | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  const s = text.slice(start);
+  let attempts = 0;
+  for (let i = s.length; i > 0 && attempts < 60; i--) {
+    const ch = s[i - 1];
+    if (ch === "]" || ch === "}" || ch === '"') {
+      attempts++;
+      const r = closeAndParse(s.slice(0, i));
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
 /** An entry with a stable dismissal key. */
 interface Entry {
   k: string;
@@ -147,13 +197,57 @@ export default function Today(props: {
     setRefreshing(true);
     setError(null);
     try {
-      const r = await post<{ briefing: Briefing; generated_at: number; cost_usd?: number | null }>(
-        "/briefing/refresh",
-      );
-      setBriefing(r.briefing);
-      setGeneratedAt(r.generated_at);
-      setBriefCost(r.cost_usd ?? null);
-      loadDismissed();
+      const res = await fetch("/api/briefing/refresh", { method: "POST" });
+      if (!res.ok || !res.body) throw new Error(res.statusText || "refresh failed");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let acc = "";
+      let lastParse = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          const frame = buf.slice(0, idx);
+          buf = buf.slice(idx + 2);
+          const line = frame.split("\n").find((l) => l.startsWith("data: "));
+          if (!line) continue;
+          const evt = JSON.parse(line.slice(6)) as
+            | { type: "delta"; text: string }
+            | { type: "done"; briefing: Briefing; generated_at: number; cost_usd?: number | null }
+            | { type: "error"; error: string };
+          if (evt.type === "delta") {
+            acc += evt.text;
+            // Throttled progressive render — sections appear as they complete.
+            if (Date.now() - lastParse > 250) {
+              lastParse = Date.now();
+              const partial = parsePartialBriefing(acc);
+              if (partial?.headline) {
+                setBriefing({
+                  headline: partial.headline,
+                  today: partial.today ?? [],
+                  today_more: partial.today_more ?? [],
+                  oneoffs: partial.oneoffs ?? [],
+                  oneoffs_more: partial.oneoffs_more ?? [],
+                  coming: partial.coming ?? [],
+                  coming_more: partial.coming_more ?? [],
+                  projects: partial.projects ?? [],
+                  projects_more: partial.projects_more ?? [],
+                });
+              }
+            }
+          } else if (evt.type === "done") {
+            setBriefing(evt.briefing);
+            setGeneratedAt(evt.generated_at);
+            setBriefCost(evt.cost_usd ?? null);
+            loadDismissed();
+          } else {
+            setError(evt.error);
+          }
+        }
+      }
     } catch (e) {
       setError(String((e as Error).message ?? e));
     } finally {
@@ -232,12 +326,13 @@ export default function Today(props: {
     );
   };
 
-  // All briefing lines show by default; each is dismissable and dismissed
-  // ones drop behind "see more".
-  const briefCard = (key: string, heading: string, entries: Entry[], action?: ReactNode) => {
-    if (entries.length === 0) return null;
-    const shown = entries.filter((e) => !dismissed.has(e.k));
-    const hidden = entries.filter((e) => dismissed.has(e.k));
+  // Focus: the main list shows only the agent's priority picks (minus your
+  // dismissals); "see more" holds the deprioritized _more items plus whatever
+  // you dismissed.
+  const briefCard = (key: string, heading: string, main: Entry[], more: Entry[], action?: ReactNode) => {
+    if (main.length + more.length === 0) return null;
+    const shown = main.filter((e) => !dismissed.has(e.k));
+    const hidden = [...main.filter((e) => dismissed.has(e.k)), ...more];
     const expanded = seeMore.has(key);
     return (
       <div className="briefing brief-card">
@@ -257,13 +352,13 @@ export default function Today(props: {
               hidden.map((e) => (
                 <li key={e.k} className="more-item hidden-item">
                   {e.node}
-                  {dismissBtn(e.k, true, e.label)}
+                  {dismissBtn(e.k, dismissed.has(e.k), e.label)}
                 </li>
               ))}
           </ul>
           {hidden.length > 0 && (
             <button className="link see-more" onClick={() => toggleMore(key)}>
-              {expanded ? "hide dismissed" : `see ${hidden.length} more`}
+              {expanded ? "show less" : `see ${hidden.length} more`}
             </button>
           )}
         </section>
@@ -354,12 +449,14 @@ export default function Today(props: {
               {briefCard(
                 "today",
                 "Plans & commitments",
-                lineEntries("today", [...(briefing.today ?? []), ...(briefing.today_more ?? [])]),
+                lineEntries("today", briefing.today ?? []),
+                lineEntries("today", briefing.today_more ?? []),
               )}
               {briefCard(
                 "oneoffs",
                 "Loose threads",
-                lineEntries("oneoffs", threads),
+                lineEntries("oneoffs", briefing.oneoffs ?? []),
+                lineEntries("oneoffs", briefing.oneoffs_more ?? []),
                 <HoldTalk
                   className="thread-talk"
                   title="Talk through these threads · hold or drag up to record"
@@ -380,13 +477,18 @@ export default function Today(props: {
                   ...(briefing.coming ?? []),
                   ...(briefing.tomorrow ?? []),
                   ...(briefing.week ?? []),
-                  ...(briefing.coming_more ?? []),
                 ]),
+                lineEntries("coming", briefing.coming_more ?? []),
               )}
               {briefCard(
                 "projects",
                 "Projects",
-                [...(briefing.projects ?? []), ...(briefing.projects_more ?? [])].map((p) => ({
+                (briefing.projects ?? []).map((p) => ({
+                  k: `b:proj:${p.name}:${p.line.slice(0, 60)}`,
+                  label: p.line.slice(0, 300),
+                  node: projectLine(p),
+                })),
+                (briefing.projects_more ?? []).map((p) => ({
                   k: `b:proj:${p.name}:${p.line.slice(0, 60)}`,
                   label: p.line.slice(0, 300),
                   node: projectLine(p),
