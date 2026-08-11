@@ -272,6 +272,22 @@ crud.get("/usage/day", async (c) => {
   return c.json({ cost: row?.cost ?? 0 });
 });
 
+// Fine-grained usage for the Settings spend table: per local-day / kind /
+// model aggregates over all time (tzoff = client's getTimezoneOffset()).
+crud.get("/usage/table", async (c) => {
+  const tzoff = Number(c.req.query("tzoff") ?? 0);
+  const r = await c.env.DB.prepare(
+    `SELECT date(created_at - ?2 * 60, 'unixepoch') AS day, kind, model,
+       COUNT(*) AS n, SUM(input_tokens) AS input, SUM(output_tokens) AS output,
+       SUM(cache_read_tokens) AS cache_read, SUM(cost_usd) AS cost
+     FROM llm_usage WHERE user_id = ?1
+     GROUP BY day, kind, model ORDER BY day DESC`,
+  )
+    .bind(c.get("user").id, Number.isFinite(tzoff) ? tzoff : 0)
+    .all();
+  return c.json({ rows: r.results });
+});
+
 // Total spend attributable to one entity: every turn whose events touched it
 // (for projects, also turns touching its todos or logs).
 crud.get("/usage/entity", async (c) => {

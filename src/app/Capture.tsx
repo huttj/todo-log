@@ -14,6 +14,7 @@ import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedI
 import Markdown from "./components/Markdown";
 import { fmtCost } from "./fmt";
 import TranscriptPlayer from "./components/TranscriptPlayer";
+import { feedIcon } from "./feedIcons";
 
 // Short segments transcribe reliably (Workers AI Whisper degrades on long
 // clips) and give near-live transcript feedback.
@@ -904,6 +905,7 @@ export default function Capture(props: {
                       const base = { todo: "todos", project: "projects", log: "logs" }[f.entity_type];
                       return (
                       <li key={`${f.event_id}-${fi}`} className={f.kind === "undone" ? "undone" : ""}>
+                        <FontAwesomeIcon className="feed-ic" icon={feedIcon(f.entity_type, f.kind)} />
                         {base && f.entity_id > 0 ? (
                           <Link className="feed-link" to={`/${base}/${f.entity_id}`}>
                             {f.label}

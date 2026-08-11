@@ -2530,3 +2530,88 @@ header {
 .feed a.feed-link:hover {
   text-decoration: underline;
 }
+
+.feed-ic {
+  color: #b5b2a8;
+  font-size: 0.68rem;
+  width: 0.85rem;
+  margin-right: 0.3rem;
+  flex-shrink: 0;
+}
+
+/* -- spend filters + react-select (rs) theme -- */
+.spend-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.spend-filters input[type="date"] {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 0.35rem;
+  background: #fff;
+}
+
+.range-sep {
+  color: #999;
+}
+
+.spend-alltime {
+  color: #999;
+  font-weight: 400;
+}
+
+.spend-table td.use-cell {
+  vertical-align: top;
+  color: #444;
+  font-weight: 600;
+}
+
+.spend-table tfoot td {
+  border-top: 2px solid #d8d4c8;
+  font-weight: 600;
+  padding-top: 0.3rem;
+}
+
+.rs__control {
+  min-height: 32px !important;
+  border-color: #ccc !important;
+  border-radius: 0.35rem !important;
+  font-size: 0.85rem;
+  box-shadow: none !important;
+}
+
+.rs__control--is-focused {
+  border-color: #4a6da7 !important;
+}
+
+.rs__value-container {
+  padding: 0 6px !important;
+}
+
+.rs__indicator {
+  padding: 4px !important;
+}
+
+.rs__indicator-separator {
+  display: none;
+}
+
+.rs__menu {
+  font-size: 0.85rem;
+  z-index: 30;
+}
+
+.rs__multi-value {
+  background: #eef2e8 !important;
+  border-radius: 0.4rem !important;
+}
+
+.rs__option--is-selected {
+  background: #4a6da7 !important;
+}

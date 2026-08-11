@@ -87,7 +87,13 @@ export default function LogView(props: {
         {events === null && <p className="empty">Loading…</p>}
         {events?.length === 0 && <p className="empty">No recorded actions.</p>}
         {events && events.length > 0 && (
-          <EventFeed events={events} todos={todos} projects={projects} className="page-feed" />
+          <EventFeed
+            events={events}
+            todos={todos}
+            projects={projects}
+            logLabels={{ [log.id]: log.title ?? log.summary.slice(0, 60) }}
+            className="page-feed"
+          />
         )}
       </section>
     </div>

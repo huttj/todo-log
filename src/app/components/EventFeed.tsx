@@ -2,22 +2,27 @@
 // label, so the line is rebuilt from kind + entity + payload). Used by the log
 // permalink page and the chat replay page.
 import { Link } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { feedIcon } from "../feedIcons";
 import type { EventRecord, Todo, Project } from "../api";
 
 export default function EventFeed(props: {
   events: EventRecord[];
   todos: Todo[];
   projects: Project[];
+  /** Log id → title (or summary snippet) so log rows read as words, not #ids. */
+  logLabels?: Record<number, string>;
   className?: string;
 }) {
   return (
     <ul className={`feed${props.className ? ` ${props.className}` : ""}`}>
       {props.events.map((e) => (
         <li key={e.id} className={e.undone ? "undone" : ""}>
+          <FontAwesomeIcon className="feed-ic" icon={feedIcon(e.entity_type, e.kind)} />
           <span>
             {e.kind.replace("_", " ")} {e.entity_type}{" "}
             <Link to={entityRoute(e)} className="entity-link">
-              {entityName(e, props.todos, props.projects)}
+              {entityName(e, props)}
             </Link>
             {payloadDetail(e)}
           </span>
@@ -42,12 +47,18 @@ function entityRoute(e: EventRecord): string {
   }
 }
 
-function entityName(e: EventRecord, todos: Todo[], projects: Project[]): string {
+function entityName(
+  e: EventRecord,
+  ctx: { todos: Todo[]; projects: Project[]; logLabels?: Record<number, string> },
+): string {
   if (e.entity_type === "todo") {
-    return todos.find((t) => t.id === e.entity_id)?.title ?? `#${e.entity_id}`;
+    return ctx.todos.find((t) => t.id === e.entity_id)?.title ?? `#${e.entity_id}`;
   }
   if (e.entity_type === "project") {
-    return projects.find((p) => p.id === e.entity_id)?.name ?? `#${e.entity_id}`;
+    return ctx.projects.find((p) => p.id === e.entity_id)?.name ?? `#${e.entity_id}`;
+  }
+  if (e.entity_type === "log") {
+    return ctx.logLabels?.[e.entity_id] ?? `#${e.entity_id}`;
   }
   return `#${e.entity_id}`;
 }

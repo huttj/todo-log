@@ -1,7 +1,8 @@
-// Settings: budget roll-ups, top-level agent defaults, per-use-case model /
-// thinking overrides, and the overview (briefing) regeneration schedule.
-import { useEffect, useState, type ReactNode } from "react";
-import { api, post, type UsageSummary } from "../api";
+// Settings: spend roll-ups with filters, top-level agent defaults, per-use
+// model / thinking overrides, regeneration schedules, and agent memory.
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import Select from "react-select";
+import { api, post } from "../api";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 
@@ -32,6 +33,17 @@ interface AgentConfig {
   chat_briefing_updates: boolean;
 }
 
+interface UsageRow {
+  day: string;
+  kind: string;
+  model: string;
+  n: number;
+  input: number;
+  output: number;
+  cache_read: number;
+  cost: number;
+}
+
 const KIND_LABELS: Record<string, string> = {
   turn: "chat",
   briefing: "overview",
@@ -46,11 +58,71 @@ const USE_CASES: { key: "chat" | "briefing" | "checkin" | "distill"; label: stri
   { key: "distill", label: "Learning distill" },
 ];
 
-const THINKING_LABELS: Record<Thinking, string> = {
-  off: "off",
-  low: "light",
-  medium: "normal",
-  high: "deep",
+const MODEL_OPTS = [
+  { value: "sonnet", label: "Sonnet 5" },
+  { value: "opus", label: "Opus 5" },
+  { value: "haiku", label: "Haiku 4.5" },
+];
+
+const THINKING_OPTS = [
+  { value: "off", label: "off" },
+  { value: "low", label: "light" },
+  { value: "medium", label: "normal" },
+  { value: "high", label: "deep" },
+];
+
+interface Opt {
+  value: string;
+  label: string;
+}
+
+/** react-select wrapper: compact, non-searchable, string-valued. */
+function Sel(props: {
+  options: Opt[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+  isDisabled?: boolean;
+  width?: number;
+}) {
+  return (
+    <Select
+      classNamePrefix="rs"
+      options={props.options}
+      value={props.options.find((o) => o.value === props.value) ?? null}
+      isSearchable={false}
+      isDisabled={props.isDisabled}
+      onChange={(v) => props.onChange((v as Opt | null)?.value ?? null)}
+      styles={{ container: (b) => ({ ...b, minWidth: props.width ?? 110 }) }}
+    />
+  );
+}
+
+function MultiSel(props: {
+  options: Opt[];
+  value: string[];
+  onChange: (v: string[]) => void;
+  placeholder: string;
+}) {
+  return (
+    <Select
+      classNamePrefix="rs"
+      options={props.options}
+      value={props.options.filter((o) => props.value.includes(o.value))}
+      isMulti
+      isSearchable={false}
+      placeholder={props.placeholder}
+      onChange={(v) => props.onChange(((v ?? []) as Opt[]).map((x) => x.value))}
+      styles={{ container: (b) => ({ ...b, minWidth: 150 }) }}
+    />
+  );
+}
+
+const localISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const daysAgoISO = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return localISO(d);
 };
 
 export default function Settings(props: {
@@ -58,19 +130,93 @@ export default function Settings(props: {
   onFocus: (ctx: CaptureContext | null) => void;
 }) {
   const [cfg, setCfg] = useState<AgentConfig | null>(null);
-  const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const [urows, setUrows] = useState<UsageRow[]>([]);
   const [saved, setSaved] = useState(false);
   const [memories, setMemories] = useState<{ key: string; content: string }[]>([]);
   const [newKey, setNewKey] = useState("");
   const [newContent, setNewContent] = useState("");
+  // Spend filters: use/model narrow everything; the date range narrows the
+  // table only (the summary keeps its fixed windows).
+  const [filterUses, setFilterUses] = useState<string[]>([]);
+  const [filterModels, setFilterModels] = useState<string[]>([]);
+  const [fromDay, setFromDay] = useState("");
+  const [toDay, setToDay] = useState("");
 
   useEffect(() => {
     props.onFocus(null);
     api<AgentConfig>("/settings/agent").then(setCfg).catch(() => {});
-    api<UsageSummary>("/usage/summary").then(setUsage).catch(() => {});
+    api<{ rows: UsageRow[] }>(`/usage/table?tzoff=${new Date().getTimezoneOffset()}`)
+      .then((r) => setUrows(r.rows))
+      .catch(() => {});
     api<{ key: string; content: string }[]>("/memory").then(setMemories).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.refreshKey]);
+
+  const spend = useMemo(() => {
+    const base = urows.filter(
+      (r) =>
+        (filterUses.length === 0 || filterUses.includes(r.kind)) &&
+        (filterModels.length === 0 || filterModels.includes(r.model)),
+    );
+    const today = localISO(new Date());
+    const d7 = daysAgoISO(6);
+    const d30 = daysAgoISO(29);
+    const sum = (rows: UsageRow[]) => rows.reduce((acc, r) => acc + r.cost, 0);
+    const tableRows = base.filter(
+      (r) => (!fromDay || r.day >= fromDay) && (!toDay || r.day <= toDay),
+    );
+    // Group by use, models as sub-rows, both ordered by cost.
+    const byKind = new Map<string, Map<string, UsageRow>>();
+    for (const r of tableRows) {
+      const models = byKind.get(r.kind) ?? byKind.set(r.kind, new Map()).get(r.kind)!;
+      const agg =
+        models.get(r.model) ??
+        models
+          .set(r.model, { day: "", kind: r.kind, model: r.model, n: 0, input: 0, output: 0, cache_read: 0, cost: 0 })
+          .get(r.model)!;
+      agg.n += r.n;
+      agg.input += r.input;
+      agg.output += r.output;
+      agg.cache_read += r.cache_read;
+      agg.cost += r.cost;
+    }
+    const groups = [...byKind.entries()]
+      .map(([kind, models]) => ({
+        kind,
+        models: [...models.values()].sort((a, b) => b.cost - a.cost),
+      }))
+      .sort((a, b) => sumCost(b.models) - sumCost(a.models));
+    const total = { n: 0, input: 0, output: 0, cache_read: 0, cost: 0 };
+    for (const r of tableRows) {
+      total.n += r.n;
+      total.input += r.input;
+      total.output += r.output;
+      total.cache_read += r.cache_read;
+      total.cost += r.cost;
+    }
+    return {
+      today: sum(base.filter((r) => r.day === today)),
+      week: sum(base.filter((r) => r.day >= d7)),
+      month: sum(base.filter((r) => r.day >= d30)),
+      allTime: sum(base),
+      groups,
+      total,
+    };
+  }, [urows, filterUses, filterModels, fromDay, toDay]);
+
+  const useOpts = useMemo(
+    () =>
+      [...new Set(urows.map((r) => r.kind))].map((k) => ({ value: k, label: KIND_LABELS[k] ?? k })),
+    [urows],
+  );
+  const modelOpts = useMemo(
+    () =>
+      [...new Set(urows.map((r) => r.model))].map((m) => ({
+        value: m,
+        label: m.replace("claude-", ""),
+      })),
+    [urows],
+  );
 
   async function saveMemory(key: string, content: string) {
     try {
@@ -96,41 +242,31 @@ export default function Settings(props: {
 
   if (!cfg) return <p className="empty">Loading…</p>;
 
-  const modelSelect = (
-    value: Model | null,
-    onChange: (m: Model | null) => void,
-    allowInherit: boolean,
-  ) => (
-    <select
-      value={value ?? "inherit"}
-      onChange={(e) => onChange(e.target.value === "inherit" ? null : (e.target.value as Model))}
-    >
-      {allowInherit && <option value="inherit">default</option>}
-      <option value="sonnet">Sonnet 5</option>
-      <option value="opus">Opus 5</option>
-      <option value="haiku">Haiku 4.5</option>
-    </select>
+  const INHERIT = { value: "inherit", label: "default" };
+  const modelSelect = (value: Model | null, onChange: (m: Model | null) => void, allowInherit: boolean) => (
+    <Sel
+      options={allowInherit ? [INHERIT, ...MODEL_OPTS] : MODEL_OPTS}
+      value={value ?? (allowInherit ? "inherit" : null)}
+      onChange={(v) => onChange(v === "inherit" || v == null ? null : (v as Model))}
+    />
   );
-
   const thinkingSelect = (
     value: Thinking | null,
     onChange: (t: Thinking | null) => void,
     allowInherit: boolean,
     disabled = false,
   ) => (
-    <select
-      value={value ?? "inherit"}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value === "inherit" ? null : (e.target.value as Thinking))}
-    >
-      {allowInherit && <option value="inherit">default</option>}
-      {(Object.keys(THINKING_LABELS) as Thinking[]).map((t) => (
-        <option key={t} value={t}>
-          {THINKING_LABELS[t]}
-        </option>
-      ))}
-    </select>
+    <Sel
+      options={allowInherit ? [INHERIT, ...THINKING_OPTS] : THINKING_OPTS}
+      value={value ?? (allowInherit ? "inherit" : null)}
+      onChange={(v) => onChange(v === "inherit" || v == null ? null : (v as Thinking))}
+      isDisabled={disabled}
+      width={100}
+    />
   );
+
+  const hourOpts = (from: number) =>
+    Array.from({ length: 24 }, (_, h) => ({ value: String(h + from), label: `${h + from}:00` }));
 
   const scheduleSection = (
     heading: string,
@@ -144,39 +280,25 @@ export default function Settings(props: {
       <h2>{heading}</h2>
       <div className="setting-row">
         <span>Every</span>
-        <select
-          value={value.interval_hours}
-          onChange={(e) => onChange({ ...value, interval_hours: Number(e.target.value) })}
-        >
-          <option value={0}>{offLabel}</option>
-          {[2, 3, 4, 6, 8, 12, 24].map((h) => (
-            <option key={h} value={h}>
-              {h}h
-            </option>
-          ))}
-        </select>
+        <Sel
+          options={[{ value: "0", label: offLabel }, ...[2, 3, 4, 6, 8, 12, 24].map((h) => ({ value: String(h), label: `${h}h` }))]}
+          value={String(value.interval_hours)}
+          onChange={(v) => onChange({ ...value, interval_hours: Number(v ?? 0) })}
+        />
         <span>between</span>
-        <select
-          value={value.start_hour}
-          onChange={(e) => onChange({ ...value, start_hour: Number(e.target.value) })}
-        >
-          {Array.from({ length: 24 }, (_, h) => (
-            <option key={h} value={h}>
-              {h}:00
-            </option>
-          ))}
-        </select>
+        <Sel
+          options={hourOpts(0)}
+          value={String(value.start_hour)}
+          onChange={(v) => onChange({ ...value, start_hour: Number(v ?? 0) })}
+          width={90}
+        />
         <span>and</span>
-        <select
-          value={value.end_hour}
-          onChange={(e) => onChange({ ...value, end_hour: Number(e.target.value) })}
-        >
-          {Array.from({ length: 24 }, (_, h) => (
-            <option key={h + 1} value={h + 1}>
-              {h + 1}:00
-            </option>
-          ))}
-        </select>
+        <Sel
+          options={hourOpts(1)}
+          value={String(value.end_hour)}
+          onChange={(v) => onChange({ ...value, end_hour: Number(v ?? 24) })}
+          width={90}
+        />
       </div>
       {extra}
       <p className="hint-left">{hint}</p>
@@ -187,44 +309,83 @@ export default function Settings(props: {
     <div className="tasks settings">
       <section>
         <h2>Spend</h2>
-        {usage ? (
-          <>
-            <p className="spend-totals">
-              Last 7 days <strong>{fmtCost(usage.week)}</strong> · all-time{" "}
-              <strong>{fmtCost(usage.all_time)}</strong>
-            </p>
-            {usage.by_kind.length > 0 && (
-              <table className="spend-table">
-                <thead>
-                  <tr>
-                    <th>use</th>
-                    <th>model</th>
-                    <th>calls</th>
-                    <th>in</th>
-                    <th>out</th>
-                    <th>cached</th>
-                    <th>cost (7d)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usage.by_kind.map((k, i) => (
-                    <tr key={i}>
-                      <td>{KIND_LABELS[k.kind] ?? k.kind}</td>
-                      <td>{k.model.replace("claude-", "")}</td>
-                      <td>{k.n}</td>
-                      <td>{(k.input / 1000).toFixed(1)}k</td>
-                      <td>{(k.output / 1000).toFixed(1)}k</td>
-                      <td>{(k.cache_read / 1000).toFixed(0)}k</td>
-                      <td>{fmtCost(k.cost)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
+        <p className="spend-totals">
+          Today <strong>{fmtCost(spend.today)}</strong> · last 7 days{" "}
+          <strong>{fmtCost(spend.week)}</strong> · last 30 days <strong>{fmtCost(spend.month)}</strong>
+          <span className="spend-alltime"> · all-time {fmtCost(spend.allTime)}</span>
+        </p>
+        <div className="spend-filters">
+          <MultiSel options={useOpts} value={filterUses} onChange={setFilterUses} placeholder="all uses" />
+          <MultiSel
+            options={modelOpts}
+            value={filterModels}
+            onChange={setFilterModels}
+            placeholder="all models"
+          />
+          <input type="date" value={fromDay} onChange={(e) => setFromDay(e.target.value)} title="From" />
+          <span className="range-sep">–</span>
+          <input type="date" value={toDay} onChange={(e) => setToDay(e.target.value)} title="To" />
+          {(fromDay || toDay) && (
+            <button
+              className="link"
+              onClick={() => {
+                setFromDay("");
+                setToDay("");
+              }}
+            >
+              clear dates
+            </button>
+          )}
+        </div>
+        {spend.groups.length === 0 ? (
+          <p className="empty">Nothing in this range.</p>
         ) : (
-          <p className="empty">No usage recorded yet.</p>
+          <table className="spend-table">
+            <thead>
+              <tr>
+                <th>use</th>
+                <th>model</th>
+                <th>calls</th>
+                <th>in</th>
+                <th>out</th>
+                <th>cached</th>
+                <th>cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {spend.groups.map((g) =>
+                g.models.map((m, i) => (
+                  <tr key={`${g.kind}-${m.model}`}>
+                    {i === 0 && (
+                      <td className="use-cell" rowSpan={g.models.length}>
+                        {KIND_LABELS[g.kind] ?? g.kind}
+                      </td>
+                    )}
+                    <td>{m.model.replace("claude-", "")}</td>
+                    <td>{m.n}</td>
+                    <td>{(m.input / 1000).toFixed(1)}k</td>
+                    <td>{(m.output / 1000).toFixed(1)}k</td>
+                    <td>{(m.cache_read / 1000).toFixed(0)}k</td>
+                    <td>{fmtCost(m.cost)}</td>
+                  </tr>
+                )),
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2}>total</td>
+                <td>{spend.total.n}</td>
+                <td>{(spend.total.input / 1000).toFixed(1)}k</td>
+                <td>{(spend.total.output / 1000).toFixed(1)}k</td>
+                <td>{(spend.total.cache_read / 1000).toFixed(0)}k</td>
+                <td>{fmtCost(spend.total.cost)}</td>
+              </tr>
+            </tfoot>
+          </table>
         )}
+        <p className="hint-left">
+          Use and model filters apply everywhere; the date range narrows the table only.
+        </p>
       </section>
 
       <section>
@@ -359,4 +520,8 @@ export default function Settings(props: {
       {saved && <p className="hint-left">saved</p>}
     </div>
   );
+}
+
+function sumCost(rows: { cost: number }[]): number {
+  return rows.reduce((acc, r) => acc + r.cost, 0);
 }

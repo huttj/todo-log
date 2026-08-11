@@ -190,6 +190,7 @@ export function SessionView(props: {
     events?: EventRecord[];
     audio_message_ids?: number[];
     message_costs?: { message_id: number; cost: number }[];
+    entity_titles?: Record<string, Record<number, string>>;
   } | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -366,7 +367,12 @@ export function SessionView(props: {
                 </>
               )}
               {feed && feed.length > 0 && (
-                <EventFeed events={feed} todos={todos} projects={projects} />
+                <EventFeed
+                  events={feed}
+                  todos={todos}
+                  projects={projects}
+                  logLabels={data.entity_titles?.log}
+                />
               )}
               {m.role === "assistant" && (turnCost ?? 0) > 0 && (
                 <span className="turn-cost" title="Cost of this turn">
