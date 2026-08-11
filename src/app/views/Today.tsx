@@ -482,7 +482,7 @@ export default function Today(props: {
       {isToday && (
         <>
           {!briefing && !refreshing && (
-            <p className="empty">No briefing yet — tap ↻ below to compute one, or just start talking.</p>
+            <p className="empty">No briefing yet — tap refresh below to compute one, or just start talking.</p>
           )}
           {briefing && (
             <>

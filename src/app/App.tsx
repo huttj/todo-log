@@ -3,6 +3,7 @@ import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-route
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faLayerGroup,
+  faMicrophone,
   faBookOpen,
   faComments,
   faMagnifyingGlass,
@@ -196,7 +197,7 @@ export default function App() {
             onContextMenu={(e) => e.preventDefault()}
             title="Tap to open · hold or drag up to record"
           >
-            🎙 Talk
+            <FontAwesomeIcon icon={faMicrophone} /> Talk
           </button>
         </footer>
       )}

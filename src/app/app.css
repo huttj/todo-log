@@ -9,6 +9,11 @@ body {
   overflow-x: clip;
 }
 
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
 body {
   font-family: system-ui, -apple-system, sans-serif;
   background: #fafaf8;
@@ -824,8 +829,10 @@ blockquote audio {
   border: none;
   background: none;
   color: #4a6da7;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
+  padding: 0.2rem 0.3rem;
 }
 
 .chat {
@@ -2883,4 +2890,11 @@ button.back {
   color: #9aa7ba;
   padding: 0.1rem 0.2rem;
   flex-shrink: 0;
+}
+
+.clickable-text,
+.word-transcript {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }

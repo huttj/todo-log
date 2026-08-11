@@ -196,14 +196,15 @@ export function SessionView(props: {
   const [projects, setProjects] = useState<Project[]>([]);
   const [openThoughts, setOpenThoughts] = useState<Set<number>>(new Set());
   // Expanded per-message transcript players (highlight + slider + speed).
-  const [openPlayers, setOpenPlayers] = useState<Set<number>>(new Set());
+  const [openPlayers, setOpenPlayers] = useState<Map<number, number>>(new Map());
   const navigate = useNavigate();
 
-  const togglePlayer = (msgId: number) =>
+  const openPlayer = (msgId: number, startIdx = 0) =>
+    setOpenPlayers((s) => new Map(s).set(msgId, startIdx));
+  const closePlayer = (msgId: number) =>
     setOpenPlayers((s) => {
-      const next = new Set(s);
-      if (next.has(msgId)) next.delete(msgId);
-      else next.add(msgId);
+      const next = new Map(s);
+      next.delete(msgId);
       return next;
     });
 
@@ -343,13 +344,16 @@ export function SessionView(props: {
               )}
               {m.role === "assistant" ? (
                 <Markdown text={m.text ?? ""} />
-              ) : playerOpen ? null : (
-                <p
-                  className={hasAudio ? "clickable-text" : undefined}
-                  onClick={hasAudio ? () => togglePlayer(m.id) : undefined}
-                >
-                  {m.text}
+              ) : playerOpen ? null : hasAudio ? (
+                <p className="clickable-text" title="Tap a word to play from there">
+                  {(m.text ?? "").split(/\s+/).map((w, wi) => (
+                    <span key={wi} onClick={() => openPlayer(m.id, wi)}>
+                      {w}{" "}
+                    </span>
+                  ))}
                 </p>
+              ) : (
+                <p>{m.text}</p>
               )}
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />
@@ -361,13 +365,16 @@ export function SessionView(props: {
                       messageId={m.id}
                       autoPlay
                       minimal
+                      startWordIndex={openPlayers.get(m.id)}
+                      fallbackText={m.text ?? undefined}
+                      onClose={() => closePlayer(m.id)}
                       emptyNote="No audio for this message (typed)."
                     />
                   ) : (
                     <button
                       className="msg-play corner"
                       title="Play the recording"
-                      onClick={() => togglePlayer(m.id)}
+                      onClick={() => openPlayer(m.id)}
                     >
                       <FontAwesomeIcon icon={faPlay} />
                     </button>

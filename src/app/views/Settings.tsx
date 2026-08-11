@@ -440,8 +440,8 @@ export default function Settings(props: {
         "manual only",
         (s) => save({ ...cfg, briefing_refresh: s }),
         cfg.chat_briefing_updates
-          ? "Chats can also rewrite the overview when they change the day's picture — plus this schedule and ↻ on Today."
-          : "Chats never touch the overview — outside this schedule, only ↻ on Today recomputes it.",
+          ? "Chats can also rewrite the overview when they change the day's picture — plus this schedule and the refresh button on Today."
+          : "Chats never touch the overview — outside this schedule, only the refresh button on Today recomputes it.",
         <label className="setting-row toggle-row">
           <input
             type="checkbox"

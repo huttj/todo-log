@@ -2,6 +2,8 @@
 // seek slider, and the persisted global speed. Works for a log's utterance
 // (logId) or a chat message (messageId). Extracted from LogCard.
 import { useEffect, useMemo, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlay, faPause, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { api, type LogTranscript, type SegmentDetail } from "../api";
 import { getSpeed, setGlobalSpeed, nextSpeed } from "../audio";
 
@@ -10,9 +12,14 @@ export default function TranscriptPlayer(props: {
   messageId?: number;
   autoPlay?: boolean;
   emptyNote?: string;
-  /** Chat-bubble mode: just the clickable transcript + a corner play/pause —
-   * no bar, no nested box. Words seek. */
+  /** Chat-bubble mode: just the clickable transcript + a compact bar —
+   * no nested box. Words seek. */
   minimal?: boolean;
+  /** Flat word index (across segments) to start playback from. */
+  startWordIndex?: number;
+  /** Shown while segments load, so the text never blinks out. */
+  fallbackText?: string;
+  onClose?: () => void;
 }) {
   const [segs, setSegs] = useState<SegmentDetail[] | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -64,10 +71,28 @@ export default function TranscriptPlayer(props: {
   useEffect(() => {
     if (props.autoPlay && segs && segs.length > 0 && !autoPlayed.current) {
       autoPlayed.current = true;
-      playSegment(0);
+      playFromFlatIndex(props.startWordIndex ?? 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segs]);
+
+  /** Map a flat word index (position in the whole utterance) to a segment +
+   * timestamp; approximate for segments without word timings. */
+  const playFromFlatIndex = (flatIdx: number) => {
+    if (!segs) return;
+    let remaining = flatIdx;
+    for (let si = 0; si < segs.length; si++) {
+      const w = segs[si].words;
+      const count = w?.length ?? (segs[si].transcript?.trim().split(/\s+/).length ?? 0);
+      if (remaining < count) {
+        if (w && w[remaining]) playSegment(si, w[remaining].start);
+        else playSegment(si);
+        return;
+      }
+      remaining -= count;
+    }
+    playSegment(0);
+  };
 
   const stop = () => {
     if (tickerRef.current) window.clearInterval(tickerRef.current);
@@ -170,7 +195,15 @@ export default function TranscriptPlayer(props: {
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
-  if (!segs) return <p className="segment-transcript">…</p>;
+  if (!segs) {
+    return props.minimal && props.fallbackText ? (
+      <div className="inline-transcript">
+        <p className="word-transcript">{props.fallbackText}</p>
+      </div>
+    ) : (
+      <p className="segment-transcript">…</p>
+    );
+  }
   if (segs.length === 0) {
     return (
       <p className="segment-transcript full">{props.emptyNote ?? "No audio (typed input)."}</p>
@@ -204,8 +237,8 @@ export default function TranscriptPlayer(props: {
       <div className="inline-transcript" onClick={(e) => e.stopPropagation()}>
         {words}
         <div className="player-bar inline-bar">
-          <button className="play-btn" onClick={togglePlay}>
-            {playing ? "⏸" : "▶"}
+          <button className="play-btn" onClick={togglePlay} title={playing ? "Pause" : "Play"}>
+            <FontAwesomeIcon icon={playing ? faPause : faPlay} />
           </button>
           <input
             type="range"
@@ -222,6 +255,11 @@ export default function TranscriptPlayer(props: {
           <button className="speed-btn" onClick={cycleSpeed} title="Playback speed (global)">
             {speed}×
           </button>
+          {props.onClose && (
+            <button className="play-btn" title="Hide the player" onClick={props.onClose}>
+              <FontAwesomeIcon icon={faXmark} />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -230,8 +268,8 @@ export default function TranscriptPlayer(props: {
   return (
     <div className="segment-transcript full combined" onClick={(e) => e.stopPropagation()}>
       <div className="player-bar">
-        <button className="play-btn" onClick={togglePlay}>
-          {playing ? "⏸" : "▶"}
+        <button className="play-btn" onClick={togglePlay} title={playing ? "Pause" : "Play"}>
+          <FontAwesomeIcon icon={playing ? faPause : faPlay} />
         </button>
         <input
           type="range"

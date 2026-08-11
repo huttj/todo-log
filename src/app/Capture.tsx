@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
+import { faMicrophone, faStop, faPaperPlane, faPlay, faPause, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
 import { requestTalk } from "./talk";
@@ -48,6 +48,8 @@ interface ChatEntry {
   showFeed?: boolean;
   questions?: { question: string; suggestions?: string[] }[];
   questionsAnswered?: boolean;
+  /** Flat word index to start playback from when the player opens. */
+  playerStart?: number;
   cost?: number;
   /** Voice message's server id — enables the transcript player. */
   msgId?: number;
@@ -249,8 +251,18 @@ export default function Capture(props: {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // Auto-scroll only while the user is at (or near) the bottom — scrolling up
+  // during a streaming reply pins the view where they are; scrolling back
+  // down re-engages following.
+  const pinnedRef = useRef(true);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const onChatScroll = () => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  };
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (pinnedRef.current) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat]);
 
   // Auto-grow the draft box with its content.
@@ -444,6 +456,7 @@ export default function Capture(props: {
     dirtyRef.current = false;
     setTranscribing(false);
     setError(null);
+    pinnedRef.current = true;
     setChat((c) => [
       ...c,
       { id: item.userEntryId, role: "user", text: item.text, transcribing: item.hadSegments },
@@ -474,6 +487,7 @@ export default function Capture(props: {
       userEntryId: ++entrySeq,
       assistantEntryId: ++entrySeq,
     };
+    pinnedRef.current = true;
     setChat((c) => [
       ...c,
       { id: item.userEntryId, role: "user", text },
@@ -823,7 +837,7 @@ export default function Capture(props: {
       </header>
 
       {chat.length > 0 && (
-        <div className="chat">
+        <div className="chat" ref={chatScrollRef} onScroll={onChatScroll}>
           {chat.map((entry) => {
             if (entry.role === "assistant" && entry.pending) return null;
             // Open player replaces the bubble text — the transcript IS the
@@ -854,16 +868,22 @@ export default function Capture(props: {
                   entry.role === "assistant" ? (
                     <Markdown text={entry.text} />
                   ) : (
-                    <p
-                      className={entry.hasAudio ? "clickable-text" : undefined}
-                      onClick={
-                        entry.hasAudio && entry.msgId && !entry.transcribing
-                          ? () => updateEntry(entry.id, (e) => ({ ...e, showPlayer: true }))
-                          : undefined
-                      }
-                    >
-                      {entry.text}
-                    </p>
+                    entry.hasAudio && entry.msgId && !entry.transcribing ? (
+                      <p className="clickable-text" title="Tap a word to play from there">
+                        {entry.text.split(/\s+/).map((w, wi) => (
+                          <span
+                            key={wi}
+                            onClick={() =>
+                              updateEntry(entry.id, (e) => ({ ...e, showPlayer: true, playerStart: wi }))
+                            }
+                          >
+                            {w}{" "}
+                          </span>
+                        ))}
+                      </p>
+                    ) : (
+                      <p>{entry.text}</p>
+                    )
                   )
                 ) : entry.live ? (
                   <TypingDots />
@@ -904,14 +924,25 @@ export default function Capture(props: {
                 {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
                   <>
                     {playerOpen ? (
-                      <TranscriptPlayer messageId={entry.msgId} autoPlay minimal />
+                      <TranscriptPlayer
+                        messageId={entry.msgId}
+                        autoPlay
+                        minimal
+                        startWordIndex={entry.playerStart}
+                        fallbackText={entry.text}
+                        onClose={() =>
+                          updateEntry(entry.id, (e) => ({ ...e, showPlayer: false, playerStart: undefined }))
+                        }
+                      />
                     ) : (
                       <button
                         className="msg-play corner"
                         title="Play the recording"
-                        onClick={() => updateEntry(entry.id, (e) => ({ ...e, showPlayer: true }))}
+                        onClick={() =>
+                          updateEntry(entry.id, (e) => ({ ...e, showPlayer: true, playerStart: 0 }))
+                        }
                       >
-                        ▶
+                        <FontAwesomeIcon icon={faPlay} />
                       </button>
                     )}
                   </>
@@ -1001,7 +1032,7 @@ export default function Capture(props: {
             .map((s) => (
               <span key={s.id} className={`pill ${recording ? "disabled" : ""}`}>
                 <button onClick={() => togglePlay(s.id)} disabled={recording} title="Play">
-                  {playingSeg === s.id ? "⏸" : "▶"}
+                  <FontAwesomeIcon icon={playingSeg === s.id ? faPause : faPlay} />
                   {s.duration_sec ? ` ${Math.round(s.duration_sec)}s` : ""}
                 </button>
                 <button
@@ -1010,7 +1041,7 @@ export default function Capture(props: {
                   disabled={recording}
                   title="Retry transcription"
                 >
-                  ↻
+                  <FontAwesomeIcon icon={faRotateRight} />
                 </button>
               </span>
             ))}
