@@ -1,8 +1,10 @@
 // A log's permalink page: the full card plus the audit trail of what the
 // agent did in the turns that touched it.
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { api, type Log, type Todo, type Project, type EventRecord } from "../api";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTrashCan } from "@fortawesome/free-solid-svg-icons";
+import { api, del, type Log, type Todo, type Project, type EventRecord } from "../api";
 import LogCard from "../components/LogCard";
 import EventFeed from "../components/EventFeed";
 import type { CaptureContext } from "../Capture";
@@ -16,6 +18,7 @@ export default function LogView(props: {
   const [events, setEvents] = useState<EventRecord[] | null>(null);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const navigate = useNavigate();
 
   const load = () => {
     api<Log>(`/logs/${logId}`).then(setLog).catch(() => {});
@@ -52,15 +55,28 @@ export default function LogView(props: {
           <Link className="back" to="/logs">
             ‹ Logs
           </Link>
-          <span className="kind">
-            {new Date(log.occurred_at * 1000).toLocaleString(undefined, {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </span>
+          <div className="page-meta">
+            <span className="kind">
+              {new Date(log.occurred_at * 1000).toLocaleString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })}
+            </span>
+            <button
+              className="link trash"
+              title="Delete log"
+              onClick={async () => {
+                if (!window.confirm("Delete this log for good? The chat and its audio stay.")) return;
+                await del(`/logs/${logId}`).catch(() => {});
+                navigate("/logs");
+              }}
+            >
+              <FontAwesomeIcon icon={faTrashCan} />
+            </button>
+          </div>
         </div>
       </div>
 

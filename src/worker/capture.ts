@@ -327,6 +327,25 @@ capture.get("/logs/:id", async (c) => {
   return c.json(log);
 });
 
+// Delete a log for good. The audit events from its turn stay (labels rebuild
+// client-side), but links into the dead row are severed; chat audio is the
+// session's, so it stays too.
+capture.delete("/logs/:id", async (c) => {
+  const user = c.get("user");
+  const log = await getEntity<LogRow>(c.env, "log", user.id, Number(c.req.param("id")));
+  if (!log) return c.json({ error: "not found" }, 404);
+  await c.env.DB.prepare(`UPDATE events SET log_id = NULL WHERE user_id = ? AND log_id = ?`)
+    .bind(user.id, log.id)
+    .run();
+  await c.env.DB.prepare(
+    `DELETE FROM events WHERE user_id = ? AND entity_type = 'log' AND entity_id = ?`,
+  )
+    .bind(user.id, log.id)
+    .run();
+  await c.env.DB.prepare(`DELETE FROM logs WHERE id = ?`).bind(log.id).run();
+  return c.json({ ok: true });
+});
+
 // Everything the agent did in the turn that produced this log (the audit
 // trail for the log's permalink page).
 capture.get("/logs/:id/events", async (c) => {
