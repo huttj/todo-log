@@ -2844,3 +2844,43 @@ button.back {
 .push-btn:hover {
   border-color: #4a6da7;
 }
+
+/* -- push / install nudge -- */
+.push-nudge {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: #4a5a72;
+  background: #eef2f8;
+  border: 1px solid #d7e0ee;
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  margin: 0.2rem 0 0.7rem;
+  line-height: 1.45;
+}
+
+.push-nudge .nudge-ic {
+  color: #4a6da7;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.push-nudge span {
+  flex: 1;
+}
+
+.push-nudge .link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+.nudge-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #9aa7ba;
+  padding: 0.1rem 0.2rem;
+  flex-shrink: 0;
+}

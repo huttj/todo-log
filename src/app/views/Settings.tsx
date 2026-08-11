@@ -5,6 +5,7 @@ import Select from "react-select";
 import { api, post } from "../api";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
+import { pushSupported, pushEnabled, enablePush, disablePush } from "../push";
 
 type Model = "sonnet" | "opus" | "haiku";
 type Thinking = "off" | "low" | "medium" | "high";
@@ -528,57 +529,26 @@ function sumCost(rows: { cost: number }[]): number {
   return rows.reduce((acc, r) => acc + r.cost, 0);
 }
 
-function urlB64ToBytes(s: string): Uint8Array {
-  const pad = "=".repeat((4 - (s.length % 4)) % 4);
-  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad);
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
-}
-
 function PushSection() {
   const [state, setState] = useState<"unsupported" | "off" | "on" | "denied" | "busy">("busy");
   const [err, setErr] = useState<string | null>(null);
 
-  const check = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      setState("unsupported");
-      return;
-    }
-    if (Notification.permission === "denied") {
-      setState("denied");
-      return;
-    }
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      setState(sub ? "on" : "off");
-    } catch {
-      setState("off");
-    }
-  };
   useEffect(() => {
-    void check();
+    void (async () => {
+      if (!pushSupported()) return setState("unsupported");
+      if (Notification.permission === "denied") return setState("denied");
+      setState((await pushEnabled()) ? "on" : "off");
+    })();
   }, []);
 
   async function enable() {
     setErr(null);
     setState("busy");
-    try {
-      const { key } = await api<{ key: string | null }>("/push/key");
-      if (!key) throw new Error("push isn't configured on the server");
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") {
-        setState(perm === "denied" ? "denied" : "off");
-        return;
-      }
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToBytes(key) as BufferSource,
-      });
-      await post("/push/subscribe", sub.toJSON());
-      setState("on");
-    } catch (e) {
-      setErr(String((e as Error).message ?? e));
+    const r = await enablePush();
+    if (r === "on") setState("on");
+    else if (r === "denied") setState("denied");
+    else {
+      setErr("couldn't subscribe — try again");
       setState("off");
     }
   }
@@ -586,12 +556,7 @@ function PushSection() {
   async function disable() {
     setState("busy");
     try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await post("/push/unsubscribe", { endpoint: sub.endpoint });
-        await sub.unsubscribe();
-      }
+      await disablePush();
     } finally {
       setState("off");
     }

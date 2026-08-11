@@ -20,6 +20,7 @@ import {
 } from "../api";
 import TodoRow from "../components/TodoRow";
 import HoldTalk from "../components/HoldTalk";
+import PushNudge from "../components/PushNudge";
 import { renderEntityRefs } from "../refs";
 import { requestTalk } from "../talk";
 import { fmtCost } from "../fmt";
@@ -470,6 +471,7 @@ export default function Today(props: {
         </div>
         <button onClick={() => setDayOffset(dayOffset + 1)}>›</button>
       </div>
+      {isToday && <PushNudge />}
       {daySpend > 0 && (
         <p className="day-cost" title="Total agent spend this day">
           agent spend {isToday ? "so far " : ""}
