@@ -20,7 +20,7 @@ export default function EventFeed(props: {
         <li key={e.id} className={e.undone ? "undone" : ""}>
           <FontAwesomeIcon className="feed-ic" icon={feedIcon(e.entity_type, e.kind)} />
           <span>
-            {e.kind.replace("_", " ")} {e.entity_type}{" "}
+            {kindLabel(e.kind)}{" "}
             <Link to={entityRoute(e)} className="entity-link">
               {entityName(e, props)}
             </Link>
@@ -30,6 +30,10 @@ export default function EventFeed(props: {
       ))}
     </ul>
   );
+}
+
+function kindLabel(kind: string): string {
+  return kind === "status_changed" ? "status" : kind.replace(/_/g, " ");
 }
 
 function entityRoute(e: EventRecord): string {
@@ -69,7 +73,7 @@ function payloadDetail(e: EventRecord): string {
       ? (JSON.parse(e.payload_json) as { before?: Record<string, unknown>; after?: Record<string, unknown> })
       : null;
     if (payload?.before && payload?.after && "status" in payload.after) {
-      return `: ${String(payload.before.status)} → ${String(payload.after.status)}`;
+      return `: ${String(payload.before.status).replace(/_/g, " ")} → ${String(payload.after.status).replace(/_/g, " ")}`;
     }
     if (payload?.after) {
       return ` (${Object.keys(payload.after).join(", ")})`;

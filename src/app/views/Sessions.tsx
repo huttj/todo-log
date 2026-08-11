@@ -344,7 +344,12 @@ export function SessionView(props: {
               {m.role === "assistant" ? (
                 <Markdown text={m.text ?? ""} />
               ) : playerOpen ? null : (
-                <p>{m.text}</p>
+                <p
+                  className={hasAudio ? "clickable-text" : undefined}
+                  onClick={hasAudio ? () => togglePlayer(m.id) : undefined}
+                >
+                  {m.text}
+                </p>
               )}
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />

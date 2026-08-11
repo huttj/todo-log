@@ -4,6 +4,7 @@ import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import LogCard from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
+import { navHistory } from "../nav";
 
 const TODO_STATUSES = ["idea", "scheduled", "in_progress", "done", "abandoned"] as const;
 
@@ -43,15 +44,31 @@ export default function TodoView(props: {
     <div className="tasks todo-page">
       <div className="page-head">
         <div className="page-nav">
-          {(window.history.state as { idx?: number } | null)?.idx ? (
-            <button className="back back-btn" onClick={() => navigate(-1)}>
-              ‹ Back
-            </button>
-          ) : (
-            <Link className="back" to={project ? `/projects/${project.id}` : "/"}>
-              ‹ {project ? project.name : "Today"}
-            </Link>
-          )}
+          {(() => {
+            const prev = navHistory.prev;
+            let label: string | null = null;
+            if (prev && (window.history.state as { idx?: number } | null)?.idx) {
+              if (prev === "/") label = "Today";
+              else if (prev === "/projects") label = "Projects";
+              else if (prev.startsWith("/projects/")) {
+                const pid = Number(prev.split("/")[2]);
+                label = projects.find((x) => x.id === pid)?.name ?? "Project";
+              } else if (prev === "/logs") label = "Logs";
+              else if (prev.startsWith("/logs/")) label = "Log";
+              else if (prev.startsWith("/sessions")) label = "Chats";
+              else if (prev === "/settings") label = "Settings";
+              else if (prev.startsWith("/todos/")) label = "Todo";
+            }
+            return label ? (
+              <button className="back" onClick={() => navigate(-1)}>
+                ‹ {label}
+              </button>
+            ) : (
+              <Link className="back" to={project ? `/projects/${project.id}` : "/"}>
+                ‹ {project ? project.name : "Today"}
+              </Link>
+            );
+          })()}
           <div className="page-meta">
             <select
               value={todo.status}

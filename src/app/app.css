@@ -2616,11 +2616,10 @@ header {
   background: #4a6da7 !important;
 }
 
-/* -- inline links are blue, everywhere -- */
+/* -- inline links are blue, everywhere (feed action text stays black) -- */
 .md a,
 .brief-list a,
-.entity-link,
-.feed a.feed-link {
+.entity-link {
   color: #4a6da7;
 }
 
@@ -2643,13 +2642,13 @@ header {
 }
 
 .bubble.user.has-audio {
-  padding-bottom: 1.5rem;
+  padding-right: 2rem;
 }
 
 .msg-play.corner {
   position: absolute;
   right: 0.55rem;
-  bottom: 0.3rem;
+  bottom: 0.5rem;
   border: none;
   background: none;
   cursor: pointer;
@@ -2743,4 +2742,64 @@ button.back-btn {
   background: none;
   cursor: pointer;
   font: inherit;
+}
+
+/* Voice bubble text opens playback on tap. */
+.clickable-text {
+  cursor: pointer;
+}
+
+/* Compact controls under the inline transcript. */
+.inline-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.inline-bar .seek {
+  flex: 1;
+  min-width: 0;
+}
+
+.inline-bar .play-btn,
+.inline-bar .speed-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: inherit;
+  padding: 0.1rem 0.2rem;
+  opacity: 0.85;
+}
+
+.inline-bar .clock {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* Done items under "see more" read as completed. */
+.done-item .line-body {
+  text-decoration: line-through;
+}
+
+/* Project card spend badge, top right. */
+.project-card {
+  position: relative;
+}
+
+.project-card .card-cost {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  font-size: 0.68rem;
+  color: #b5b2a8;
+}
+
+/* Back can be a button (history pop) — match the link look. */
+button.back {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }

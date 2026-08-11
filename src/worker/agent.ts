@@ -494,7 +494,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         created_at: t,
         updated_at: t,
       });
-      await feedEvent(s, "project", row.id, "created", `Created project “${row.name}”`);
+      await feedEvent(s, "project", row.id, "created", `Created “${row.name}”`);
       return JSON.stringify({ project_id: row.id });
     }
     case "update_project": {
@@ -514,8 +514,8 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const kind = "status" in cols ? "status_changed" : "updated";
       const label =
         "status" in cols
-          ? `Project “${current.name}”: ${current.status} → ${cols.status}`
-          : `Updated project “${current.name}” (${Object.keys(after).join(", ")})`;
+          ? `“${current.name}”: ${current.status} → ${cols.status}`
+          : `Updated “${current.name}” (${Object.keys(after).join(", ")})`;
       await feedEvent(s, "project", current.id, kind, label, { before, after });
       return "ok";
     }
@@ -541,7 +541,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           ...(dayStart ? { weekday: "short", month: "short", day: "numeric" } : {}),
         })}${dayStart ? " (any time)" : ""}`;
       }
-      await feedEvent(s, "todo", row.id, "created", `Created todo “${row.title}” (${row.status})${when}`);
+      await feedEvent(s, "todo", row.id, "created", `Created “${row.title}” (${String(row.status).replace(/_/g, " ")})${when}`);
       return JSON.stringify({ todo_id: row.id });
     }
     case "update_todo": {
@@ -561,8 +561,8 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const kind = "status" in cols ? "status_changed" : "updated";
       const label =
         "status" in cols
-          ? `Todo “${current.title}”: ${current.status} → ${cols.status}`
-          : `Updated todo “${current.title}” (${Object.keys(after).join(", ")})`;
+          ? `“${current.title}”: ${String(current.status).replace(/_/g, " ")} → ${String(cols.status).replace(/_/g, " ")}`
+          : `Updated “${current.title}” (${Object.keys(after).join(", ")})`;
       await feedEvent(s, "todo", current.id, kind, label, { before, after });
       return "ok";
     }
@@ -656,7 +656,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         created_at: t,
       });
       s.createdLogIds.push(row.id);
-      await feedEvent(s, "log", row.id, "created", `Logged ${row.kind}: ${row.title ?? row.summary}`);
+      await feedEvent(s, "log", row.id, "created", `${row.kind === "reflection" ? "Reflection" : "Logged"}: ${row.title ?? row.summary}`);
       return JSON.stringify({ log_id: row.id });
     }
     case "update_log": {
@@ -674,8 +674,8 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       await updateRow(s.env, "logs", s.user.id, current.id, cols);
       const attachChanged = "todo_id" in cols || "project_id" in cols;
       const label = attachChanged
-        ? `Re-filed log: ${(cols.summary as string) ?? current.summary}`
-        : `Updated log (${Object.keys(after).join(", ")})`;
+        ? `Re-filed: ${(cols.title as string) ?? current.title ?? (cols.summary as string) ?? current.summary}`
+        : `Updated (${Object.keys(after).join(", ")})`;
       await feedEvent(s, "log", current.id, "updated", label, { before, after });
       return "ok";
     }

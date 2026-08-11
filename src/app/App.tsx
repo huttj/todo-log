@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faLayerGroup,
@@ -22,11 +22,14 @@ import { Sessions, SessionView } from "./views/Sessions";
 import Landing from "./views/Landing";
 import Capture, { type CaptureContext } from "./Capture";
 import { TALK_EVENT, type TalkRequest } from "./talk";
+import { trackPath } from "./nav";
 
 type AuthState = "loading" | "signed-out" | "waitlist" | "ready";
 
 export default function App() {
   const [auth, setAuth] = useState<AuthState>("loading");
+  const location = useLocation();
+  useEffect(() => trackPath(location.pathname), [location.pathname]);
   const [me, setMe] = useState<Me | null>(null);
   // What the user is looking at / last touched — becomes capture context.
   const [focus, setFocus] = useState<CaptureContext | null>(null);

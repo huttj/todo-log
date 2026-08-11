@@ -166,14 +166,13 @@ export default function Capture(props: {
             .filter((e) => e.message_id === userMsgId)
             .map((e) => {
               const title = data.entity_titles?.[e.entity_type]?.[e.entity_id];
+              const kindLabel = e.kind === "status_changed" ? "status" : e.kind.replace(/_/g, " ");
               return {
                 event_id: e.id,
                 entity_type: e.entity_type,
                 entity_id: e.entity_id,
                 kind: e.kind,
-                label: title
-                  ? `${e.kind.replace("_", " ")}: ${title}`
-                  : `${e.kind.replace("_", " ")} ${e.entity_type} #${e.entity_id}`,
+                label: title ? `${kindLabel}: ${title}` : `${kindLabel} #${e.entity_id}`,
               };
             });
         const costFor = (userMsgId: number) =>
@@ -847,7 +846,16 @@ export default function Capture(props: {
                   entry.role === "assistant" ? (
                     <Markdown text={entry.text} />
                   ) : (
-                    <p>{entry.text}</p>
+                    <p
+                      className={entry.hasAudio ? "clickable-text" : undefined}
+                      onClick={
+                        entry.hasAudio && entry.msgId && !entry.transcribing
+                          ? () => updateEntry(entry.id, (e) => ({ ...e, showPlayer: true }))
+                          : undefined
+                      }
+                    >
+                      {entry.text}
+                    </p>
                   )
                 ) : entry.live ? (
                   <TypingDots />

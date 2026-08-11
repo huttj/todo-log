@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEye, faEyeSlash } from "@fortawesome/free-solid-svg-icons";
 import { api, type Project, type Todo } from "../api";
+import { fmtCost } from "../fmt";
 import TodoRow from "../components/TodoRow";
 import type { CaptureContext } from "../Capture";
 
@@ -27,6 +28,7 @@ export default function ProjectsHome(props: {
 }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [costs, setCosts] = useState<Record<number, number>>({});
   const [showInactive, setShowInactive] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
   const navigate = useNavigate();
@@ -34,6 +36,7 @@ export default function ProjectsHome(props: {
   const load = () => {
     api<Project[]>("/projects").then(setProjects).catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
+    api<Record<number, number>>("/usage/projects").then(setCosts).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [props.refreshKey]);
@@ -70,6 +73,11 @@ export default function ProjectsHome(props: {
               className={`project-card status-${p.status}`}
               onClick={() => navigate(`/projects/${p.id}`)}
             >
+              {(costs[p.id] ?? 0) > 0 && (
+                <span className="card-cost" title="Agent spend on this project">
+                  {fmtCost(costs[p.id])}
+                </span>
+              )}
               <span className="name">{p.name}</span>
               <span className="meta">
                 <span className="kind">{p.kind}</span>

@@ -26,7 +26,7 @@ import {
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
 import { listMemories, saveMemory, listDismissals, setDismissal } from "./db";
-import type { EntityType, ProjectRow, TodoRow } from "./types";
+import type { Env, EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
 crud.use("*", requireEnabled);
@@ -290,11 +290,12 @@ crud.get("/usage/table", async (c) => {
 
 // Total spend attributable to one entity: every turn whose events touched it
 // (for projects, also turns touching its todos or logs).
-crud.get("/usage/entity", async (c) => {
-  const userId = c.get("user").id;
-  const type = c.req.query("type");
-  const id = Number(c.req.query("id"));
-  if (!id || (type !== "todo" && type !== "project")) return c.json({ error: "bad params" }, 400);
+async function entityCost(
+  c: { env: Env },
+  userId: number,
+  type: "todo" | "project",
+  id: number,
+): Promise<number> {
   const touching =
     type === "todo"
       ? `SELECT DISTINCT message_id FROM events
@@ -311,7 +312,25 @@ crud.get("/usage/entity", async (c) => {
   )
     .bind(userId, id)
     .first<{ cost: number }>();
-  return c.json({ cost: row?.cost ?? 0 });
+  return row?.cost ?? 0;
+}
+
+crud.get("/usage/entity", async (c) => {
+  const type = c.req.query("type");
+  const id = Number(c.req.query("id"));
+  if (!id || (type !== "todo" && type !== "project")) return c.json({ error: "bad params" }, 400);
+  return c.json({ cost: await entityCost(c, c.get("user").id, type, id) });
+});
+
+// Per-project totals for the project cards (one map, no N client calls).
+crud.get("/usage/projects", async (c) => {
+  const userId = c.get("user").id;
+  const projects = await listProjects(c.env, userId);
+  const out: Record<number, number> = {};
+  for (const p of projects) {
+    out[p.id] = await entityCost(c, userId, "project", p.id);
+  }
+  return c.json(out);
 });
 
 // -- Today-view dismissals --------------------------------------------------
@@ -320,7 +339,10 @@ crud.get("/dismissals", async (c) => {
   const day = c.req.query("day");
   if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return c.json({ error: "day=YYYY-MM-DD required" }, 400);
   const rows = await listDismissals(c.env, c.get("user").id, day);
-  return c.json({ keys: rows.map((r) => r.key) });
+  return c.json({
+    keys: rows.map((r) => r.key),
+    items: rows.map((r) => ({ key: r.key, why: r.why ?? "hide" })),
+  });
 });
 
 crud.post("/dismissals", async (c) => {

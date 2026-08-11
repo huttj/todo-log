@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowsRotate, faCheck, faEye, faEyeSlash, faMicrophone } from "@fortawesome/free-solid-svg-icons";
+import { faArrowsRotate, faCheck, faEye, faEyeSlash, faMicrophone, faRotateLeft } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   post,
@@ -176,9 +176,13 @@ export default function Today(props: {
   // -- Dismissals (server-side, per date — the overview generator reads them
   // and re-hides regenerated equivalents) -----------------------------------
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [doneKeys, setDoneKeys] = useState<Set<string>>(new Set());
   const loadDismissed = () => {
-    api<{ keys: string[] }>(`/dismissals?day=${isoDate}`)
-      .then((r) => setDismissed(new Set(r.keys)))
+    api<{ keys: string[]; items?: { key: string; why?: string }[] }>(`/dismissals?day=${isoDate}`)
+      .then((r) => {
+        setDismissed(new Set(r.keys));
+        setDoneKeys(new Set((r.items ?? []).filter((x) => x.why === "done").map((x) => x.key)));
+      })
       .catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,6 +193,12 @@ export default function Today(props: {
     if (dismissing) next.add(k);
     else next.delete(k);
     setDismissed(next);
+    setDoneKeys((prev) => {
+      const d = new Set(prev);
+      if (dismissing && why === "done") d.add(k);
+      else d.delete(k);
+      return d;
+    });
     void post("/dismissals", { day: isoDate, key: k, label, dismissed: dismissing, why }).catch(
       () => {},
     );
@@ -207,18 +217,21 @@ export default function Today(props: {
     </button>
   );
 
-  const dismissBtn = (k: string, restore = false, label?: string) => (
-    <button
-      className="dismiss-btn"
-      title={restore ? "Bring it back" : "Hide for today"}
-      onClick={(e) => {
-        e.stopPropagation();
-        toggleDismiss(k, label);
-      }}
-    >
-      <FontAwesomeIcon icon={restore ? faEyeSlash : faEye} />
-    </button>
-  );
+  const dismissBtn = (k: string, restore = false, label?: string) => {
+    const wasDone = doneKeys.has(k);
+    return (
+      <button
+        className="dismiss-btn"
+        title={restore ? (wasDone ? "Undo done" : "Bring it back") : "Hide for today"}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleDismiss(k, label);
+        }}
+      >
+        <FontAwesomeIcon icon={restore ? (wasDone ? faRotateLeft : faEyeSlash) : faEye} />
+      </button>
+    );
+  };
 
   const [seeMore, setSeeMore] = useState<Set<string>>(new Set());
   const toggleMore = (key: string) =>
@@ -378,7 +391,10 @@ export default function Today(props: {
             ))}
             {expanded &&
               hidden.map((e) => (
-                <li key={e.k} className={`brief-line ${dismissed.has(e.k) ? "hidden-item" : "more-item"}`}>
+                <li
+                  key={e.k}
+                  className={`brief-line ${dismissed.has(e.k) ? (doneKeys.has(e.k) ? "hidden-item done-item" : "hidden-item") : "more-item"}`}
+                >
                   <span className="line-body">{e.node}</span>
                   <span className="line-acts">{dismissBtn(e.k, dismissed.has(e.k), e.label)}</span>
                 </li>

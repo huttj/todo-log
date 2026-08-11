@@ -203,13 +203,26 @@ export default function TranscriptPlayer(props: {
     return (
       <div className="inline-transcript" onClick={(e) => e.stopPropagation()}>
         {words}
-        <button
-          className="msg-play corner"
-          title={playing ? "Pause" : "Play (tap a word to jump)"}
-          onClick={togglePlay}
-        >
-          {playing ? "⏸" : "▶"}
-        </button>
+        <div className="player-bar inline-bar">
+          <button className="play-btn" onClick={togglePlay}>
+            {playing ? "⏸" : "▶"}
+          </button>
+          <input
+            type="range"
+            className="seek"
+            min={0}
+            max={Math.max(1, total)}
+            step={0.1}
+            value={Math.min(pos, total)}
+            onChange={(e) => seek(Number(e.target.value))}
+          />
+          <span className="clock">
+            {fmt(pos)} / {fmt(total)}
+          </span>
+          <button className="speed-btn" onClick={cycleSpeed} title="Playback speed (global)">
+            {speed}×
+          </button>
+        </div>
       </div>
     );
   }
