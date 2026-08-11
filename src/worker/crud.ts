@@ -26,6 +26,7 @@ import {
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
 import { listMemories, saveMemory, listDismissals, setDismissal } from "./db";
+import { saveSubscription } from "./push";
 import type { Env, EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -365,6 +366,31 @@ crud.post("/dismissals", async (c) => {
     body.dismissed !== false,
     body.why === "done" ? "done" : "hide",
   );
+  return c.json({ ok: true });
+});
+
+// -- Web push subscriptions -------------------------------------------------
+
+crud.get("/push/key", (c) => c.json({ key: c.env.VAPID_PUBLIC_KEY ?? null }));
+
+crud.post("/push/subscribe", async (c) => {
+  const body = await c.req.json<{ endpoint?: string; keys?: { p256dh?: string; auth?: string } }>();
+  if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+    return c.json({ error: "endpoint and keys required" }, 400);
+  }
+  await saveSubscription(c.env, c.get("user").id, {
+    endpoint: body.endpoint,
+    keys: { p256dh: body.keys.p256dh, auth: body.keys.auth },
+  });
+  return c.json({ ok: true });
+});
+
+crud.post("/push/unsubscribe", async (c) => {
+  const body = await c.req.json<{ endpoint?: string }>();
+  if (!body.endpoint) return c.json({ error: "endpoint required" }, 400);
+  await c.env.DB.prepare(`DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?`)
+    .bind(c.get("user").id, body.endpoint)
+    .run();
   return c.json({ ok: true });
 });
 

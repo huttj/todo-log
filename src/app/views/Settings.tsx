@@ -459,6 +459,8 @@ export default function Settings(props: {
         "The agent looks at what's open and may leave one short check-in note; it skips when you've chatted within the hour.",
       )}
 
+      <PushSection />
+
       <section>
         <h2>Agent memory</h2>
         {memories.length === 0 && <p className="empty">Nothing saved yet — the agent adds notes as it learns.</p>}
@@ -524,4 +526,109 @@ export default function Settings(props: {
 
 function sumCost(rows: { cost: number }[]): number {
   return rows.reduce((acc, r) => acc + r.cost, 0);
+}
+
+function urlB64ToBytes(s: string): Uint8Array {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + pad);
+  return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+}
+
+function PushSection() {
+  const [state, setState] = useState<"unsupported" | "off" | "on" | "denied" | "busy">("busy");
+  const [err, setErr] = useState<string | null>(null);
+
+  const check = async () => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setState("unsupported");
+      return;
+    }
+    if (Notification.permission === "denied") {
+      setState("denied");
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setState(sub ? "on" : "off");
+    } catch {
+      setState("off");
+    }
+  };
+  useEffect(() => {
+    void check();
+  }, []);
+
+  async function enable() {
+    setErr(null);
+    setState("busy");
+    try {
+      const { key } = await api<{ key: string | null }>("/push/key");
+      if (!key) throw new Error("push isn't configured on the server");
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        setState(perm === "denied" ? "denied" : "off");
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToBytes(key) as BufferSource,
+      });
+      await post("/push/subscribe", sub.toJSON());
+      setState("on");
+    } catch (e) {
+      setErr(String((e as Error).message ?? e));
+      setState("off");
+    }
+  }
+
+  async function disable() {
+    setState("busy");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await post("/push/unsubscribe", { endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      }
+    } finally {
+      setState("off");
+    }
+  }
+
+  return (
+    <section>
+      <h2>Push notifications</h2>
+      {state === "unsupported" && (
+        <p className="hint-left">
+          This browser doesn't support web push. On iPhone: add Todo Log to your Home Screen
+          (Share → Add to Home Screen), then open it from there and enable push.
+        </p>
+      )}
+      {state === "denied" && (
+        <p className="hint-left">
+          Notifications are blocked for this site — allow them in your browser settings, then
+          reload.
+        </p>
+      )}
+      {(state === "off" || state === "on" || state === "busy") && (
+        <div className="setting-row">
+          <button
+            className="push-btn"
+            disabled={state === "busy"}
+            onClick={() => (state === "on" ? void disable() : void enable())}
+          >
+            {state === "on" ? "Disable on this device" : state === "busy" ? "…" : "Enable on this device"}
+          </button>
+          {state === "on" && <span className="hint-left">check-ins reach this device even with the app closed</span>}
+        </div>
+      )}
+      {err && <p className="error">{err}</p>}
+      <p className="hint-left">
+        Check-in notifications arrive as system notifications. Each device subscribes separately;
+        on iPhone this needs the Home Screen app.
+      </p>
+    </section>
+  );
 }

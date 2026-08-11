@@ -2811,3 +2811,36 @@ button.back {
   color: #555;
   margin: 0.2rem 0 0.6rem;
 }
+
+/* -- chat turn limit notice -- */
+.turn-limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.7rem;
+  font-size: 0.78rem;
+  color: #7a6a3a;
+  background: #faf4e2;
+  border: 1px solid #eadfc0;
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  margin: 0.3rem 0;
+}
+
+.turn-limit button {
+  font-size: 0.78rem;
+}
+
+.push-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 0.4rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.push-btn:hover {
+  border-color: #4a6da7;
+}

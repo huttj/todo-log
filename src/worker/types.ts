@@ -9,6 +9,9 @@ export interface Env {
   /** Comma-separated emails auto-enabled on first sign-in. */
   ALLOWLIST_EMAILS: string;
   TIMEZONE: string;
+  /** Web push (unset = push disabled). */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 }
 
 export interface TranscriptWord {

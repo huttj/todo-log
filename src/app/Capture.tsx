@@ -11,6 +11,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faStop, faPaperPlane } from "@fortawesome/free-solid-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
+import { requestTalk } from "./talk";
 import Markdown from "./components/Markdown";
 import { fmtCost } from "./fmt";
 import TranscriptPlayer from "./components/TranscriptPlayer";
@@ -20,6 +21,9 @@ import { feedIcon } from "./feedIcons";
 // clips) and give near-live transcript feedback.
 const MAX_SEGMENT_MS = 25_000;
 const DRAFT_KEY = "todolog.draft";
+// Every message re-sends the whole history, so long chats get expensive —
+// soft-cap at 5 turns with an explicit +5 override.
+const TURN_LIMIT = 5;
 
 export interface CaptureContext {
   type: "project" | "todo" | "action" | "log" | "session" | "today";
@@ -99,6 +103,7 @@ export default function Capture(props: {
   });
   const [draft, setDraft] = useState(() => localStorage.getItem(DRAFT_KEY) ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [turnAllowance, setTurnAllowance] = useState(TURN_LIMIT);
 
   const sessionRef = useRef<CaptureSession | null>(null);
   const ctxRef = useRef<CaptureContext | null>(props.context);
@@ -409,6 +414,8 @@ export default function Capture(props: {
   // messages too, so they must not drive it.
   const busy = transcribing;
   const hasContent = draft.trim().length > 0 || seqRef.current > 0;
+  const userTurns = chat.filter((e) => e.role === "user").length;
+  const limitReached = userTurns >= turnAllowance;
 
   const updateEntry = (id: number, fn: (e: ChatEntry) => ChatEntry) =>
     setChat((c) => c.map((e) => (e.id === id ? fn(e) : e)));
@@ -416,7 +423,7 @@ export default function Capture(props: {
   // -- Fire-and-forget send queue -------------------------------------------
 
   function requestSend() {
-    if (!hasContent) return;
+    if (!hasContent || limitReached) return;
     if (recording) stopRecording();
     const item: QueuedSend = {
       msgId: messageIdRef.current,
@@ -456,6 +463,7 @@ export default function Capture(props: {
 
   /** Send a canned answer (question chip) as its own message. */
   function sendText(text: string, fromEntryId: number) {
+    if (limitReached) return;
     updateEntry(fromEntryId, (e) => ({ ...e, questionsAnswered: true }));
     const item: QueuedSend = {
       msgId: null,
@@ -966,6 +974,26 @@ export default function Capture(props: {
 
       {error && <p className="error">{error}</p>}
 
+      {limitReached && (
+        <div className="turn-limit">
+          <span>
+            {userTurns} turns — each message re-sends the whole chat, so fresh chats are cheaper.
+          </span>
+          <button className="link" onClick={() => setTurnAllowance((a) => a + 5)}>
+            continue (+5)
+          </button>
+          <button
+            className="link"
+            onClick={() => {
+              void done();
+              requestTalk(null);
+            }}
+          >
+            start fresh
+          </button>
+        </div>
+      )}
+
       {segments.some((s) => !s.transcript) && (
         <div className="seg-pills">
           {segments
@@ -1020,8 +1048,8 @@ export default function Capture(props: {
         <button
           className="icon-btn send-btn"
           onClick={requestSend}
-          disabled={!hasContent}
-          title="Send"
+          disabled={!hasContent || limitReached}
+          title={limitReached ? "Turn limit — continue or start fresh above" : "Send"}
         >
           <FontAwesomeIcon icon={faPaperPlane} />
         </button>

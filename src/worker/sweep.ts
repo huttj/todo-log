@@ -21,6 +21,7 @@ import { transcribe } from "./transcribe";
 import { generateBriefing } from "./briefing";
 import { emptyUsage, addUsage, recordUsage } from "./usage";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
+import { pushToUser } from "./push";
 
 const DAY = 86400;
 
@@ -261,6 +262,9 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
     };
     if (parsed.skip || !parsed.title) return;
     await setNotification(env, user.id, "checkin", parsed.title, parsed.body ?? null);
+    await pushToUser(env, user.id, { title: parsed.title, body: parsed.body ?? null }).catch((err) =>
+      console.error(`push: check-in push failed for user ${user.id}:`, err),
+    );
     // Respect a manual-only overview setting: check-ins don't regenerate it either.
     if (parsed.refresh_briefing && parseConfig(user.agent_config).briefing_refresh.interval_hours > 0) {
       await generateBriefing(env, user).catch((err) =>
