@@ -256,7 +256,7 @@ nav a.active svg {
 }
 
 .session-head .count {
-  margin-left: auto;
+  margin: 0 auto;
 }
 
 .trash {
@@ -2300,6 +2300,7 @@ header {
   flex-shrink: 0;
   color: #999;
   opacity: 0.7;
+  padding-left: 0.6rem;
 }
 
 .session-head .expand:hover {

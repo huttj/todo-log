@@ -2,9 +2,10 @@
 // Opening the panel marks them read; X dismisses; "reply" opens Talk.
 import { useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBell, faXmark, faReply } from "@fortawesome/free-solid-svg-icons";
+import { faBell, faXmark, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import { api, post, del, type AppNotification } from "../api";
 import { requestTalk } from "../talk";
+import HoldTalk from "./HoldTalk";
 
 export default function Bell(props: { refreshKey: number }) {
   const [items, setItems] = useState<AppNotification[]>([]);
@@ -77,15 +78,19 @@ export default function Bell(props: { refreshKey: number }) {
                     minute: "2-digit",
                   })}
                 </span>
-                <button
-                  className="link"
-                  onClick={() => {
+                <HoldTalk
+                  className="thread-talk"
+                  title="Talk about this · hold or drag up to record"
+                  onOpen={(autoStart) => {
                     setOpen(false);
-                    requestTalk(null, { replyTo: { id: n.id, title: n.title, body: n.body } });
+                    requestTalk(null, {
+                      replyTo: { id: n.id, title: n.title, body: n.body },
+                      autoStart,
+                    });
                   }}
                 >
-                  <FontAwesomeIcon icon={faReply} /> reply
-                </button>
+                  <FontAwesomeIcon icon={faMicrophone} /> talk
+                </HoldTalk>
               </div>
             </div>
           ))}

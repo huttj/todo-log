@@ -98,14 +98,6 @@ export function Sessions(props: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [props.refreshKey]);
 
-  async function deleteSession(id: number) {
-    if (!window.confirm("Delete this chat? Journal logs stay, but the audio and transcript are gone for good.")) {
-      return;
-    }
-    await del(`/sessions/${id}`).catch(() => {});
-    load();
-  }
-
   useEffect(() => {
     props.onFocus(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,16 +166,6 @@ export function Sessions(props: {
                     }}
                   >
                     <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} />
-                  </button>
-                  <button
-                    className="link trash"
-                    title="Delete chat"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void deleteSession(s.id);
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faTrashCan} />
                   </button>
                 </div>
                 {s.first_text && <p className="snippet">{s.first_text.slice(0, 140)}</p>}
