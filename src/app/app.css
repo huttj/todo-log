@@ -1993,7 +1993,7 @@ header {
   content: "•";
   position: absolute;
   left: 0.1rem;
-  top: 0.3em;
+  top: calc(0.3em + 2px);
   font-size: 0.6em;
   color: #b5b2a8;
 }
