@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSun,
   faLayerGroup,
   faBookOpen,
   faComments,
@@ -136,10 +135,6 @@ export default function App() {
           <Link to="/">Todo Log</Link>
         </h1>
         <nav>
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")} title="Today">
-            <FontAwesomeIcon icon={faSun} />
-            <span className="nav-label">Today</span>
-          </NavLink>
           <NavLink
             to="/projects"
             className={({ isActive }) => (isActive ? "active" : "")}

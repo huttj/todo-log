@@ -5,7 +5,7 @@ import type { UserRow } from "./types";
 
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
 export type ModelChoice = "sonnet" | "opus" | "haiku";
-export type UseCase = "chat" | "briefing" | "checkin";
+export type UseCase = "chat" | "briefing" | "checkin" | "distill";
 
 export interface UseCaseSetting {
   model: ModelChoice | null; // null = inherit default
@@ -24,6 +24,8 @@ export interface AgentConfig {
   overrides: Record<UseCase, UseCaseSetting>;
   briefing_refresh: RefreshSchedule;
   checkin_schedule: RefreshSchedule;
+  /** Opt-in: chats may rewrite the overview via the update_briefing tool. */
+  chat_briefing_updates: boolean;
 }
 
 export const MODEL_IDS: Record<ModelChoice, string> = {
@@ -39,12 +41,16 @@ export function defaultConfig(): AgentConfig {
   return {
     default: { model: "sonnet", thinking: "medium" },
     overrides: {
-      chat: { model: null, thinking: null },
+      // Haiku holds up well for filing turns at ~1/3 the cost — chat defaults
+      // to it; the default model covers the rest.
+      chat: { model: "haiku", thinking: null },
       briefing: { model: null, thinking: null },
       checkin: { model: null, thinking: null },
+      distill: { model: null, thinking: null },
     },
     briefing_refresh: { interval_hours: 4, start_hour: 6, end_hour: 23 },
     checkin_schedule: { interval_hours: 3, start_hour: 8, end_hour: 22 },
+    chat_briefing_updates: false,
   };
 }
 
@@ -68,7 +74,7 @@ export function parseConfig(raw: string | null): AgentConfig {
       }
     }
     const ov = parsed.overrides as Record<string, Record<string, unknown>> | undefined;
-    for (const uc of ["chat", "briefing", "checkin"] as UseCase[]) {
+    for (const uc of ["chat", "briefing", "checkin", "distill"] as UseCase[]) {
       const o = ov?.[uc];
       if (!o) continue;
       if (MODELS.includes(o.model as ModelChoice)) cfg.overrides[uc].model = o.model as ModelChoice;
@@ -88,6 +94,9 @@ export function parseConfig(raw: string | null): AgentConfig {
     };
     readSchedule(parsed.briefing_refresh, cfg.briefing_refresh);
     readSchedule(parsed.checkin_schedule, cfg.checkin_schedule);
+    if (typeof parsed.chat_briefing_updates === "boolean") {
+      cfg.chat_briefing_updates = parsed.chat_briefing_updates;
+    }
     return cfg;
   } catch {
     return cfg;

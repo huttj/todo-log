@@ -16,7 +16,8 @@ import type {
   EntityType,
 } from "./types";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
-import { resolveUseCase, modelParams } from "./config";
+import { BRIEFING_STYLE } from "./briefing";
+import { resolveUseCase, modelParams, parseConfig } from "./config";
 import {
   now,
   insertRow,
@@ -39,6 +40,7 @@ import {
   listNotifications,
   getNotificationById,
   getBriefing,
+  setBriefing,
   saveMemory,
   listMemories,
   recentSessionEvents,
@@ -46,6 +48,55 @@ import {
   conversationOrder,
   messageSegments,
 } from "./db";
+
+// Opt-in via Settings (chat_briefing_updates): chats may rewrite the overview.
+const UPDATE_BRIEFING_TOOL: Anthropic.Tool = {
+  name: "update_briefing",
+  description:
+    "Rewrite the Today-view briefing (replaces it whole — include every section, not just what changed). Fetch the current briefing first (fetch, entity_type \"briefing\") if you haven't seen it this conversation, so unchanged sections carry forward. Call when this conversation meaningfully changes what today or the week looks like: new plans, finished/dropped items, a shifted picture of a project, or an answered question in it. Don't call for minor bookkeeping. Main lists hold only what deserves attention; the rest goes in the _more lists (behind \"see more\").\n" +
+    BRIEFING_STYLE,
+  input_schema: {
+    type: "object",
+    properties: {
+      headline: { type: "string", description: "One honest line about what today looks like" },
+      today: { type: "array", items: { type: "string" }, description: "Actionable plans/commitments for today and tonight" },
+      today_more: { type: "array", items: { type: "string" } },
+      oneoffs: {
+        type: "array",
+        items: { type: "string" },
+        description: "Loose threads: commitments living only in logs — phrase assumed states as questions",
+      },
+      oneoffs_more: { type: "array", items: { type: "string" } },
+      coming: { type: "array", items: { type: "string" }, description: "Tomorrow and the days ahead; also pure timing/status info" },
+      coming_more: { type: "array", items: { type: "string" } },
+      projects: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            project_id: { type: ["integer", "null"] },
+            name: { type: "string" },
+            line: { type: "string", description: "Momentum + one suggested next step, ≤ 20 words" },
+          },
+          required: ["name", "line"],
+        },
+      },
+      projects_more: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            project_id: { type: ["integer", "null"] },
+            name: { type: "string" },
+            line: { type: "string" },
+          },
+          required: ["name", "line"],
+        },
+      },
+    },
+    required: ["headline"],
+  },
+};
 
 // Model + thinking come from per-user settings (worker/config.ts).
 const MAX_TOOL_ITERATIONS = 8;
@@ -632,6 +683,47 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!q) return "error: query required";
       return JSON.stringify(await searchAll(s.env, s.user.id, q));
     }
+    case "update_briefing": {
+      const headline = str(input.headline);
+      if (!headline) return "error: headline required";
+      const arr = (v: unknown) =>
+        Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : [];
+      const projArr = (v: unknown) =>
+        Array.isArray(v)
+          ? (v as Record<string, unknown>[])
+              .filter((p) => typeof p.name === "string" && typeof p.line === "string")
+              .map((p) => ({
+                project_id: typeof p.project_id === "number" ? p.project_id : null,
+                name: p.name as string,
+                line: p.line as string,
+              }))
+          : [];
+      await setBriefing(
+        s.env,
+        s.user.id,
+        JSON.stringify({
+          headline,
+          today: arr(input.today),
+          today_more: arr(input.today_more),
+          oneoffs: arr(input.oneoffs),
+          oneoffs_more: arr(input.oneoffs_more),
+          coming: arr(input.coming),
+          coming_more: arr(input.coming_more),
+          projects: projArr(input.projects),
+          projects_more: projArr(input.projects_more),
+        }),
+      );
+      const item: ChangeFeedItem = {
+        event_id: 0,
+        entity_type: "briefing",
+        entity_id: 0,
+        kind: "briefing_updated",
+        label: "Updated today's briefing",
+      };
+      s.feed.push(item);
+      s.onEvent?.({ type: "feed", item });
+      return "briefing updated";
+    }
     case "save_memory": {
       const key = str(input.key);
       if (!key) return "error: key required";
@@ -762,7 +854,13 @@ How you behave:
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
 - NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
-- BRIEFING: the Today view shows a precomputed overview. It is NOT in your context by default — fetch it (fetch, entity_type "briefing") when the conversation concerns the day's plan. It is read-only from here: it regenerates on its own schedule, so never claim you updated it.`;
+- BRIEFING: the Today view shows a precomputed overview. It is NOT in your context by default — fetch it (fetch, entity_type "briefing") when the conversation concerns the day's plan.`;
+
+const BRIEFING_READONLY = `
+- The overview is read-only from chats: it regenerates on its own schedule — never claim you updated it.`;
+
+const BRIEFING_WRITABLE = `
+- When this conversation meaningfully changes the shape of today or the week — plans made or finished, a project's picture shifting — rewrite the overview with update_briefing (fetch it first). Skip it for minor bookkeeping.`;
 
 /** Extra system prompt for 'plan' sessions ("what should I do today?"). */
 const PLAN_ADDENDUM = `
@@ -936,7 +1034,11 @@ export async function runTurn(
   // context (current time, todos, briefing) sits after the breakpoints so a
   // change there never invalidates the expensive prefix. Within one turn's
   // tool iterations everything repeats and reads from cache.
-  const staticSystem = SYSTEM_PROMPT + (planMode ? PLAN_ADDENDUM : "");
+  const chatBriefingUpdates = parseConfig(user.agent_config).chat_briefing_updates;
+  const staticSystem =
+    SYSTEM_PROMPT +
+    (chatBriefingUpdates ? BRIEFING_WRITABLE : BRIEFING_READONLY) +
+    (planMode ? PLAN_ADDENDUM : "");
   const volatileSystem = contextBlock({
       clock: nowInZone(tz),
       learnings,
@@ -961,8 +1063,9 @@ export async function runTurn(
     { type: "text", text: staticSystem, cache_control: { type: "ephemeral", ttl: "1h" } },
     { type: "text", text: volatileSystem },
   ];
-  const tools: Anthropic.Tool[] = TOOLS.map((t, i) =>
-    i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral", ttl: "1h" } } : t,
+  const toolList = chatBriefingUpdates ? [...TOOLS, UPDATE_BRIEFING_TOOL] : TOOLS;
+  const tools: Anthropic.Tool[] = toolList.map((t, i) =>
+    i === toolList.length - 1 ? { ...t, cache_control: { type: "ephemeral", ttl: "1h" } } : t,
   );
 
   // Per-user tuning (Settings page): model + thinking level for chat turns.

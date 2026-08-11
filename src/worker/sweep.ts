@@ -22,7 +22,6 @@ import { generateBriefing } from "./briefing";
 import { emptyUsage, addUsage, recordUsage } from "./usage";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 
-const DISTILL_MODEL = "claude-opus-5";
 const DAY = 86400;
 
 export async function runSweep(env: Env): Promise<void> {
@@ -89,12 +88,23 @@ async function distillCorrections(env: Env): Promise<void> {
   }
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  let users: UserRow[] = [];
+  try {
+    users = await enabledUsers(env);
+  } catch {
+    return;
+  }
+  const userById = new Map(users.map((u) => [u.id, u]));
   for (const [userId, corrections] of byUser) {
     try {
+      const user = userById.get(userId);
+      if (!user) continue;
+      const resolved = resolveUseCase(user, "distill");
       const current = await getLearnings(env, userId);
       const response = await client.messages.create({
-        model: DISTILL_MODEL,
-        max_tokens: 4096,
+        model: resolved.modelId,
+        max_tokens: 6000,
+        ...(modelParams(resolved) as object),
         system:
           "You maintain a concise 'learnings' document for a personal todo/journal agent: durable guidance " +
           "distilled from times the user corrected the agent. Merge the new corrections into the current " +
@@ -112,7 +122,7 @@ async function distillCorrections(env: Env): Promise<void> {
       });
       const usage = emptyUsage();
       addUsage(usage, response.usage);
-      await recordUsage(env, { userId, kind: "distill", model: DISTILL_MODEL, usage });
+      await recordUsage(env, { userId, kind: "distill", model: resolved.modelId, usage });
       const text = response.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { text: string }).text)

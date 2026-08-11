@@ -73,7 +73,7 @@ nav a.active svg {
   opacity: 1;
 }
 
-/* Small screens: icons only */
+/* Small screens: icons only, tightened so everything stays on one line */
 @media (max-width: 560px) {
   .nav-label {
     display: none;
@@ -81,7 +81,15 @@ nav a.active svg {
 
   nav a {
     font-size: 1.1rem;
-    padding: 0.45rem 0.65rem;
+    padding: 0.45rem 0.5rem;
+  }
+
+  header {
+    column-gap: 0.5rem;
+  }
+
+  .nav-search {
+    padding: 0.4rem 0.45rem;
   }
 }
 
@@ -2461,4 +2469,13 @@ header {
   font-size: 0.75rem;
   color: #b5b2a8;
   margin: -0.3rem 0 0.6rem;
+}
+
+.toggle-row {
+  cursor: pointer;
+  margin-top: -0.2rem;
+}
+
+.toggle-row input {
+  accent-color: #4a6da7;
 }

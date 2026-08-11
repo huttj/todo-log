@@ -21,9 +21,15 @@ interface Schedule {
 
 interface AgentConfig {
   default: { model: Model; thinking: Thinking };
-  overrides: { chat: UseCaseSetting; briefing: UseCaseSetting; checkin: UseCaseSetting };
+  overrides: {
+    chat: UseCaseSetting;
+    briefing: UseCaseSetting;
+    checkin: UseCaseSetting;
+    distill: UseCaseSetting;
+  };
   briefing_refresh: Schedule;
   checkin_schedule: Schedule;
+  chat_briefing_updates: boolean;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -33,10 +39,11 @@ const KIND_LABELS: Record<string, string> = {
   distill: "learning distill",
 };
 
-const USE_CASES: { key: "chat" | "briefing" | "checkin"; label: string }[] = [
+const USE_CASES: { key: "chat" | "briefing" | "checkin" | "distill"; label: string }[] = [
   { key: "chat", label: "Chat" },
   { key: "briefing", label: "Overview" },
   { key: "checkin", label: "Notifications" },
+  { key: "distill", label: "Learning distill" },
 ];
 
 const THINKING_LABELS: Record<Thinking, string> = {
@@ -255,6 +262,15 @@ export default function Settings(props: {
         (s) => save({ ...cfg, briefing_refresh: s }),
         "Chats never touch the overview — outside this schedule, only ↻ on Today recomputes it.",
       )}
+
+      <label className="setting-row toggle-row">
+        <input
+          type="checkbox"
+          checked={cfg.chat_briefing_updates}
+          onChange={(e) => save({ ...cfg, chat_briefing_updates: e.target.checked })}
+        />
+        <span>Chats may rewrite the overview when they change the day's picture</span>
+      </label>
 
       {scheduleSection(
         "Check-in notifications",
