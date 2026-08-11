@@ -1,6 +1,6 @@
 // Settings: budget roll-ups, top-level agent defaults, per-use-case model /
 // thinking overrides, and the overview (briefing) regeneration schedule.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, post, type UsageSummary } from "../api";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
@@ -60,13 +60,28 @@ export default function Settings(props: {
   const [cfg, setCfg] = useState<AgentConfig | null>(null);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [saved, setSaved] = useState(false);
+  const [memories, setMemories] = useState<{ key: string; content: string }[]>([]);
+  const [newKey, setNewKey] = useState("");
+  const [newContent, setNewContent] = useState("");
 
   useEffect(() => {
     props.onFocus(null);
     api<AgentConfig>("/settings/agent").then(setCfg).catch(() => {});
     api<UsageSummary>("/usage/summary").then(setUsage).catch(() => {});
+    api<{ key: string; content: string }[]>("/memory").then(setMemories).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.refreshKey]);
+
+  async function saveMemory(key: string, content: string) {
+    try {
+      await post("/memory", { key, content });
+      if (!content.trim()) setMemories((ms) => ms.filter((m) => m.key !== key));
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 1500);
+    } catch {
+      /* transient */
+    }
+  }
 
   async function save(next: AgentConfig) {
     setCfg(next);
@@ -123,6 +138,7 @@ export default function Settings(props: {
     offLabel: string,
     onChange: (s: Schedule) => void,
     hint: string,
+    extra?: ReactNode,
   ) => (
     <section>
       <h2>{heading}</h2>
@@ -162,6 +178,7 @@ export default function Settings(props: {
           ))}
         </select>
       </div>
+      {extra}
       <p className="hint-left">{hint}</p>
     </section>
   );
@@ -260,17 +277,18 @@ export default function Settings(props: {
         cfg.briefing_refresh,
         "manual only",
         (s) => save({ ...cfg, briefing_refresh: s }),
-        "Chats never touch the overview — outside this schedule, only ↻ on Today recomputes it.",
+        cfg.chat_briefing_updates
+          ? "Chats can also rewrite the overview when they change the day's picture — plus this schedule and ↻ on Today."
+          : "Chats never touch the overview — outside this schedule, only ↻ on Today recomputes it.",
+        <label className="setting-row toggle-row">
+          <input
+            type="checkbox"
+            checked={cfg.chat_briefing_updates}
+            onChange={(e) => save({ ...cfg, chat_briefing_updates: e.target.checked })}
+          />
+          <span>Chats may rewrite the overview when they change the day's picture</span>
+        </label>,
       )}
-
-      <label className="setting-row toggle-row">
-        <input
-          type="checkbox"
-          checked={cfg.chat_briefing_updates}
-          onChange={(e) => save({ ...cfg, chat_briefing_updates: e.target.checked })}
-        />
-        <span>Chats may rewrite the overview when they change the day's picture</span>
-      </label>
 
       {scheduleSection(
         "Check-in notifications",
@@ -279,6 +297,64 @@ export default function Settings(props: {
         (s) => save({ ...cfg, checkin_schedule: s }),
         "The agent looks at what's open and may leave one short check-in note; it skips when you've chatted within the hour.",
       )}
+
+      <section>
+        <h2>Agent memory</h2>
+        {memories.length === 0 && <p className="empty">Nothing saved yet — the agent adds notes as it learns.</p>}
+        {memories.map((m) => (
+          <div className="memory-item" key={m.key}>
+            <div className="memory-head">
+              <strong>{m.key}</strong>
+              <button
+                className="link trash"
+                title="Delete this note"
+                onClick={() => {
+                  if (window.confirm(`Delete the "${m.key}" note?`)) void saveMemory(m.key, "");
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <textarea
+              value={m.content}
+              rows={2}
+              onChange={(e) =>
+                setMemories((ms) => ms.map((x) => (x.key === m.key ? { ...x, content: e.target.value } : x)))
+              }
+              onBlur={(e) => void saveMemory(m.key, e.target.value)}
+            />
+          </div>
+        ))}
+        <div className="memory-item memory-new">
+          <input
+            placeholder="new-note-key"
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+          />
+          <textarea
+            placeholder="What should the agent remember?"
+            rows={2}
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+          />
+          <button
+            className="link"
+            disabled={!newKey.trim() || !newContent.trim()}
+            onClick={async () => {
+              await saveMemory(newKey.trim(), newContent.trim());
+              setMemories((ms) => [...ms, { key: newKey.trim(), content: newContent.trim() }]);
+              setNewKey("");
+              setNewContent("");
+            }}
+          >
+            add note
+          </button>
+        </div>
+        <p className="hint-left">
+          These notes are shown to the agent at the start of every conversation. Edits save when you
+          click away; clearing a note deletes it.
+        </p>
+      </section>
 
       {saved && <p className="hint-left">saved</p>}
     </div>

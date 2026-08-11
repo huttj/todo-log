@@ -2474,9 +2474,42 @@ header {
 
 .toggle-row {
   cursor: pointer;
-  margin-top: -0.2rem;
+  margin: 0.6rem 0 0.15rem;
 }
 
 .toggle-row input {
   accent-color: #4a6da7;
+}
+
+/* -- agent memory editor (settings) -- */
+.memory-item {
+  margin-bottom: 0.7rem;
+}
+
+.memory-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+}
+
+.memory-item textarea,
+.memory-new input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  border: 1px solid #ddd;
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  background: #fff;
+  resize: vertical;
+}
+
+.memory-new input {
+  margin-bottom: 0.3rem;
+}
+
+.memory-new button {
+  margin-top: 0.2rem;
 }

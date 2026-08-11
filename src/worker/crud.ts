@@ -25,6 +25,7 @@ import {
 } from "./db";
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
+import { listMemories, saveMemory } from "./db";
 import type { EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -273,6 +274,19 @@ crud.get("/usage/entity", async (c) => {
     .bind(userId, id)
     .first<{ cost: number }>();
   return c.json({ cost: row?.cost ?? 0 });
+});
+
+// -- Agent memory (the save_memory notes, user-editable) --------------------
+
+crud.get("/memory", async (c) => c.json(await listMemories(c.env, c.get("user").id)));
+
+crud.post("/memory", async (c) => {
+  const body = await c.req.json<{ key?: string; content?: string }>();
+  const key = (body.key ?? "").trim();
+  if (!key) return c.json({ error: "key required" }, 400);
+  // Empty content deletes the key (same contract as the agent's tool).
+  await saveMemory(c.env, c.get("user").id, key, body.content ?? "");
+  return c.json({ ok: true });
 });
 
 // -- Agent settings (model / thinking) --------------------------------------
