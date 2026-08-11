@@ -458,6 +458,7 @@ export default function Settings(props: {
         "off",
         (s) => save({ ...cfg, checkin_schedule: s }),
         "The agent looks at what's open and may leave one short check-in note; it skips when you've chatted within the hour.",
+        <CheckinNowButton />,
       )}
 
       <TextSizeSection />
@@ -558,6 +559,53 @@ function TextSizeSection() {
   );
 }
 
+function TestPushButton() {
+  const [sent, setSent] = useState(false);
+  return (
+    <button
+      className="push-btn"
+      onClick={async () => {
+        await post("/push/test").catch(() => {});
+        setSent(true);
+        window.setTimeout(() => setSent(false), 4000);
+      }}
+    >
+      {sent ? "sent — check your notifications" : "Send test notification"}
+    </button>
+  );
+}
+
+function CheckinNowButton() {
+  const [result, setResult] = useState<string | null>(null);
+  const MESSAGES: Record<string, string> = {
+    sent: "check-in sent — see the bell / your device",
+    skipped: "the agent looked and decided nothing needs saying",
+    "nothing-open": "nothing open or scheduled to check in about",
+    error: "check-in failed — try again",
+  };
+  return (
+    <div className="setting-row">
+      <button
+        className="push-btn"
+        disabled={result === "…"}
+        onClick={async () => {
+          setResult("…");
+          try {
+            const r = await post<{ result: string }>("/checkin/run");
+            setResult(MESSAGES[r.result] ?? r.result);
+          } catch {
+            setResult(MESSAGES.error);
+          }
+        }}
+      >
+        Run a check-in now
+      </button>
+      {result && result !== "…" && <span className="hint-left">{result}</span>}
+      {result === "…" && <span className="hint-left">thinking…</span>}
+    </div>
+  );
+}
+
 function PushSection() {
   const [state, setState] = useState<"unsupported" | "off" | "on" | "denied" | "busy">("busy");
   const [err, setErr] = useState<string | null>(null);
@@ -615,7 +663,7 @@ function PushSection() {
           >
             {state === "on" ? "Disable on this device" : state === "busy" ? "…" : "Enable on this device"}
           </button>
-          {state === "on" && <span className="hint-left">check-ins reach this device even with the app closed</span>}
+          {state === "on" && <TestPushButton />}
         </div>
       )}
       {err && <p className="error">{err}</p>}

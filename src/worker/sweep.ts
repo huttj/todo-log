@@ -190,7 +190,11 @@ async function runCheckins(env: Env): Promise<void> {
   }
 }
 
-async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void> {
+export async function checkinForUser(
+  env: Env,
+  user: UserRow,
+  t: number,
+): Promise<"sent" | "skipped" | "nothing-open" | "error"> {
   const [schedule, todos, memories] = await Promise.all([
     listSchedule(env, user.id, { from: t - 2 * DAY, to: t + DAY }),
     listTodos(env, user.id),
@@ -200,7 +204,7 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
   const inFlight = todos.filter(
     (td) => (td.status === "in_progress" || td.status === "scheduled") && !open.some((o) => o.id === td.id),
   );
-  if (open.length === 0 && inFlight.length === 0) return;
+  if (open.length === 0 && inFlight.length === 0) return "nothing-open";
 
   const tz = user.timezone ?? env.TIMEZONE;
   const line = (s: ScheduleRow) => {
@@ -260,11 +264,12 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
       skip?: boolean;
       refresh_briefing?: boolean;
     };
-    if (parsed.skip || !parsed.title) return;
+    if (parsed.skip || !parsed.title) return "skipped";
     await setNotification(env, user.id, "checkin", parsed.title, parsed.body ?? null);
     await pushToUser(env, user.id, { title: parsed.title, body: parsed.body ?? null }).catch((err) =>
       console.error(`push: check-in push failed for user ${user.id}:`, err),
     );
+    return "sent";
     // Respect a manual-only overview setting: check-ins don't regenerate it either.
     if (parsed.refresh_briefing && parseConfig(user.agent_config).briefing_refresh.interval_hours > 0) {
       await generateBriefing(env, user).catch((err) =>
@@ -273,5 +278,6 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
     }
   } catch {
     console.error(`sweep: unparseable check-in for user ${user.id}: ${text.slice(0, 200)}`);
+    return "error";
   }
 }

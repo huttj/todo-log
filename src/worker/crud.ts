@@ -26,7 +26,8 @@ import {
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
 import { listMemories, saveMemory, listDismissals, setDismissal } from "./db";
-import { saveSubscription } from "./push";
+import { saveSubscription, pushToUser } from "./push";
+import { checkinForUser } from "./sweep";
 import type { Env, EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -392,6 +393,21 @@ crud.post("/push/unsubscribe", async (c) => {
     .bind(c.get("user").id, body.endpoint)
     .run();
   return c.json({ ok: true });
+});
+
+// Test push to every device this user subscribed.
+crud.post("/push/test", async (c) => {
+  await pushToUser(c.env, c.get("user").id, {
+    title: "Todo Log push works",
+    body: "This is a test — check-ins will look like this.",
+  });
+  return c.json({ ok: true });
+});
+
+// Manual check-in (the same pass the cron runs, minus the schedule gates).
+crud.post("/checkin/run", async (c) => {
+  const result = await checkinForUser(c.env, c.get("user"), now());
+  return c.json({ result });
 });
 
 // -- Agent memory (the save_memory notes, user-editable) --------------------
