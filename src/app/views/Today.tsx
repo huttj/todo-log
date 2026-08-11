@@ -364,7 +364,7 @@ export default function Today(props: {
             ))}
             {expanded &&
               hidden.map((e) => (
-                <li key={e.k} className="more-item hidden-item">
+                <li key={e.k} className={dismissed.has(e.k) ? "hidden-item" : "more-item"}>
                   {e.node}
                   {dismissBtn(e.k, dismissed.has(e.k), e.label)}
                 </li>

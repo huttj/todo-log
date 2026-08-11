@@ -2065,8 +2065,9 @@ header {
   font-size: 0.8rem;
 }
 
+/* Agent-deprioritized ("below the fold"): readable dark gray. */
 .brief-list .more-item {
-  color: #666;
+  color: #555;
 }
 
 .brief-refresh {
@@ -2428,8 +2429,9 @@ header {
   margin-left: 0.25rem;
 }
 
+/* User-hidden: clearly faded — distinct from agent-deprioritized. */
 .hidden-item {
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 .dismiss-row {
