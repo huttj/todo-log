@@ -64,6 +64,31 @@ function closeAndParse(fragment: string): Partial<Briefing> | null {
   }
 }
 
+/** A partial parse can cut arrays/objects mid-item — keep only complete ones. */
+function sanitizeBriefing(p: Partial<Briefing>): Briefing | null {
+  if (typeof p.headline !== "string") return null;
+  const strs = (v: unknown) =>
+    Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  const projs = (v: unknown) =>
+    Array.isArray(v)
+      ? (v as { project_id?: unknown; name?: unknown; line?: unknown }[]).filter(
+          (x): x is BriefingProjectLine =>
+            !!x && typeof x === "object" && typeof x.name === "string" && typeof x.line === "string",
+        )
+      : [];
+  return {
+    headline: p.headline,
+    today: strs(p.today),
+    today_more: strs(p.today_more),
+    oneoffs: strs(p.oneoffs),
+    oneoffs_more: strs(p.oneoffs_more),
+    coming: strs(p.coming),
+    coming_more: strs(p.coming_more),
+    projects: projs(p.projects),
+    projects_more: projs(p.projects_more),
+  };
+}
+
 function parsePartialBriefing(text: string): Partial<Briefing> | null {
   const start = text.indexOf("{");
   if (start < 0) return null;
@@ -224,19 +249,8 @@ export default function Today(props: {
             if (Date.now() - lastParse > 250) {
               lastParse = Date.now();
               const partial = parsePartialBriefing(acc);
-              if (partial?.headline) {
-                setBriefing({
-                  headline: partial.headline,
-                  today: partial.today ?? [],
-                  today_more: partial.today_more ?? [],
-                  oneoffs: partial.oneoffs ?? [],
-                  oneoffs_more: partial.oneoffs_more ?? [],
-                  coming: partial.coming ?? [],
-                  coming_more: partial.coming_more ?? [],
-                  projects: partial.projects ?? [],
-                  projects_more: partial.projects_more ?? [],
-                });
-              }
+              const clean = partial ? sanitizeBriefing(partial) : null;
+              if (clean) setBriefing(clean);
             }
           } else if (evt.type === "done") {
             setBriefing(evt.briefing);
@@ -371,7 +385,7 @@ export default function Today(props: {
   // opener still gets the name prefixed), and only skip the prefix then
   // (avoids "Back Taxes — Back Taxes — ...").
   const startsWithName = (p: BriefingProjectLine) => {
-    const m = p.line.trimStart().match(/^\[([^\]]+)\]/);
+    const m = (p.line ?? "").trimStart().match(/^\[([^\]]+)\]/);
     if (!m) return false;
     const linked = m[1].toLowerCase();
     const name = p.name.toLowerCase();
@@ -379,7 +393,7 @@ export default function Today(props: {
   };
   const projectLine = (p: BriefingProjectLine) =>
     startsWithName(p) ? (
-      <>{renderRefs(p.line)}</>
+      <>{renderRefs(p.line ?? "")}</>
     ) : (
       <>
         {p.project_id ? (
@@ -390,7 +404,7 @@ export default function Today(props: {
           <strong>{p.name}</strong>
         )}
         {" — "}
-        {renderRefs(p.line)}
+        {renderRefs(p.line ?? "")}
       </>
     );
 
