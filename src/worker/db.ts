@@ -315,10 +315,12 @@ export async function listLogs(
   if (filter.actionId) (conds.push("action_id = ?"), binds.push(filter.actionId));
   if (filter.projectId) {
     conds.push(
-      `(project_id = ? OR (message_id IS NOT NULL AND message_id IN
+      `(project_id = ?
+        OR todo_id IN (SELECT id FROM todos WHERE user_id = ? AND project_id = ?)
+        OR (message_id IS NOT NULL AND message_id IN
         (SELECT message_id FROM events WHERE entity_type = 'project' AND entity_id = ? AND message_id IS NOT NULL)))`,
     );
-    binds.push(filter.projectId, filter.projectId);
+    binds.push(filter.projectId, userId, filter.projectId, filter.projectId);
   }
   if (filter.from) (conds.push("occurred_at >= ?"), binds.push(filter.from));
   if (filter.to) (conds.push("occurred_at < ?"), binds.push(filter.to));
