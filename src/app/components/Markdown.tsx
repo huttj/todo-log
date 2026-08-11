@@ -26,6 +26,28 @@ export default function Markdown(props: { text: string }) {
                 </Link>
               );
             }
+            // In-app links (relative paths or our own origin) navigate in
+            // place; only genuinely external URLs open a new tab.
+            const h = href ?? "";
+            if (h.startsWith("/")) {
+              return (
+                <Link className="brief-ref" to={h}>
+                  {children}
+                </Link>
+              );
+            }
+            try {
+              const u = new URL(h);
+              if (u.origin === window.location.origin) {
+                return (
+                  <Link className="brief-ref" to={u.pathname + u.search + u.hash}>
+                    {children}
+                  </Link>
+                );
+              }
+            } catch {
+              /* not a URL — fall through */
+            }
             return (
               <a href={href} target="_blank" rel="noreferrer">
                 {children}

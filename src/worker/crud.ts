@@ -249,6 +249,32 @@ crud.get("/usage/day", async (c) => {
   return c.json({ cost: row?.cost ?? 0 });
 });
 
+// Total spend attributable to one entity: every turn whose events touched it
+// (for projects, also turns touching its todos or logs).
+crud.get("/usage/entity", async (c) => {
+  const userId = c.get("user").id;
+  const type = c.req.query("type");
+  const id = Number(c.req.query("id"));
+  if (!id || (type !== "todo" && type !== "project")) return c.json({ error: "bad params" }, 400);
+  const touching =
+    type === "todo"
+      ? `SELECT DISTINCT message_id FROM events
+         WHERE user_id = ?1 AND message_id IS NOT NULL
+           AND entity_type = 'todo' AND entity_id = ?2`
+      : `SELECT DISTINCT message_id FROM events
+         WHERE user_id = ?1 AND message_id IS NOT NULL
+           AND ((entity_type = 'project' AND entity_id = ?2)
+             OR (entity_type = 'todo' AND entity_id IN (SELECT id FROM todos WHERE user_id = ?1 AND project_id = ?2))
+             OR (entity_type = 'log' AND entity_id IN (SELECT id FROM logs WHERE user_id = ?1 AND project_id = ?2)))`;
+  const row = await c.env.DB.prepare(
+    `SELECT COALESCE(SUM(cost_usd), 0) AS cost FROM llm_usage
+     WHERE user_id = ?1 AND message_id IN (${touching})`,
+  )
+    .bind(userId, id)
+    .first<{ cost: number }>();
+  return c.json({ cost: row?.cost ?? 0 });
+});
+
 // -- Agent settings (model / thinking) --------------------------------------
 
 crud.get("/settings/agent", async (c) => {

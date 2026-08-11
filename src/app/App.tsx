@@ -55,7 +55,7 @@ export default function App() {
       setCaptureReplyTo(req.replyTo);
       setCaptureSeed(req.seed);
       setCaptureResume(req.resume);
-      setCaptureAutoStart(false);
+      setCaptureAutoStart(req.autoStart ?? false);
       setCaptureKey((k) => k + 1); // fresh session bound to the new context
       setCaptureOpen(true);
     };

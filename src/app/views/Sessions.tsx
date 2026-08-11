@@ -12,7 +12,6 @@ import {
   type Todo,
   type Project,
   type EventRecord,
-  type UsageSummary,
 } from "../api";
 import EventFeed from "../components/EventFeed";
 import TranscriptPlayer from "../components/TranscriptPlayer";
@@ -89,14 +88,12 @@ export function Sessions(props: {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [usage, setUsage] = useState<UsageSummary | null>(null);
   const navigate = useNavigate();
 
   const load = () => {
     api<SessionSummary[]>("/sessions").then(setSessions).catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
     api<Project[]>("/projects").then(setProjects).catch(() => {});
-    api<UsageSummary>("/usage/summary").then(setUsage).catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [props.refreshKey]);
@@ -129,24 +126,19 @@ export function Sessions(props: {
 
   return (
     <div className="sessions">
-      {usage && usage.all_time > 0 && (
-        <p className="usage-line">
-          Agent spend — 7 days: {fmtCost(usage.week)}
-          {usage.by_kind.length > 0 && (
-            <>
-              {" ("}
-              {usage.by_kind.map((k) => `${k.kind} ${fmtCost(k.cost)}`).join(" · ")}
-              {")"}
-            </>
-          )}
-          {" · all-time "}
-          {fmtCost(usage.all_time)}
-        </p>
-      )}
       {sessions.length === 0 && <p className="empty">No chats yet — tap Talk.</p>}
-      {byDay.map(([day, list]) => (
+      {byDay.map(([day, list]) => {
+        const dayCost = list.reduce((sum, s) => sum + (s.cost_usd ?? 0), 0);
+        return (
         <section key={day}>
-          <h2>{day}</h2>
+          <h2>
+            {day}
+            {dayCost > 0 && (
+              <span className="day-chat-cost" title="Agent spend across this day's chats">
+                {fmtCost(dayCost)}
+              </span>
+            )}
+          </h2>
           {list.map((s) => {
             const label = contextLabel(s, todos, projects);
             const timeLabel = new Date(s.started_at * 1000).toLocaleString(undefined, {
@@ -199,7 +191,8 @@ export function Sessions(props: {
             );
           })}
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

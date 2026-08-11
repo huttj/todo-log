@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, patch, type Project, type Todo, type Log } from "../api";
+import { fmtCost } from "../fmt";
 import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
@@ -16,11 +17,15 @@ export default function ProjectView(props: {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [logs, setLogs] = useState<Log[] | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [spend, setSpend] = useState(0);
 
   const load = () => {
     api<Project[]>("/projects").then(setProjects).catch(() => {});
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
     api<Log[]>(`/logs?project_id=${projectId}&limit=25`).then(setLogs).catch(() => {});
+    api<{ cost: number }>(`/usage/entity?type=project&id=${projectId}`)
+      .then((r) => setSpend(r.cost))
+      .catch(() => {});
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [props.refreshKey, projectId]);
@@ -64,6 +69,11 @@ export default function ProjectView(props: {
         <h2 className="page-title">{project.name}</h2>
       </div>
       {project.description && <p className="description">{project.description}</p>}
+      {spend > 0 && (
+        <p className="entity-cost" title="Agent spend on turns that touched this project">
+          agent spend {fmtCost(spend)}
+        </p>
+      )}
 
       <section>
         <h2>Todos</h2>

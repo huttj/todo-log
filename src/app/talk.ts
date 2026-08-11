@@ -14,6 +14,8 @@ export interface TalkRequest {
   seed?: string;
   /** Open an existing chat in the dock, history loaded, ready to continue. */
   resume?: { id: number; label: string };
+  /** Start recording immediately (hold/drag-up gesture). */
+  autoStart?: boolean;
 }
 
 export function requestTalk(
@@ -23,6 +25,7 @@ export function requestTalk(
     replyTo?: { id: number; title: string; body?: string | null };
     seed?: string;
     resume?: { id: number; label: string };
+    autoStart?: boolean;
   },
 ) {
   const detail: TalkRequest = {
@@ -31,6 +34,7 @@ export function requestTalk(
     replyTo: opts?.replyTo,
     seed: opts?.seed,
     resume: opts?.resume,
+    autoStart: opts?.autoStart,
   };
   window.dispatchEvent(new CustomEvent(TALK_EVENT, { detail }));
 }

@@ -248,14 +248,14 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "fetch",
     description:
-      "Fetch full detail for one entity: the record plus its related todos and recent logs. Use when the context snapshot isn't enough.",
+      "Fetch full detail for one entity: the record plus its related todos and recent logs. Use when the context snapshot isn't enough. entity_type \"briefing\" returns the current Today-view overview (no id needed).",
     input_schema: {
       type: "object",
       properties: {
-        entity_type: { type: "string", enum: ["project", "todo", "log"] },
+        entity_type: { type: "string", enum: ["project", "todo", "log", "briefing"] },
         id: { type: "integer" },
       },
-      required: ["entity_type", "id"],
+      required: ["entity_type"],
     },
   },
   {
@@ -271,7 +271,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_briefing",
     description:
-      "Rewrite the Today-view briefing (replaces it whole — include every section, not just what changed). Call when this conversation meaningfully changes what today or the week looks like: new plans, finished/dropped items, a shifted picture of a project, or an answered question in it. Don't call for minor bookkeeping. Main lists hold only what deserves attention; the rest goes in the _more lists (behind \"see more\").\n" +
+      "Rewrite the Today-view briefing (replaces it whole — include every section, not just what changed). Fetch the current briefing first (fetch, entity_type \"briefing\") if you haven't seen it this conversation, so unchanged sections carry forward. Call when this conversation meaningfully changes what today or the week looks like: new plans, finished/dropped items, a shifted picture of a project, or an answered question in it. Don't call for minor bookkeeping. Main lists hold only what deserves attention; the rest goes in the _more lists (behind \"see more\").\n" +
       BRIEFING_STYLE,
     input_schema: {
       type: "object",
@@ -656,6 +656,10 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       return "ok";
     }
     case "fetch": {
+      if (str(input.entity_type) === "briefing") {
+        const b = await getBriefing(s.env, s.user.id);
+        return b ? b.content_json : "no briefing computed yet";
+      }
       const type = str(input.entity_type) as EntityType | null;
       const id = num(input.id);
       if (!type || !id || !["project", "todo", "log"].includes(type)) {
@@ -848,7 +852,7 @@ How you behave:
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
 - NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
-- BRIEFING: the Today view shows a precomputed briefing (included below when one exists). When this conversation meaningfully changes the shape of today or the week — plans made or finished, a project's picture shifting — rewrite it with update_briefing. Skip it for minor bookkeeping.`;
+- BRIEFING: the Today view shows a precomputed briefing. It is NOT in your context by default — fetch it (fetch, entity_type "briefing") when the conversation concerns the day's plan or before updating it. When this conversation meaningfully changes the shape of today or the week — plans made or finished, a project's picture shifting — rewrite it with update_briefing. Skip it for minor bookkeeping.`;
 
 /** Extra system prompt for 'plan' sessions ("what should I do today?"). */
 const PLAN_ADDENDUM = `
@@ -1002,7 +1006,7 @@ export async function runTurn(
   // Seeded chats (loose threads etc.) get the same rich today-context as
   // planning: recent logs join the always-present briefing and schedule.
   const wantsStory = planMode || !!session.seed_text;
-  const [learnings, memories, notifications, projects, todos, scheduled, recentLogs, briefingRow, contextEntity, priorMessages, priorEvents] =
+  const [learnings, memories, notifications, projects, todos, scheduled, recentLogs, contextEntity, priorMessages, priorEvents] =
     await Promise.all([
       getLearnings(env, user.id),
       listMemories(env, user.id),
@@ -1012,7 +1016,6 @@ export async function runTurn(
       listSchedule(env, user.id, { from: t - DAY, to: t + 7 * DAY }),
       // Planning and seeded chats want the recent story; regular turns stay lean.
       wantsStory ? listLogs(env, user.id, { from: t - 3 * DAY, limit: 25 }) : Promise.resolve([]),
-      getBriefing(env, user.id),
       describeContextEntity(env, session, user.id),
       sessionMessages(env, session.id),
       recentSessionEvents(env, session.id),
@@ -1037,10 +1040,7 @@ export async function runTurn(
       changeFeedSoFar: priorEvents
         .map((e) => `- ${e.kind} ${e.entity_type} #${e.entity_id}`)
         .join("\n"),
-    }) +
-    (briefingRow
-      ? `\n\nThe briefing currently shown on the Today view${planMode ? " (start from it — refine, don't recite)" : ""}:\n${briefingRow.content_json}`
-      : "");
+    });
   // Static prefix (tools + prompt) caches for 1h — it must survive BETWEEN
   // turns (5-min TTL expired between real-world turns, so every turn paid a
   // full ~11K-token rewrite at 1.25x; that was most of per-turn cost). The

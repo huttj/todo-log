@@ -1,10 +1,12 @@
 // Today: the precomputed daily briefing (what today should look like) above
 // the day's schedule (scheduled todos) and logs. Arrows / date picker browse
 // other days; briefing, slipped, and in-flight sections only show on today.
+// Every entry is dismissable (eye icon) — dismissed ones hide behind "see
+// more" for the rest of the day (stored locally, per date).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowsRotate, faComment } from "@fortawesome/free-solid-svg-icons";
+import { faArrowsRotate, faEye, faEyeSlash, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   post,
@@ -18,6 +20,7 @@ import {
 } from "../api";
 import TodoRow from "../components/TodoRow";
 import LogCard from "../components/LogCard";
+import HoldTalk from "../components/HoldTalk";
 import { renderEntityRefs } from "../refs";
 import { requestTalk } from "../talk";
 import { fmtCost } from "../fmt";
@@ -25,6 +28,37 @@ import type { CaptureContext } from "../Capture";
 
 const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
 const DAY = 86400;
+const DISMISS_KEY = "todolog.dismissed";
+
+function loadDismissed(date: string): Set<string> {
+  try {
+    const all = JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "{}") as Record<string, string[]>;
+    return new Set(all[date] ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDismissed(date: string, keys: Set<string>) {
+  let all: Record<string, string[]> = {};
+  try {
+    all = JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "{}") as Record<string, string[]>;
+  } catch {
+    all = {};
+  }
+  all[date] = [...keys];
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  const floor = cutoff.toISOString().slice(0, 10);
+  for (const d of Object.keys(all)) if (d < floor) delete all[d];
+  localStorage.setItem(DISMISS_KEY, JSON.stringify(all));
+}
+
+/** An entry with a stable dismissal key. */
+interface Entry {
+  k: string;
+  node: ReactNode;
+}
 
 export default function Today(props: {
   refreshKey: number;
@@ -51,6 +85,7 @@ export default function Today(props: {
   }, [dayOffset]);
   const dayStart = Math.floor(day.getTime() / 1000);
   const isToday = dayOffset === 0;
+  const isoDate = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
 
   const load = () => {
     if (isToday) {
@@ -83,15 +118,48 @@ export default function Today(props: {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [props.refreshKey, dayStart]);
 
-  // Talk from this page = a planning-flavored session about the day.
+  // Talk from this page is a plain session — the agent fetches the overview
+  // itself when the conversation needs it.
   useEffect(() => {
-    props.onFocus({
-      type: "today",
-      id: 0,
-      label: new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }),
-    });
+    props.onFocus(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // -- Dismissals (local, per date) ----------------------------------------
+  const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed(isoDate));
+  useEffect(() => {
+    setDismissed(loadDismissed(isoDate));
+  }, [isoDate]);
+  const toggleDismiss = (k: string) =>
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      saveDismissed(isoDate, next);
+      return next;
+    });
+
+  const dismissBtn = (k: string, restore = false) => (
+    <button
+      className="dismiss-btn"
+      title={restore ? "Bring it back" : "Hide for today"}
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleDismiss(k);
+      }}
+    >
+      <FontAwesomeIcon icon={restore ? faEyeSlash : faEye} />
+    </button>
+  );
+
+  const [seeMore, setSeeMore] = useState<Set<string>>(new Set());
+  const toggleMore = (key: string) =>
+    setSeeMore((s) => {
+      const next = new Set(s);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   async function refresh() {
     setRefreshing(true);
@@ -116,11 +184,10 @@ export default function Today(props: {
     (t) => t.status === "in_progress" && !scheduled.some((s) => s.id === t.id),
   );
 
-
-  const scheduledRow = (s: ScheduleEntry, showDay = false) => (
+  const scheduledRow = (s: ScheduleEntry, showDay = false, restore = false) => (
     <div
       key={s.schedule_id}
-      className={`action-row status-${s.slot_status === "planned" ? s.status : s.slot_status}`}
+      className={`action-row status-${s.slot_status === "planned" ? s.status : s.slot_status} ${restore ? "hidden-item" : ""}`}
     >
       <span className="time">
         {s.slot_all_day
@@ -149,6 +216,7 @@ export default function Today(props: {
           </option>
         ))}
       </select>
+      {dismissBtn(`sched:${s.schedule_id}`, restore)}
     </div>
   );
 
@@ -161,23 +229,32 @@ export default function Today(props: {
   const renderRefs = (text: string) =>
     renderEntityRefs(text, { todo: todoTitle, project: projectName });
 
-  const [seeMore, setSeeMore] = useState<Set<string>>(new Set());
-  const toggleMore = (key: string) =>
-    setSeeMore((s) => {
-      const next = new Set(s);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  /** A section of dismissable rows: dismissed ones collapse behind "see more". */
+  const rowSection = (secKey: string, heading: string, entries: Entry[]) => {
+    if (entries.length === 0) return null;
+    const shown = entries.filter((e) => !dismissed.has(e.k));
+    const hidden = entries.filter((e) => dismissed.has(e.k));
+    const open = seeMore.has(secKey);
+    return (
+      <section>
+        <h2>{heading}</h2>
+        {shown.map((e) => e.node)}
+        {open && hidden.map((e) => e.node)}
+        {hidden.length > 0 && (
+          <button className="link see-more" onClick={() => toggleMore(secKey)}>
+            {open ? "hide dismissed" : `see ${hidden.length} more`}
+          </button>
+        )}
+      </section>
+    );
+  };
 
-  const briefCard = (
-    key: string,
-    heading: string,
-    items: ReactNode[],
-    more: ReactNode[],
-    action?: ReactNode,
-  ) => {
-    if (items.length + more.length === 0) return null;
+  // All briefing lines show by default; each is dismissable and dismissed
+  // ones drop behind "see more".
+  const briefCard = (key: string, heading: string, entries: Entry[], action?: ReactNode) => {
+    if (entries.length === 0) return null;
+    const shown = entries.filter((e) => !dismissed.has(e.k));
+    const hidden = entries.filter((e) => dismissed.has(e.k));
     const expanded = seeMore.has(key);
     return (
       <div className="briefing brief-card">
@@ -187,19 +264,23 @@ export default function Today(props: {
             {action}
           </h2>
           <ul className={`brief-list ${key}`}>
-            {items.map((x, i) => (
-              <li key={i}>{x}</li>
+            {shown.map((e) => (
+              <li key={e.k}>
+                {e.node}
+                {dismissBtn(e.k)}
+              </li>
             ))}
             {expanded &&
-              more.map((x, i) => (
-                <li key={`m${i}`} className="more-item">
-                  {x}
+              hidden.map((e) => (
+                <li key={e.k} className="more-item hidden-item">
+                  {e.node}
+                  {dismissBtn(e.k, true)}
                 </li>
               ))}
           </ul>
-          {more.length > 0 && (
+          {hidden.length > 0 && (
             <button className="link see-more" onClick={() => toggleMore(key)}>
-              {expanded ? "see less" : `see ${more.length} more`}
+              {expanded ? "hide dismissed" : `see ${hidden.length} more`}
             </button>
           )}
         </section>
@@ -226,7 +307,12 @@ export default function Today(props: {
       </>
     );
 
-  const isoDate = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+  const lineEntries = (section: string, lines: string[]): Entry[] =>
+    lines.map((t) => ({ k: `b:${section}:${t.slice(0, 80)}`, node: renderRefs(t) }));
+
+  const threads = briefing
+    ? [...(briefing.oneoffs ?? []), ...(briefing.oneoffs_more ?? [])]
+    : [];
 
   return (
     <div className="tasks today">
@@ -276,47 +362,42 @@ export default function Today(props: {
               {briefCard(
                 "today",
                 "Plans & commitments",
-                (briefing.today ?? []).map(renderRefs),
-                (briefing.today_more ?? []).map(renderRefs),
+                lineEntries("today", [...(briefing.today ?? []), ...(briefing.today_more ?? [])]),
               )}
               {briefCard(
                 "oneoffs",
                 "Loose threads",
-                (briefing.oneoffs ?? []).map(renderRefs),
-                (briefing.oneoffs_more ?? []).map(renderRefs),
-                <button
+                lineEntries("oneoffs", threads),
+                <HoldTalk
                   className="thread-talk"
-                  title="Talk through these threads"
-                  onClick={() =>
+                  title="Talk through these threads · hold or drag up to record"
+                  onOpen={(autoStart) =>
                     requestTalk(null, {
-                      seed: [
-                        "**Loose threads:**",
-                        "",
-                        ...[...(briefing.oneoffs ?? []), ...(briefing.oneoffs_more ?? [])].map(
-                          (x) => `- ${x}`,
-                        ),
-                      ].join("\n"),
+                      seed: ["**Loose threads:**", "", ...threads.map((x) => `- ${x}`)].join("\n"),
+                      autoStart,
                     })
                   }
                 >
-                  <FontAwesomeIcon icon={faComment} />
-                </button>,
+                  <FontAwesomeIcon icon={faMicrophone} /> talk
+                </HoldTalk>,
               )}
               {briefCard(
                 "coming",
                 "Coming up",
-                [
+                lineEntries("coming", [
                   ...(briefing.coming ?? []),
                   ...(briefing.tomorrow ?? []),
                   ...(briefing.week ?? []),
-                ].map(renderRefs),
-                (briefing.coming_more ?? []).map(renderRefs),
+                  ...(briefing.coming_more ?? []),
+                ]),
               )}
               {briefCard(
                 "projects",
                 "Projects",
-                (briefing.projects ?? []).map(projectLine),
-                (briefing.projects_more ?? []).map(projectLine),
+                [...(briefing.projects ?? []), ...(briefing.projects_more ?? [])].map((p) => ({
+                  k: `b:proj:${p.name}:${p.line.slice(0, 60)}`,
+                  node: projectLine(p),
+                })),
               )}
             </>
           )}
@@ -341,48 +422,57 @@ export default function Today(props: {
         </>
       )}
 
-      {sorted.length > 0 && (
-        <section>
-          <h2>Schedule</h2>
-          {sorted.map((s) => scheduledRow(s))}
-        </section>
+      {rowSection(
+        "schedule",
+        "Schedule",
+        sorted.map((s) => ({ k: `sched:${s.schedule_id}`, node: scheduledRow(s, false, dismissed.has(`sched:${s.schedule_id}`)) })),
       )}
       {!isToday && sorted.length === 0 && <p className="empty">Nothing scheduled this day.</p>}
 
-      {isToday && overdue.length > 0 && (
-        <section>
-          <h2>Slipped</h2>
-          {overdue.map((s) => scheduledRow(s, true))}
-        </section>
-      )}
+      {isToday &&
+        rowSection(
+          "slipped",
+          "Slipped",
+          overdue.map((s) => ({ k: `sched:${s.schedule_id}`, node: scheduledRow(s, true, dismissed.has(`sched:${s.schedule_id}`)) })),
+        )}
 
-      {isToday && inFlight.length > 0 && (
-        <section>
-          <h2>In flight</h2>
-          {inFlight.map((t) => (
-            <TodoRow key={t.id} todo={t} onChanged={load} />
-          ))}
-        </section>
-      )}
+      {isToday &&
+        rowSection(
+          "inflight",
+          "In flight",
+          inFlight.map((t) => ({
+            k: `todo:${t.id}`,
+            node: (
+              <div key={t.id} className={`dismiss-row ${dismissed.has(`todo:${t.id}`) ? "hidden-item" : ""}`}>
+                <TodoRow todo={t} onChanged={load} />
+                {dismissBtn(`todo:${t.id}`, dismissed.has(`todo:${t.id}`))}
+              </div>
+            ),
+          })),
+        )}
 
-      {logs.length > 0 && (
-        <section>
-          <h2>Logs</h2>
-          {logs.map((l) => (
-            <LogCard
-              key={l.id}
-              log={l}
-              onClick={() => props.onFocus({ type: "log", id: l.id, label: l.summary.slice(0, 40) })}
-              attachment={
-                l.todo_id
-                  ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
-                  : l.project_id
-                    ? { label: `project: ${projectName.get(l.project_id) ?? l.project_id}`, to: `/projects/${l.project_id}` }
-                    : null
-              }
-            />
-          ))}
-        </section>
+      {rowSection(
+        "logs",
+        "Logs",
+        logs.map((l) => ({
+          k: `log:${l.id}`,
+          node: (
+            <div key={l.id} className={`dismiss-row ${dismissed.has(`log:${l.id}`) ? "hidden-item" : ""}`}>
+              <LogCard
+                log={l}
+                onClick={() => props.onFocus({ type: "log", id: l.id, label: l.summary.slice(0, 40) })}
+                attachment={
+                  l.todo_id
+                    ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
+                    : l.project_id
+                      ? { label: `project: ${projectName.get(l.project_id) ?? l.project_id}`, to: `/projects/${l.project_id}` }
+                      : null
+                }
+              />
+              {dismissBtn(`log:${l.id}`, dismissed.has(`log:${l.id}`))}
+            </div>
+          ),
+        })),
       )}
     </div>
   );

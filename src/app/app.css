@@ -2243,6 +2243,7 @@ header {
 
 .log-pills .attachment {
   white-space: normal;
+  font-size: 0.68rem;
 }
 
 /* -- markdown in chat bubbles -- */
@@ -2397,4 +2398,67 @@ header {
 .spend-table td {
   padding: 0.25rem 0.5rem 0.25rem 0;
   border-bottom: 1px solid #f4f2ec;
+}
+
+/* -- dismissable Today entries -- */
+.dismiss-btn {
+  border: none;
+  background: none;
+  color: #c9c6bc;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.25rem;
+  flex-shrink: 0;
+}
+
+.dismiss-btn:hover {
+  color: #666;
+}
+
+.brief-list li .dismiss-btn {
+  margin-left: 0.25rem;
+}
+
+.hidden-item {
+  opacity: 0.55;
+}
+
+.dismiss-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.dismiss-row > *:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.dismiss-row .dismiss-btn {
+  margin-top: 0.5rem;
+}
+
+/* Loose-threads talk trigger: mic + label, same gesture as the Talk button. */
+.thread-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Per-day chat spend on the Chats page day headers. */
+.sessions h2 .day-chat-cost {
+  float: right;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #b5b2a8;
+}
+
+/* Agent spend line on todo / project pages. */
+.entity-cost {
+  font-size: 0.75rem;
+  color: #b5b2a8;
+  margin: -0.3rem 0 0.6rem;
 }
