@@ -271,10 +271,19 @@ export default function Today(props: {
     );
   };
 
-  // The style guide has lines start with the linked project name; only add a
-  // name prefix for lines that don't (avoids "Back Taxes — Back Taxes — ...").
+  // The style guide has lines start with the linked project name; only trust
+  // a leading link when its text actually is the name (a "[Moving](project:3)"
+  // opener still gets the name prefixed), and only skip the prefix then
+  // (avoids "Back Taxes — Back Taxes — ...").
+  const startsWithName = (p: BriefingProjectLine) => {
+    const m = p.line.trimStart().match(/^\[([^\]]+)\]/);
+    if (!m) return false;
+    const linked = m[1].toLowerCase();
+    const name = p.name.toLowerCase();
+    return linked === name || linked.includes(name) || name.includes(linked);
+  };
   const projectLine = (p: BriefingProjectLine) =>
-    p.line.trimStart().startsWith("[") ? (
+    startsWithName(p) ? (
       <>{renderRefs(p.line)}</>
     ) : (
       <>

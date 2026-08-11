@@ -59,7 +59,9 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
 - Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
 - When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?"
 - Only actionable items go in plans; pure status or timing information belongs in coming.
-- Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
+- Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. The words inside that first link are the project's NAME, nothing else.
+  BAD: "[Moving](project:3). Next: ..." (momentum word linked instead of the name — the reader can't tell which project this is)
+  GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more").
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
