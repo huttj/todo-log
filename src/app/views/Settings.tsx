@@ -460,6 +460,8 @@ export default function Settings(props: {
         "The agent looks at what's open and may leave one short check-in note; it skips when you've chatted within the hour.",
       )}
 
+      <TextSizeSection />
+
       <PushSection />
 
       <section>
@@ -527,6 +529,33 @@ export default function Settings(props: {
 
 function sumCost(rows: { cost: number }[]): number {
   return rows.reduce((acc, r) => acc + r.cost, 0);
+}
+
+const TEXT_SIZES = [
+  { value: "", label: "default" },
+  { value: "110%", label: "medium" },
+  { value: "122%", label: "large" },
+  { value: "135%", label: "extra large" },
+];
+
+function TextSizeSection() {
+  const [size, setSize] = useState(() => localStorage.getItem("todolog.textSize") ?? "");
+  const apply = (v: string | null) => {
+    const next = v ?? "";
+    setSize(next);
+    if (next) localStorage.setItem("todolog.textSize", next);
+    else localStorage.removeItem("todolog.textSize");
+    document.documentElement.style.fontSize = next || "";
+  };
+  return (
+    <section>
+      <h2>Text size</h2>
+      <div className="setting-row">
+        <Sel options={TEXT_SIZES} value={size} onChange={apply} width={140} />
+        <span className="hint-left">per device — takes effect immediately</span>
+      </div>
+    </section>
+  );
 }
 
 function PushSection() {

@@ -4,6 +4,11 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./app.css";
 
+// Text size is a per-device preference; apply before first paint. The whole
+// UI is rem-based, so scaling the root scales everything.
+const textSize = localStorage.getItem("todolog.textSize");
+if (textSize) document.documentElement.style.fontSize = textSize;
+
 if ("serviceWorker" in navigator) {
   void navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
