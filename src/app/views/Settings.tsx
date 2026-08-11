@@ -5,7 +5,7 @@ import { api, post, type UsageSummary } from "../api";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 
-type Model = "sonnet" | "haiku";
+type Model = "sonnet" | "opus" | "haiku";
 type Thinking = "off" | "low" | "medium" | "high";
 
 interface UseCaseSetting {
@@ -71,6 +71,7 @@ export default function Settings(props: {
     >
       {allowInherit && <option value="inherit">default</option>}
       <option value="sonnet">Sonnet 5</option>
+      <option value="opus">Opus 5</option>
       <option value="haiku">Haiku 4.5</option>
     </select>
   );

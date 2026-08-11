@@ -4,7 +4,7 @@
 import type { UserRow } from "./types";
 
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
-export type ModelChoice = "sonnet" | "haiku";
+export type ModelChoice = "sonnet" | "opus" | "haiku";
 export type UseCase = "chat" | "briefing" | "checkin";
 
 export interface UseCaseSetting {
@@ -20,10 +20,12 @@ export interface AgentConfig {
 
 export const MODEL_IDS: Record<ModelChoice, string> = {
   sonnet: "claude-sonnet-5",
+  opus: "claude-opus-5",
   haiku: "claude-haiku-4-5",
 };
 
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "low", "medium", "high"];
+const MODELS: ModelChoice[] = ["sonnet", "opus", "haiku"];
 
 export function defaultConfig(): AgentConfig {
   return {
@@ -51,7 +53,7 @@ export function parseConfig(raw: string | null): AgentConfig {
     }
     const d = parsed.default as Record<string, unknown> | undefined;
     if (d) {
-      if (d.model === "haiku" || d.model === "sonnet") cfg.default.model = d.model;
+      if (MODELS.includes(d.model as ModelChoice)) cfg.default.model = d.model as ModelChoice;
       if (THINKING_LEVELS.includes(d.thinking as ThinkingLevel)) {
         cfg.default.thinking = d.thinking as ThinkingLevel;
       }
@@ -60,7 +62,7 @@ export function parseConfig(raw: string | null): AgentConfig {
     for (const uc of ["chat", "briefing", "checkin"] as UseCase[]) {
       const o = ov?.[uc];
       if (!o) continue;
-      if (o.model === "haiku" || o.model === "sonnet") cfg.overrides[uc].model = o.model;
+      if (MODELS.includes(o.model as ModelChoice)) cfg.overrides[uc].model = o.model as ModelChoice;
       if (THINKING_LEVELS.includes(o.thinking as ThinkingLevel)) {
         cfg.overrides[uc].thinking = o.thinking as ThinkingLevel;
       }
