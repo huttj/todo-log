@@ -256,7 +256,7 @@ nav a.active svg {
 }
 
 .session-head .count {
-  margin: 0 auto;
+  margin-left: auto;
 }
 
 .trash {
