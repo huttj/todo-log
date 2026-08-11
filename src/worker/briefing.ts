@@ -15,6 +15,8 @@ import {
   listMemories,
   listNotifications,
   setBriefing,
+  listDismissals,
+  setDismissal,
 } from "./db";
 
 const DAY = 86400;
@@ -64,13 +66,16 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
 export async function generateBriefing(env: Env, user: UserRow): Promise<Briefing | null> {
   const t = now();
   const tz = user.timezone ?? env.TIMEZONE;
-  const [projects, todos, scheduled, logs, memories, notifications] = await Promise.all([
+  // Today's date string in the user's timezone — dismissals are keyed by it.
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(t * 1000));
+  const [projects, todos, scheduled, logs, memories, notifications, dismissed] = await Promise.all([
     listProjects(env, user.id),
     listTodos(env, user.id),
     listSchedule(env, user.id, { from: t - 2 * DAY, to: t + 7 * DAY }),
     listLogs(env, user.id, { from: t - 7 * DAY, limit: 40 }),
     listMemories(env, user.id),
     listNotifications(env, user.id),
+    listDismissals(env, user.id, day),
   ]);
 
   const when = (s: ScheduleRow) =>
@@ -98,6 +103,11 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     memories.length ? `Agent memory notes:\n${memories.map((m) => `[${m.key}] ${m.content}`).join("\n")}` : "",
     notifications.length
       ? `Open notifications:\n${notifications.map((n) => `- ${n.title}${n.body ? ` — ${n.body}` : ""}`).join("\n")}`
+      : "",
+    dismissed.length
+      ? `Items the user DISMISSED (hid) from today's view — seen and set aside, don't resurface them prominently:\n${dismissed
+          .map((d) => `- ${d.label ?? d.key}`)
+          .join("\n")}`
       : "",
   ]
     .filter(Boolean)
@@ -132,10 +142,11 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       coming_more: strArray,
       projects: projArray,
       projects_more: projArray,
+      rehidden: strArray,
     },
     required: [
       "headline", "today", "today_more", "oneoffs", "oneoffs_more",
-      "coming", "coming_more", "projects", "projects_more",
+      "coming", "coming_more", "projects", "projects_more", "rehidden",
     ],
     additionalProperties: false,
   };
@@ -162,6 +173,9 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       '- "coming" + "coming_more": tomorrow and the days ahead, plus pure timing/status info.\n' +
       '- "projects" + "projects_more": {"project_id": n, "name": "...", "line": "..."} per ACTIVE project, ' +
       "line = momentum + one suggested next step, ≤ 20 words.\n" +
+      '- "rehidden": if any line in your output is the SAME underlying item as one the user dismissed ' +
+      "(see the dismissed list in the data, when present), copy that line's exact text here (for project rows, " +
+      "the line text) so it stays hidden after regeneration. [] when none.\n" +
       "All keys required; use [] when empty.\n\n" +
       BRIEFING_STYLE,
     messages: [{ role: "user", content: input }],
@@ -206,6 +220,20 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       projects_more: parsed.projects_more ?? [],
     };
     await setBriefing(env, user.id, JSON.stringify(briefing), computeCost(resolved.modelId, usage));
+    // Regenerated equivalents of dismissed items start hidden: map each
+    // rehidden line back to its section and store the client-format key.
+    const rehidden = (parsed as { rehidden?: string[] }).rehidden ?? [];
+    for (const line of rehidden) {
+      let key: string | null = null;
+      if ([...briefing.today, ...briefing.today_more].includes(line)) key = `b:today:${line.slice(0, 80)}`;
+      else if ([...briefing.oneoffs, ...briefing.oneoffs_more].includes(line)) key = `b:oneoffs:${line.slice(0, 80)}`;
+      else if ([...briefing.coming, ...briefing.coming_more].includes(line)) key = `b:coming:${line.slice(0, 80)}`;
+      else {
+        const proj = [...briefing.projects, ...briefing.projects_more].find((p) => p.line === line);
+        if (proj) key = `b:proj:${proj.name}:${proj.line.slice(0, 60)}`;
+      }
+      if (key) await setDismissal(env, user.id, day, key, line.slice(0, 300), true).catch(() => {});
+    }
     return briefing;
   } catch {
     console.error(`briefing: unparseable output for user ${user.id}: ${text.slice(0, 200)}`);

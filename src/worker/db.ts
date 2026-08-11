@@ -647,6 +647,41 @@ export async function undoBriefing(env: Env, userId: number): Promise<BriefingRo
   return getBriefing(env, userId);
 }
 
+// -- Today-view dismissals (per user, per day) ------------------------------
+
+export async function listDismissals(
+  env: Env,
+  userId: number,
+  day: string,
+): Promise<{ key: string; label: string | null }[]> {
+  const r = await env.DB.prepare(`SELECT key, label FROM dismissals WHERE user_id = ? AND day = ?`)
+    .bind(userId, day)
+    .all<{ key: string; label: string | null }>();
+  return r.results;
+}
+
+export async function setDismissal(
+  env: Env,
+  userId: number,
+  day: string,
+  key: string,
+  label: string | null,
+  dismissed: boolean,
+): Promise<void> {
+  if (!dismissed) {
+    await env.DB.prepare(`DELETE FROM dismissals WHERE user_id = ? AND day = ? AND key = ?`)
+      .bind(userId, day, key)
+      .run();
+    return;
+  }
+  await env.DB.prepare(
+    `INSERT INTO dismissals (user_id, day, key, label, created_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, day, key) DO UPDATE SET label = excluded.label`,
+  )
+    .bind(userId, day, key, label, now())
+    .run();
+}
+
 export async function saveMemory(env: Env, userId: number, key: string, content: string): Promise<void> {
   if (!content.trim()) {
     await env.DB.prepare(`DELETE FROM agent_memory WHERE user_id = ? AND key = ?`)

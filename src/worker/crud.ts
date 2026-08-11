@@ -25,7 +25,7 @@ import {
 } from "./db";
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
-import { listMemories, saveMemory } from "./db";
+import { listMemories, saveMemory, listDismissals, setDismissal } from "./db";
 import type { EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -274,6 +274,31 @@ crud.get("/usage/entity", async (c) => {
     .bind(userId, id)
     .first<{ cost: number }>();
   return c.json({ cost: row?.cost ?? 0 });
+});
+
+// -- Today-view dismissals --------------------------------------------------
+
+crud.get("/dismissals", async (c) => {
+  const day = c.req.query("day");
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return c.json({ error: "day=YYYY-MM-DD required" }, 400);
+  const rows = await listDismissals(c.env, c.get("user").id, day);
+  return c.json({ keys: rows.map((r) => r.key) });
+});
+
+crud.post("/dismissals", async (c) => {
+  const body = await c.req.json<{ day?: string; key?: string; label?: string; dismissed?: boolean }>();
+  if (!body.day || !/^\d{4}-\d{2}-\d{2}$/.test(body.day) || !body.key) {
+    return c.json({ error: "day and key required" }, 400);
+  }
+  await setDismissal(
+    c.env,
+    c.get("user").id,
+    body.day,
+    body.key.slice(0, 300),
+    body.label ? body.label.slice(0, 300) : null,
+    body.dismissed !== false,
+  );
+  return c.json({ ok: true });
 });
 
 // -- Agent memory (the save_memory notes, user-editable) --------------------

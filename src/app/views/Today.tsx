@@ -2,7 +2,8 @@
 // the day's schedule (scheduled todos) and logs. Arrows / date picker browse
 // other days; briefing, slipped, and in-flight sections only show on today.
 // Every entry is dismissable (eye icon) — dismissed ones hide behind "see
-// more" for the rest of the day (stored locally, per date).
+// more" for the rest of the day (server-side per date, so the overview
+// generator sees them and re-hides regenerated equivalents).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -28,36 +29,12 @@ import type { CaptureContext } from "../Capture";
 
 const SLOT_STATUSES = ["planned", "done", "skipped"] as const;
 const DAY = 86400;
-const DISMISS_KEY = "todolog.dismissed";
-
-function loadDismissed(date: string): Set<string> {
-  try {
-    const all = JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "{}") as Record<string, string[]>;
-    return new Set(all[date] ?? []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveDismissed(date: string, keys: Set<string>) {
-  let all: Record<string, string[]> = {};
-  try {
-    all = JSON.parse(localStorage.getItem(DISMISS_KEY) ?? "{}") as Record<string, string[]>;
-  } catch {
-    all = {};
-  }
-  all[date] = [...keys];
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 7);
-  const floor = cutoff.toISOString().slice(0, 10);
-  for (const d of Object.keys(all)) if (d < floor) delete all[d];
-  localStorage.setItem(DISMISS_KEY, JSON.stringify(all));
-}
 
 /** An entry with a stable dismissal key. */
 interface Entry {
   k: string;
   node: ReactNode;
+  label?: string;
 }
 
 export default function Today(props: {
@@ -125,27 +102,32 @@ export default function Today(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -- Dismissals (local, per date) ----------------------------------------
-  const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed(isoDate));
-  useEffect(() => {
-    setDismissed(loadDismissed(isoDate));
-  }, [isoDate]);
-  const toggleDismiss = (k: string) =>
-    setDismissed((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      saveDismissed(isoDate, next);
-      return next;
-    });
+  // -- Dismissals (server-side, per date — the overview generator reads them
+  // and re-hides regenerated equivalents) -----------------------------------
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const loadDismissed = () => {
+    api<{ keys: string[] }>(`/dismissals?day=${isoDate}`)
+      .then((r) => setDismissed(new Set(r.keys)))
+      .catch(() => {});
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadDismissed, [isoDate, props.refreshKey]);
+  const toggleDismiss = (k: string, label?: string) => {
+    const next = new Set(dismissed);
+    const dismissing = !next.has(k);
+    if (dismissing) next.add(k);
+    else next.delete(k);
+    setDismissed(next);
+    void post("/dismissals", { day: isoDate, key: k, label, dismissed: dismissing }).catch(() => {});
+  };
 
-  const dismissBtn = (k: string, restore = false) => (
+  const dismissBtn = (k: string, restore = false, label?: string) => (
     <button
       className="dismiss-btn"
       title={restore ? "Bring it back" : "Hide for today"}
       onClick={(e) => {
         e.stopPropagation();
-        toggleDismiss(k);
+        toggleDismiss(k, label);
       }}
     >
       <FontAwesomeIcon icon={restore ? faEyeSlash : faEye} />
@@ -171,6 +153,7 @@ export default function Today(props: {
       setBriefing(r.briefing);
       setGeneratedAt(r.generated_at);
       setBriefCost(r.cost_usd ?? null);
+      loadDismissed();
     } catch (e) {
       setError(String((e as Error).message ?? e));
     } finally {
@@ -216,7 +199,7 @@ export default function Today(props: {
           </option>
         ))}
       </select>
-      {dismissBtn(`sched:${s.schedule_id}`, restore)}
+      {dismissBtn(`sched:${s.schedule_id}`, restore, s.title)}
     </div>
   );
 
@@ -267,14 +250,14 @@ export default function Today(props: {
             {shown.map((e) => (
               <li key={e.k}>
                 {e.node}
-                {dismissBtn(e.k)}
+                {dismissBtn(e.k, false, e.label)}
               </li>
             ))}
             {expanded &&
               hidden.map((e) => (
                 <li key={e.k} className="more-item hidden-item">
                   {e.node}
-                  {dismissBtn(e.k, true)}
+                  {dismissBtn(e.k, true, e.label)}
                 </li>
               ))}
           </ul>
@@ -308,7 +291,7 @@ export default function Today(props: {
     );
 
   const lineEntries = (section: string, lines: string[]): Entry[] =>
-    lines.map((t) => ({ k: `b:${section}:${t.slice(0, 80)}`, node: renderRefs(t) }));
+    lines.map((t) => ({ k: `b:${section}:${t.slice(0, 80)}`, label: t.slice(0, 300), node: renderRefs(t) }));
 
   const threads = briefing
     ? [...(briefing.oneoffs ?? []), ...(briefing.oneoffs_more ?? [])]
@@ -396,6 +379,7 @@ export default function Today(props: {
                 "Projects",
                 [...(briefing.projects ?? []), ...(briefing.projects_more ?? [])].map((p) => ({
                   k: `b:proj:${p.name}:${p.line.slice(0, 60)}`,
+                  label: p.line.slice(0, 300),
                   node: projectLine(p),
                 })),
               )}
@@ -445,7 +429,7 @@ export default function Today(props: {
             node: (
               <div key={t.id} className={`dismiss-row ${dismissed.has(`todo:${t.id}`) ? "hidden-item" : ""}`}>
                 <TodoRow todo={t} onChanged={load} />
-                {dismissBtn(`todo:${t.id}`, dismissed.has(`todo:${t.id}`))}
+                {dismissBtn(`todo:${t.id}`, dismissed.has(`todo:${t.id}`), t.title)}
               </div>
             ),
           })),
@@ -469,7 +453,7 @@ export default function Today(props: {
                       : null
                 }
               />
-              {dismissBtn(`log:${l.id}`, dismissed.has(`log:${l.id}`))}
+              {dismissBtn(`log:${l.id}`, dismissed.has(`log:${l.id}`), l.summary.slice(0, 120))}
             </div>
           ),
         })),
