@@ -13,11 +13,25 @@ interface UseCaseSetting {
   thinking: Thinking | null;
 }
 
+interface Schedule {
+  interval_hours: number;
+  start_hour: number;
+  end_hour: number;
+}
+
 interface AgentConfig {
   default: { model: Model; thinking: Thinking };
   overrides: { chat: UseCaseSetting; briefing: UseCaseSetting; checkin: UseCaseSetting };
-  briefing_refresh: { interval_hours: number; start_hour: number; end_hour: number };
+  briefing_refresh: Schedule;
+  checkin_schedule: Schedule;
 }
+
+const KIND_LABELS: Record<string, string> = {
+  turn: "chat",
+  briefing: "overview",
+  checkin: "check-in",
+  distill: "learning distill",
+};
 
 const USE_CASES: { key: "chat" | "briefing" | "checkin"; label: string }[] = [
   { key: "chat", label: "Chat" },
@@ -96,6 +110,55 @@ export default function Settings(props: {
     </select>
   );
 
+  const scheduleSection = (
+    heading: string,
+    value: Schedule,
+    offLabel: string,
+    onChange: (s: Schedule) => void,
+    hint: string,
+  ) => (
+    <section>
+      <h2>{heading}</h2>
+      <div className="setting-row">
+        <span>Every</span>
+        <select
+          value={value.interval_hours}
+          onChange={(e) => onChange({ ...value, interval_hours: Number(e.target.value) })}
+        >
+          <option value={0}>{offLabel}</option>
+          {[2, 3, 4, 6, 8, 12, 24].map((h) => (
+            <option key={h} value={h}>
+              {h}h
+            </option>
+          ))}
+        </select>
+        <span>between</span>
+        <select
+          value={value.start_hour}
+          onChange={(e) => onChange({ ...value, start_hour: Number(e.target.value) })}
+        >
+          {Array.from({ length: 24 }, (_, h) => (
+            <option key={h} value={h}>
+              {h}:00
+            </option>
+          ))}
+        </select>
+        <span>and</span>
+        <select
+          value={value.end_hour}
+          onChange={(e) => onChange({ ...value, end_hour: Number(e.target.value) })}
+        >
+          {Array.from({ length: 24 }, (_, h) => (
+            <option key={h + 1} value={h + 1}>
+              {h + 1}:00
+            </option>
+          ))}
+        </select>
+      </div>
+      <p className="hint-left">{hint}</p>
+    </section>
+  );
+
   return (
     <div className="tasks settings">
       <section>
@@ -122,7 +185,7 @@ export default function Settings(props: {
                 <tbody>
                   {usage.by_kind.map((k, i) => (
                     <tr key={i}>
-                      <td>{k.kind === "briefing" ? "overview" : k.kind}</td>
+                      <td>{KIND_LABELS[k.kind] ?? k.kind}</td>
                       <td>{k.model.replace("claude-", "")}</td>
                       <td>{k.n}</td>
                       <td>{(k.input / 1000).toFixed(1)}k</td>
@@ -185,64 +248,21 @@ export default function Settings(props: {
         </p>
       </section>
 
-      <section>
-        <h2>Overview regeneration</h2>
-        <div className="setting-row">
-          <span>Every</span>
-          <select
-            value={cfg.briefing_refresh.interval_hours}
-            onChange={(e) =>
-              save({
-                ...cfg,
-                briefing_refresh: { ...cfg.briefing_refresh, interval_hours: Number(e.target.value) },
-              })
-            }
-          >
-            <option value={0}>manual / chat only</option>
-            {[2, 4, 6, 8, 12, 24].map((h) => (
-              <option key={h} value={h}>
-                {h}h
-              </option>
-            ))}
-          </select>
-          <span>between</span>
-          <select
-            value={cfg.briefing_refresh.start_hour}
-            onChange={(e) =>
-              save({
-                ...cfg,
-                briefing_refresh: { ...cfg.briefing_refresh, start_hour: Number(e.target.value) },
-              })
-            }
-          >
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h} value={h}>
-                {h}:00
-              </option>
-            ))}
-          </select>
-          <span>and</span>
-          <select
-            value={cfg.briefing_refresh.end_hour}
-            onChange={(e) =>
-              save({
-                ...cfg,
-                briefing_refresh: { ...cfg.briefing_refresh, end_hour: Number(e.target.value) },
-              })
-            }
-          >
-            {Array.from({ length: 24 }, (_, h) => (
-              <option key={h + 1} value={h + 1}>
-                {h + 1}:00
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="hint-left">
-          The overview also updates when the agent decides a chat changed the day, and via ↻ on
-          Today.
-        </p>
-      </section>
+      {scheduleSection(
+        "Overview regeneration",
+        cfg.briefing_refresh,
+        "manual only",
+        (s) => save({ ...cfg, briefing_refresh: s }),
+        "Chats never touch the overview — outside this schedule, only ↻ on Today recomputes it.",
+      )}
+
+      {scheduleSection(
+        "Check-in notifications",
+        cfg.checkin_schedule,
+        "off",
+        (s) => save({ ...cfg, checkin_schedule: s }),
+        "The agent looks at what's open and may leave one short check-in note; it skips when you've chatted within the hour.",
+      )}
 
       {saved && <p className="hint-left">saved</p>}
     </div>

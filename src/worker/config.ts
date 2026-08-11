@@ -12,10 +12,18 @@ export interface UseCaseSetting {
   thinking: ThinkingLevel | null;
 }
 
+export interface RefreshSchedule {
+  /** 0 = never (manual only for the briefing; off for check-ins). */
+  interval_hours: number;
+  start_hour: number;
+  end_hour: number;
+}
+
 export interface AgentConfig {
   default: { model: ModelChoice; thinking: ThinkingLevel };
   overrides: Record<UseCase, UseCaseSetting>;
-  briefing_refresh: { interval_hours: number; start_hour: number; end_hour: number };
+  briefing_refresh: RefreshSchedule;
+  checkin_schedule: RefreshSchedule;
 }
 
 export const MODEL_IDS: Record<ModelChoice, string> = {
@@ -36,6 +44,7 @@ export function defaultConfig(): AgentConfig {
       checkin: { model: null, thinking: null },
     },
     briefing_refresh: { interval_hours: 4, start_hour: 6, end_hour: 23 },
+    checkin_schedule: { interval_hours: 3, start_hour: 8, end_hour: 22 },
   };
 }
 
@@ -67,15 +76,18 @@ export function parseConfig(raw: string | null): AgentConfig {
         cfg.overrides[uc].thinking = o.thinking as ThinkingLevel;
       }
     }
-    const br = parsed.briefing_refresh as Record<string, unknown> | undefined;
-    if (br) {
-      const n = Number(br.interval_hours);
-      if ([0, 2, 4, 6, 8, 12, 24].includes(n)) cfg.briefing_refresh.interval_hours = n;
-      const sh = Number(br.start_hour);
-      const eh = Number(br.end_hour);
-      if (Number.isInteger(sh) && sh >= 0 && sh <= 23) cfg.briefing_refresh.start_hour = sh;
-      if (Number.isInteger(eh) && eh >= 1 && eh <= 24) cfg.briefing_refresh.end_hour = eh;
-    }
+    const readSchedule = (raw2: unknown, into: RefreshSchedule) => {
+      const r = raw2 as Record<string, unknown> | undefined;
+      if (!r) return;
+      const n = Number(r.interval_hours);
+      if ([0, 2, 3, 4, 6, 8, 12, 24].includes(n)) into.interval_hours = n;
+      const sh = Number(r.start_hour);
+      const eh = Number(r.end_hour);
+      if (Number.isInteger(sh) && sh >= 0 && sh <= 23) into.start_hour = sh;
+      if (Number.isInteger(eh) && eh >= 1 && eh <= 24) into.end_hour = eh;
+    };
+    readSchedule(parsed.briefing_refresh, cfg.briefing_refresh);
+    readSchedule(parsed.checkin_schedule, cfg.checkin_schedule);
     return cfg;
   } catch {
     return cfg;

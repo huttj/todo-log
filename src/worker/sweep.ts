@@ -23,7 +23,6 @@ import { emptyUsage, addUsage, recordUsage } from "./usage";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 
 const DISTILL_MODEL = "claude-opus-5";
-const CHECKIN_INTERVAL = 3 * 3600;
 const DAY = 86400;
 
 export async function runSweep(env: Env): Promise<void> {
@@ -33,8 +32,8 @@ export async function runSweep(env: Env): Promise<void> {
   await refreshStaleBriefings(env);
 }
 
-/** Chats regenerate the briefing; cron covers the mornings and quiet days —
- * refresh whenever it's stale (> 4h) during waking hours. */
+/** The overview regenerates only here (per the user's schedule) or via the
+ * manual refresh button — chats never touch it. */
 async function refreshStaleBriefings(env: Env): Promise<void> {
   let users: UserRow[];
   try {
@@ -157,9 +156,11 @@ async function runCheckins(env: Env): Promise<void> {
   }
   for (const user of users) {
     try {
-      if (user.last_checkin_at && t - user.last_checkin_at < CHECKIN_INTERVAL) continue;
+      const schedule = parseConfig(user.agent_config).checkin_schedule;
+      if (schedule.interval_hours === 0) continue; // check-ins turned off
+      if (user.last_checkin_at && t - user.last_checkin_at < schedule.interval_hours * 3600) continue;
       const hour = hourInZone(user.timezone ?? env.TIMEZONE);
-      if (hour < 8 || hour >= 22) continue;
+      if (hour < schedule.start_hour || hour >= schedule.end_hour) continue;
       // Recently in a conversation → they're engaged; don't nag.
       const recent = await env.DB.prepare(
         `SELECT 1 FROM sessions WHERE user_id = ? AND started_at > ? LIMIT 1`,
@@ -167,7 +168,7 @@ async function runCheckins(env: Env): Promise<void> {
         .bind(user.id, t - 3600)
         .first();
       if (recent) continue;
-      // Mark the attempt regardless of outcome so a SKIP still waits 3h.
+      // Mark the attempt regardless of outcome so a SKIP still waits a full interval.
       await env.DB.prepare(`UPDATE users SET last_checkin_at = ? WHERE id = ?`)
         .bind(t, user.id)
         .run();
@@ -250,7 +251,8 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
     };
     if (parsed.skip || !parsed.title) return;
     await setNotification(env, user.id, "checkin", parsed.title, parsed.body ?? null);
-    if (parsed.refresh_briefing) {
+    // Respect a manual-only overview setting: check-ins don't regenerate it either.
+    if (parsed.refresh_briefing && parseConfig(user.agent_config).briefing_refresh.interval_hours > 0) {
       await generateBriefing(env, user).catch((err) =>
         console.error(`sweep: check-in-triggered briefing refresh failed for user ${user.id}:`, err),
       );
