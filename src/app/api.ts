@@ -9,6 +9,7 @@ export interface Project {
   id: number;
   name: string;
   description: string | null;
+  priority?: string | null;
   kind: "bounded" | "ongoing";
   status: "active" | "paused" | "completed" | "abandoned";
 }

@@ -324,7 +324,13 @@ crud.get("/dismissals", async (c) => {
 });
 
 crud.post("/dismissals", async (c) => {
-  const body = await c.req.json<{ day?: string; key?: string; label?: string; dismissed?: boolean }>();
+  const body = await c.req.json<{
+    day?: string;
+    key?: string;
+    label?: string;
+    dismissed?: boolean;
+    why?: string;
+  }>();
   if (!body.day || !/^\d{4}-\d{2}-\d{2}$/.test(body.day) || !body.key) {
     return c.json({ error: "day and key required" }, 400);
   }
@@ -335,6 +341,7 @@ crud.post("/dismissals", async (c) => {
     body.key.slice(0, 300),
     body.label ? body.label.slice(0, 300) : null,
     body.dismissed !== false,
+    body.why === "done" ? "done" : "hide",
   );
   return c.json({ ok: true });
 });
@@ -378,7 +385,7 @@ crud.get("/search", async (c) => {
 // -- Generic PATCH / undo ---------------------------------------------------
 
 const PATCHABLE: Record<EntityType, string[]> = {
-  project: ["name", "description", "kind", "status"],
+  project: ["name", "description", "kind", "status", "priority"],
   todo: ["title", "outcome", "details", "project_id", "status", "scheduled_start", "all_day"],
   action: [
     "todo_id",

@@ -171,6 +171,10 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
+        priority: {
+          type: ["string", "null"],
+          description: "Where this sits for the user, their own words ('urgent but I hate it', 'matters, but later this year'). Set when they say it.",
+        },
         name: { type: "string" },
         description: { type: ["string", "null"] },
         kind: { type: "string", enum: ["bounded", "ongoing"] },
@@ -184,6 +188,7 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
+        priority: { type: ["string", "null"] },
         project_id: { type: "integer" },
         name: { type: ["string", "null"] },
         description: { type: ["string", "null"] },
@@ -480,6 +485,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
   switch (name) {
     case "create_project": {
       const row = await insertRow<ProjectRow>(s.env, "projects", {
+        priority: str(input.priority),
         user_id: s.user.id,
         name: str(input.name) ?? "Untitled project",
         description: str(input.description),
@@ -500,6 +506,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         { name: "description" },
         { name: "kind" },
         { name: "status" },
+        { name: "priority" },
       ]);
       if (Object.keys(cols).length === 0) return "no changes";
       cols.updated_at = t;
@@ -682,7 +689,9 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         const hidden = await listDismissals(s.env, s.user.id, day);
         return JSON.stringify({
           briefing: JSON.parse(b.content_json),
-          dismissed_today: hidden.map((h) => h.label ?? h.key),
+          dismissed_today: hidden.map(
+            (h) => `${h.why === "done" ? "[marked done] " : "[hidden for today] "}${h.label ?? h.key}`,
+          ),
         });
       }
       const type = str(input.entity_type) as EntityType | null;
@@ -914,7 +923,7 @@ function contextBlock(data: {
   const projects = data.projects
     .map(
       (p) =>
-        `#${p.id} ${p.name} [${p.kind}, ${p.status}]${p.description ? ` — ${p.description.slice(0, 160)}` : ""}`,
+        `#${p.id} ${p.name} [${p.kind}, ${p.status}]${p.priority ? ` [priority: ${p.priority}]` : ""}${p.description ? ` — ${p.description.slice(0, 160)}` : ""}`,
     )
     .join("\n");
   const todos = data.todos

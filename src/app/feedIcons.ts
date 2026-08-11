@@ -1,11 +1,9 @@
-// One FontAwesome icon per change-feed action, chosen from (entity, kind).
-// Shared by the live dock feed and the replay/log-page EventFeed.
+// One FontAwesome icon per change-feed action. Entity-first (matching the
+// nav: log=book, project=stack, todo=pencil), with a few verb overrides.
 import {
-  faSquarePlus,
-  faFolderPlus,
-  faFeather,
-  faPen,
-  faArrowsRotate,
+  faPencil,
+  faLayerGroup,
+  faBookOpen,
   faCalendarDays,
   faSun,
   faBell,
@@ -13,16 +11,13 @@ import {
   faRotateLeft,
   faBrain,
   faGraduationCap,
-  faSquareCheck,
-  faLayerGroup,
-  faBookOpen,
   faCircleDot,
   faTrashCan,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 
 const ENTITY_ICONS: Record<string, IconDefinition> = {
-  todo: faSquareCheck,
+  todo: faPencil,
   project: faLayerGroup,
   log: faBookOpen,
   schedule: faCalendarDays,
@@ -35,13 +30,6 @@ const ENTITY_ICONS: Record<string, IconDefinition> = {
 export function feedIcon(entityType: string, kind: string): IconDefinition {
   if (kind === "undone") return faRotateLeft;
   if (kind === "deleted") return faTrashCan;
-  if (kind === "created") {
-    if (entityType === "todo") return faSquarePlus;
-    if (entityType === "project") return faFolderPlus;
-    if (entityType === "log") return faFeather;
-  }
-  if (kind === "updated" || kind === "refiled") return entityType === "log" ? faFeather : faPen;
-  if (kind === "status_changed") return faArrowsRotate;
   if (kind === "scheduled" || kind === "rescheduled") return faCalendarDays;
   if (kind === "briefing_updated") return faSun;
   if (kind.includes("notification")) return kind.includes("clear") ? faBellSlash : faBell;

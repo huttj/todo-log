@@ -10,6 +10,9 @@ export default function TranscriptPlayer(props: {
   messageId?: number;
   autoPlay?: boolean;
   emptyNote?: string;
+  /** Chat-bubble mode: just the clickable transcript + a corner play/pause —
+   * no bar, no nested box. Words seek. */
+  minimal?: boolean;
 }) {
   const [segs, setSegs] = useState<SegmentDetail[] | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -174,6 +177,43 @@ export default function TranscriptPlayer(props: {
     );
   }
 
+  const words = (
+    <p className="word-transcript">
+      {segs.map((seg, si) =>
+        seg.words && seg.words.length > 0 ? (
+          seg.words.map((w, wi) => (
+            <span
+              key={`${si}-${wi}`}
+              className={current.seg === si && current.word === wi ? "current" : ""}
+              onClick={() => playSegment(si, w.start)}
+            >
+              {w.word}{" "}
+            </span>
+          ))
+        ) : (
+          <span key={`${si}-t`} onClick={() => playSegment(si)}>
+            {seg.transcript ?? ""}{" "}
+          </span>
+        ),
+      )}
+    </p>
+  );
+
+  if (props.minimal) {
+    return (
+      <div className="inline-transcript" onClick={(e) => e.stopPropagation()}>
+        {words}
+        <button
+          className="msg-play corner"
+          title={playing ? "Pause" : "Play (tap a word to jump)"}
+          onClick={togglePlay}
+        >
+          {playing ? "⏸" : "▶"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="segment-transcript full combined" onClick={(e) => e.stopPropagation()}>
       <div className="player-bar">
@@ -196,25 +236,7 @@ export default function TranscriptPlayer(props: {
           {speed}×
         </button>
       </div>
-      <p className="word-transcript">
-        {segs.map((seg, si) =>
-          seg.words && seg.words.length > 0 ? (
-            seg.words.map((w, wi) => (
-              <span
-                key={`${si}-${wi}`}
-                className={current.seg === si && current.word === wi ? "current" : ""}
-                onClick={() => playSegment(si, w.start)}
-              >
-                {w.word}{" "}
-              </span>
-            ))
-          ) : (
-            <span key={`${si}-t`} onClick={() => playSegment(si)}>
-              {seg.transcript ?? ""}{" "}
-            </span>
-          ),
-        )}
-      </p>
+      {words}
     </div>
   );
 }

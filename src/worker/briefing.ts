@@ -59,6 +59,7 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
 - Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
 - When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?"
 - Only actionable items go in plans; pure status or timing information belongs in coming.
+- Order project lines by the user's stated priorities (shown per project when set) — high-priority or urgent-vibe projects go in the main list, back-burner ones in projects_more. Mirror the priority's wording when it shapes the next step.
 - Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. The words inside that first link are the project's NAME, nothing else.
   BAD: "[Moving](project:3). Next: ..." (momentum word linked instead of the name — the reader can't tell which project this is)
   GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
@@ -116,7 +117,7 @@ export async function generateBriefing(
       .map((p) => {
         const days = Math.floor((t - p.created_at) / DAY);
         const age = days === 0 ? "created today" : days === 1 ? "created yesterday" : `${days} days old`;
-        return `#${p.id} ${p.name} (${age})${p.description ? ` — ${p.description}` : ""}`;
+        return `#${p.id} ${p.name} (${age})${p.priority ? ` [priority: ${p.priority}]` : ""}${p.description ? ` — ${p.description}` : ""}`;
       })
       .join("\n") || "(none)"}`,
     `Open todos:\n${todos
@@ -130,8 +131,15 @@ export async function generateBriefing(
     notifications.length
       ? `Open notifications:\n${notifications.map((n) => `- ${n.title}${n.body ? ` — ${n.body}` : ""}`).join("\n")}`
       : "",
-    dismissed.length
-      ? `Items the user DISMISSED (hid) from today's view — seen and set aside, don't resurface them prominently:\n${dismissed
+    dismissed.filter((d) => d.why === "done").length
+      ? `Items the user marked DONE from today's view — treat as completed; never re-list them as open work:\n${dismissed
+          .filter((d) => d.why === "done")
+          .map((d) => `- ${d.label ?? d.key}`)
+          .join("\n")}`
+      : "",
+    dismissed.filter((d) => d.why !== "done").length
+      ? `Items the user HID from today's view ("don't bother me with this today" — still open, keep tracking, just don't resurface it prominently today):\n${dismissed
+          .filter((d) => d.why !== "done")
           .map((d) => `- ${d.label ?? d.key}`)
           .join("\n")}`
       : "",

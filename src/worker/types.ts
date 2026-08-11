@@ -41,6 +41,7 @@ export interface ProjectRow {
   user_id: number;
   name: string;
   description: string | null;
+  priority: string | null;
   kind: ProjectKind;
   status: "active" | "paused" | "completed" | "abandoned";
   created_at: number;

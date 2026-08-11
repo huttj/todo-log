@@ -825,7 +825,10 @@ export default function Capture(props: {
               entry.role === "user" && entry.showPlayer && entry.hasAudio && entry.msgId && !entry.transcribing,
             );
             return (
-              <div key={entry.id} className={`bubble ${entry.role}`}>
+              <div
+                key={entry.id}
+                className={`bubble ${entry.role}${entry.role === "user" && entry.hasAudio ? " has-audio" : ""}`}
+              >
                 {entry.live && entry.thinking && <p className="thinking">{entry.thinking}</p>}
                 {entry.role === "assistant" && !entry.live && entry.thinking && (
                   <>
@@ -884,16 +887,17 @@ export default function Capture(props: {
                 )}
                 {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
                   <>
-                    {playerOpen && <TranscriptPlayer messageId={entry.msgId} autoPlay />}
-                    <button
-                      className="msg-play"
-                      title={playerOpen ? "Back to plain text" : "Play the recording"}
-                      onClick={() =>
-                        updateEntry(entry.id, (e) => ({ ...e, showPlayer: !e.showPlayer }))
-                      }
-                    >
-                      {playerOpen ? "⏹" : "▶"}
-                    </button>
+                    {playerOpen ? (
+                      <TranscriptPlayer messageId={entry.msgId} autoPlay minimal />
+                    ) : (
+                      <button
+                        className="msg-play corner"
+                        title="Play the recording"
+                        onClick={() => updateEntry(entry.id, (e) => ({ ...e, showPlayer: true }))}
+                      >
+                        ▶
+                      </button>
+                    )}
                   </>
                 )}
                 {entry.feed && entry.feed.length > 0 && (

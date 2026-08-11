@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import LogCard from "../components/LogCard";
@@ -16,6 +16,7 @@ export default function TodoView(props: {
   const [projects, setProjects] = useState<Project[]>([]);
   const [logs, setLogs] = useState<Log[] | null>(null);
   const [spend, setSpend] = useState(0);
+  const navigate = useNavigate();
 
   const load = () => {
     api<Todo[]>("/todos?all=1").then(setTodos).catch(() => {});
@@ -42,9 +43,15 @@ export default function TodoView(props: {
     <div className="tasks todo-page">
       <div className="page-head">
         <div className="page-nav">
-          <Link className="back" to={project ? `/projects/${project.id}` : "/"}>
-            ‹ {project ? project.name : "Projects"}
-          </Link>
+          {(window.history.state as { idx?: number } | null)?.idx ? (
+            <button className="back back-btn" onClick={() => navigate(-1)}>
+              ‹ Back
+            </button>
+          ) : (
+            <Link className="back" to={project ? `/projects/${project.id}` : "/"}>
+              ‹ {project ? project.name : "Today"}
+            </Link>
+          )}
           <div className="page-meta">
             <select
               value={todo.status}

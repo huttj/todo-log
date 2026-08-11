@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowsRotate, faEye, faEyeSlash, faMicrophone } from "@fortawesome/free-solid-svg-icons";
+import { faArrowsRotate, faCheck, faEye, faEyeSlash, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   post,
@@ -15,12 +15,10 @@ import {
   type Todo,
   type ScheduleEntry,
   type Project,
-  type Log,
   type Briefing,
   type BriefingProjectLine,
 } from "../api";
 import TodoRow from "../components/TodoRow";
-import LogCard from "../components/LogCard";
 import HoldTalk from "../components/HoldTalk";
 import { renderEntityRefs } from "../refs";
 import { requestTalk } from "../talk";
@@ -124,7 +122,6 @@ export default function Today(props: {
   const [error, setError] = useState<string | null>(null);
   const [scheduled, setScheduled] = useState<ScheduleEntry[]>([]);
   const [overdue, setOverdue] = useState<ScheduleEntry[]>([]);
-  const [logs, setLogs] = useState<Log[]>([]);
   const [daySpend, setDaySpend] = useState(0);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -160,7 +157,6 @@ export default function Today(props: {
     api<ScheduleEntry[]>(`/schedule?from=${dayStart}&to=${dayStart + DAY}`)
       .then(setScheduled)
       .catch(() => {});
-    api<Log[]>(`/logs?from=${dayStart}&to=${dayStart + DAY}`).then(setLogs).catch(() => {});
     api<{ cost: number }>(`/usage/day?from=${dayStart}&to=${dayStart + DAY}`)
       .then((r) => setDaySpend(r.cost))
       .catch(() => {});
@@ -187,14 +183,29 @@ export default function Today(props: {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadDismissed, [isoDate, props.refreshKey]);
-  const toggleDismiss = (k: string, label?: string) => {
+  const toggleDismiss = (k: string, label?: string, why: "done" | "hide" = "hide") => {
     const next = new Set(dismissed);
     const dismissing = !next.has(k);
     if (dismissing) next.add(k);
     else next.delete(k);
     setDismissed(next);
-    void post("/dismissals", { day: isoDate, key: k, label, dismissed: dismissing }).catch(() => {});
+    void post("/dismissals", { day: isoDate, key: k, label, dismissed: dismissing, why }).catch(
+      () => {},
+    );
   };
+
+  const doneBtn = (k: string, label?: string) => (
+    <button
+      className="dismiss-btn done-btn"
+      title="Done — clears it from today (undo under see more)"
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleDismiss(k, label, "done");
+      }}
+    >
+      <FontAwesomeIcon icon={faCheck} />
+    </button>
+  );
 
   const dismissBtn = (k: string, restore = false, label?: string) => (
     <button
@@ -357,16 +368,19 @@ export default function Today(props: {
           </h2>
           <ul className={`brief-list ${key}`}>
             {shown.map((e) => (
-              <li key={e.k}>
-                {e.node}
-                {dismissBtn(e.k, false, e.label)}
+              <li key={e.k} className="brief-line">
+                <span className="line-body">{e.node}</span>
+                <span className="line-acts">
+                  {doneBtn(e.k, e.label)}
+                  {dismissBtn(e.k, false, e.label)}
+                </span>
               </li>
             ))}
             {expanded &&
               hidden.map((e) => (
-                <li key={e.k} className={dismissed.has(e.k) ? "hidden-item" : "more-item"}>
-                  {e.node}
-                  {dismissBtn(e.k, dismissed.has(e.k), e.label)}
+                <li key={e.k} className={`brief-line ${dismissed.has(e.k) ? "hidden-item" : "more-item"}`}>
+                  <span className="line-body">{e.node}</span>
+                  <span className="line-acts">{dismissBtn(e.k, dismissed.has(e.k), e.label)}</span>
                 </li>
               ))}
           </ul>
@@ -560,29 +574,6 @@ export default function Today(props: {
           })),
         )}
 
-      {rowSection(
-        "logs",
-        "Logs",
-        logs.map((l) => ({
-          k: `log:${l.id}`,
-          node: (
-            <div key={l.id} className={`dismiss-row ${dismissed.has(`log:${l.id}`) ? "hidden-item" : ""}`}>
-              <LogCard
-                log={l}
-                onClick={() => props.onFocus({ type: "log", id: l.id, label: l.summary.slice(0, 40) })}
-                attachment={
-                  l.todo_id
-                    ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
-                    : l.project_id
-                      ? { label: `project: ${projectName.get(l.project_id) ?? l.project_id}`, to: `/projects/${l.project_id}` }
-                      : null
-                }
-              />
-              {dismissBtn(`log:${l.id}`, dismissed.has(`log:${l.id}`), l.summary.slice(0, 120))}
-            </div>
-          ),
-        })),
-      )}
     </div>
   );
 }

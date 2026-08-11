@@ -18,6 +18,7 @@ export default function ProjectView(props: {
   const [logs, setLogs] = useState<Log[] | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [spend, setSpend] = useState(0);
+  const [priDraft, setPriDraft] = useState<string | null>(null);
 
   const load = () => {
     api<Project[]>("/projects").then(setProjects).catch(() => {});
@@ -69,6 +70,21 @@ export default function ProjectView(props: {
         <h2 className="page-title">{project.name}</h2>
       </div>
       {project.description && <p className="description">{project.description}</p>}
+      <div className="priority-row">
+        <span className="pri-label">priority</span>
+        <input
+          value={priDraft ?? project.priority ?? ""}
+          placeholder="in your own words — 'urgent but I hate it', 'matters, but later this year'"
+          onChange={(e) => setPriDraft(e.target.value)}
+          onBlur={async (e) => {
+            const v = e.target.value.trim();
+            if (v === (project.priority ?? "")) return;
+            await patch(`/projects/${project.id}`, { priority: v || null }).catch(() => {});
+            setPriDraft(null);
+            load();
+          }}
+        />
+      </div>
       {spend > 0 && (
         <p className="entity-cost" title="Agent spend on turns that touched this project">
           agent spend {fmtCost(spend)}

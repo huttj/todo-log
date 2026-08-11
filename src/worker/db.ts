@@ -649,7 +649,7 @@ export async function undoBriefing(env: Env, userId: number): Promise<BriefingRo
 
 // -- Today-view dismissals (JSON field on the briefing row) -----------------
 
-type DismissMap = Record<string, { key: string; label: string | null }[]>;
+type DismissMap = Record<string, { key: string; label: string | null; why?: "done" | "hide" }[]>;
 
 async function readDismissMap(env: Env, userId: number): Promise<DismissMap> {
   const row = await env.DB.prepare(`SELECT dismissed_json FROM briefings WHERE user_id = ?`)
@@ -680,7 +680,7 @@ export async function listDismissals(
   env: Env,
   userId: number,
   day: string,
-): Promise<{ key: string; label: string | null }[]> {
+): Promise<{ key: string; label: string | null; why?: "done" | "hide" }[]> {
   return (await readDismissMap(env, userId))[day] ?? [];
 }
 
@@ -691,10 +691,11 @@ export async function setDismissal(
   key: string,
   label: string | null,
   dismissed: boolean,
+  why: "done" | "hide" = "hide",
 ): Promise<void> {
   const map = await readDismissMap(env, userId);
   const list = (map[day] ?? []).filter((x) => x.key !== key);
-  if (dismissed) list.push({ key, label });
+  if (dismissed) list.push({ key, label, why });
   map[day] = list;
   await writeDismissMap(env, userId, map);
 }

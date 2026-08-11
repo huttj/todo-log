@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan, faPlay, faStop, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faPlay, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   del,
@@ -330,8 +330,9 @@ export function SessionView(props: {
               : undefined;
           const playerOpen =
             m.role === "user" && openPlayers.has(m.id) && (data.audio_message_ids ?? []).includes(m.id);
+          const hasAudio = (data.audio_message_ids ?? []).includes(m.id);
           return (
-            <div key={m.id} className={`bubble ${m.role}`}>
+            <div key={m.id} className={`bubble ${m.role}${m.role === "user" && hasAudio ? " has-audio" : ""}`}>
               {m.role === "assistant" && m.thinking && (
                 <>
                   <button className="link thinking-toggle" onClick={() => toggleThoughts(m.id)}>
@@ -348,22 +349,24 @@ export function SessionView(props: {
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />
               )}
-              {m.role === "user" && (data.audio_message_ids ?? []).includes(m.id) && (
+              {m.role === "user" && hasAudio && (
                 <>
-                  {playerOpen && (
+                  {playerOpen ? (
                     <TranscriptPlayer
                       messageId={m.id}
                       autoPlay
+                      minimal
                       emptyNote="No audio for this message (typed)."
                     />
+                  ) : (
+                    <button
+                      className="msg-play corner"
+                      title="Play the recording"
+                      onClick={() => togglePlayer(m.id)}
+                    >
+                      <FontAwesomeIcon icon={faPlay} />
+                    </button>
                   )}
-                  <button
-                    className="msg-play"
-                    title={playerOpen ? "Back to plain text" : "Play the recording"}
-                    onClick={() => togglePlayer(m.id)}
-                  >
-                    <FontAwesomeIcon icon={playerOpen ? faStop : faPlay} />
-                  </button>
                 </>
               )}
               {feed && feed.length > 0 && (
