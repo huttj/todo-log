@@ -16,7 +16,7 @@ import type {
   EntityType,
 } from "./types";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
-import { BRIEFING_STYLE, rehiddenEntries, type Briefing } from "./briefing";
+import { BRIEFING_STYLE, rehiddenEntries, stripInvalidRefs, type Briefing } from "./briefing";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 import {
   now,
@@ -730,7 +730,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
                 line: p.line as string,
               }))
           : [];
-      const next: Briefing = {
+      const next: Briefing = await stripInvalidRefs(s.env, s.user.id, {
         headline,
         today: arr(input.today),
         today_more: arr(input.today_more),
@@ -740,7 +740,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         coming_more: arr(input.coming_more),
         projects: projArr(input.projects),
         projects_more: projArr(input.projects_more),
-      };
+      });
       await setBriefing(s.env, s.user.id, JSON.stringify(next));
       const day = new Intl.DateTimeFormat("en-CA", {
         timeZone: s.user.timezone ?? s.env.TIMEZONE,
@@ -887,6 +887,7 @@ How you behave:
 - When a LOG is the session context (the user hit reprocess), restructure freely as their correction implies: create or reschedule todos, re-file the log, fix the summary — don't limit yourself to re-attaching.
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
+- PRIORITIES: each project can carry a priority in the user's OWN words (shown in the project list). Only the agent writes it (update_project.priority) — there's no manual editing. When a project has none and the conversation touches it, or when what the user says suggests its priority shifted, ask ONE short ask_user question about where it sits and store their answer near-verbatim. Never invent a priority they didn't express.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
 - NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
 - BRIEFING: the Today view shows a precomputed overview. It is NOT in your context by default — fetch it (fetch, entity_type "briefing") when the conversation concerns the day's plan.`;

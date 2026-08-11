@@ -64,7 +64,40 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   BAD: "[Moving](project:3). Next: ..." (momentum word linked instead of the name — the reader can't tell which project this is)
   GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more"). Be strict: 3-5 main items per list is the ceiling. For coming, prioritize by imminence and prep-need — the long tail of someday-items always goes in coming_more.
+- Link ids must come from the data above, exactly as shown. NEVER invent or guess an id, and never label a log id as todo:N (or vice versa) — a link to the wrong record is worse than no link.
 - Ground every line in real data — never invent. Second person, plain, brief.`;
+
+/** The model sometimes links an id that doesn't exist (or a log id as
+ * todo:N). Validate every ref against real ids; invalid ones degrade to
+ * their words. */
+export async function stripInvalidRefs(env: Env, userId: number, briefing: Briefing): Promise<Briefing> {
+  const ids: Record<string, Set<number>> = {};
+  for (const [key, table] of [["todo", "todos"], ["project", "projects"], ["log", "logs"]] as const) {
+    const r = await env.DB.prepare(`SELECT id FROM ${table} WHERE user_id = ?`)
+      .bind(userId)
+      .all<{ id: number }>();
+    ids[key] = new Set(r.results.map((x) => x.id));
+  }
+  const clean = (text: string) =>
+    text
+      .replace(/\[([^\]]+)\]\((todo|project|log):(\d+)\)/g, (m, words: string, type: string, id: string) =>
+        ids[type].has(Number(id)) ? m : words,
+      )
+      .replace(/\[(todo|project|log):(\d+)\]/g, (m, type: string, id: string) =>
+        ids[type].has(Number(id)) ? m : "",
+      );
+  return {
+    headline: clean(briefing.headline),
+    today: briefing.today.map(clean),
+    today_more: briefing.today_more.map(clean),
+    oneoffs: briefing.oneoffs.map(clean),
+    oneoffs_more: briefing.oneoffs_more.map(clean),
+    coming: briefing.coming.map(clean),
+    coming_more: briefing.coming_more.map(clean),
+    projects: briefing.projects.map((pr) => ({ ...pr, line: clean(pr.line) })),
+    projects_more: briefing.projects_more.map((pr) => ({ ...pr, line: clean(pr.line) })),
+  };
+}
 
 /** Map re-hidden output lines back to the Today view's dismissal keys. */
 export function rehiddenEntries(
@@ -244,7 +277,7 @@ export async function generateBriefing(
   try {
     const parsed = JSON.parse(text.slice(start, end + 1)) as Partial<Briefing>;
     if (!parsed.headline) return null;
-    const briefing: Briefing = {
+    const briefing: Briefing = await stripInvalidRefs(env, user.id, {
       headline: parsed.headline,
       today: parsed.today ?? [],
       today_more: parsed.today_more ?? [],
@@ -254,10 +287,11 @@ export async function generateBriefing(
       coming_more: parsed.coming_more ?? [],
       projects: parsed.projects ?? [],
       projects_more: parsed.projects_more ?? [],
-    };
+    });
     await setBriefing(env, user.id, JSON.stringify(briefing), computeCost(resolved.modelId, usage));
     // Regenerated equivalents of dismissed items start hidden.
-    const rehidden = (parsed as { rehidden?: string[] }).rehidden ?? [];
+    const rehiddenRaw = (parsed as { rehidden?: string[] }).rehidden ?? [];
+    const rehidden = (await stripInvalidRefs(env, user.id, { ...briefing, today: rehiddenRaw })).today;
     await addDismissals(env, user.id, day, rehiddenEntries(briefing, rehidden)).catch(() => {});
     return briefing;
   } catch {

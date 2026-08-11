@@ -1990,9 +1990,11 @@ header {
 }
 
 .brief-list li::before {
-  content: "–";
+  content: "•";
   position: absolute;
-  left: 0;
+  left: 0.1rem;
+  top: 0.3em;
+  font-size: 0.6em;
   color: #b5b2a8;
 }
 
@@ -2802,4 +2804,10 @@ button.back {
   border: none;
   cursor: pointer;
   font-family: inherit;
+}
+
+.priority-line {
+  font-size: 0.85rem;
+  color: #555;
+  margin: 0.2rem 0 0.6rem;
 }

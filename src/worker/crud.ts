@@ -407,7 +407,7 @@ crud.get("/search", async (c) => {
 // -- Generic PATCH / undo ---------------------------------------------------
 
 const PATCHABLE: Record<EntityType, string[]> = {
-  project: ["name", "description", "kind", "status", "priority"],
+  project: ["name", "description", "kind", "status"],
   todo: ["title", "outcome", "details", "project_id", "status", "scheduled_start", "all_day"],
   action: [
     "todo_id",
