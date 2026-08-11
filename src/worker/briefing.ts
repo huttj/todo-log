@@ -5,6 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Env, UserRow, ScheduleRow } from "./types";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
+import { resolveUseCase, modelParams } from "./config";
 import {
   now,
   listProjects,
@@ -16,7 +17,6 @@ import {
   setBriefing,
 } from "./db";
 
-const BRIEFING_MODEL = "claude-sonnet-5";
 const DAY = 86400;
 
 export interface Briefing {
@@ -140,11 +140,17 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
     additionalProperties: false,
   };
   const started = Date.now();
+  const resolved = resolveUseCase(user, "briefing");
+  const params = modelParams(resolved) as {
+    thinking?: Anthropic.ThinkingConfigParam;
+    output_config?: Record<string, unknown>;
+  };
   const response = await client.messages.create({
-    model: BRIEFING_MODEL,
+    model: resolved.modelId,
     max_tokens: 6000,
+    ...(params.thinking ? { thinking: params.thinking } : {}),
     output_config: {
-      effort: "medium",
+      ...(params.output_config ?? {}),
       format: { type: "json_schema", schema: BRIEFING_SCHEMA },
     },
     system:
@@ -167,7 +173,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
   );
   const usage = emptyUsage();
   addUsage(usage, response.usage);
-  await recordUsage(env, { userId: user.id, kind: "briefing", model: BRIEFING_MODEL, usage });
+  await recordUsage(env, { userId: user.id, kind: "briefing", model: resolved.modelId, usage });
 
   const text = response.content
     .filter((b) => b.type === "text")
@@ -199,7 +205,7 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       projects: parsed.projects ?? [],
       projects_more: parsed.projects_more ?? [],
     };
-    await setBriefing(env, user.id, JSON.stringify(briefing), computeCost(BRIEFING_MODEL, usage));
+    await setBriefing(env, user.id, JSON.stringify(briefing), computeCost(resolved.modelId, usage));
     return briefing;
   } catch {
     console.error(`briefing: unparseable output for user ${user.id}: ${text.slice(0, 200)}`);

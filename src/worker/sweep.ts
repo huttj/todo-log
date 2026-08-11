@@ -20,9 +20,9 @@ import {
 import { transcribe } from "./transcribe";
 import { generateBriefing } from "./briefing";
 import { emptyUsage, addUsage, recordUsage } from "./usage";
+import { resolveUseCase, modelParams, parseConfig } from "./config";
 
 const DISTILL_MODEL = "claude-opus-5";
-const CHECKIN_MODEL = "claude-sonnet-5";
 const CHECKIN_INTERVAL = 3 * 3600;
 const DAY = 86400;
 
@@ -45,10 +45,12 @@ async function refreshStaleBriefings(env: Env): Promise<void> {
   const t = now();
   for (const user of users) {
     try {
+      const schedule = parseConfig(user.agent_config).briefing_refresh;
+      if (schedule.interval_hours === 0) continue; // manual / chat-driven only
       const hour = hourInZone(user.timezone ?? env.TIMEZONE);
-      if (hour < 6 || hour >= 23) continue;
+      if (hour < schedule.start_hour || hour >= schedule.end_hour) continue;
       const current = await getBriefing(env, user.id);
-      if (current && t - current.generated_at < 4 * 3600) continue;
+      if (current && t - current.generated_at < schedule.interval_hours * 3600) continue;
       await generateBriefing(env, user);
     } catch (err) {
       console.error(`sweep: briefing refresh for user ${user.id} failed:`, err);
@@ -198,9 +200,11 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
   const todoLine = (td: TodoRow) => `- todo “${td.title}” [${td.status}]`;
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const resolved = resolveUseCase(user, "checkin");
   const response = await client.messages.create({
-    model: CHECKIN_MODEL,
-    max_tokens: 500,
+    model: resolved.modelId,
+    max_tokens: 2000,
+    ...(modelParams(resolved) as object),
     system:
       "You are the agent inside Todo Log, writing the single in-app check-in notification for your user. " +
       "You are warm, brief, and specific — a good coworker glancing at the board, never a nag. " +
@@ -230,7 +234,7 @@ async function checkinForUser(env: Env, user: UserRow, t: number): Promise<void>
   });
   const usage = emptyUsage();
   addUsage(usage, response.usage);
-  await recordUsage(env, { userId: user.id, kind: "checkin", model: CHECKIN_MODEL, usage });
+  await recordUsage(env, { userId: user.id, kind: "checkin", model: resolved.modelId, usage });
 
   const text = response.content
     .filter((b) => b.type === "text")

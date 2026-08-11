@@ -24,6 +24,7 @@ import {
   ENTITY_TABLES,
 } from "./db";
 import { generateBriefing } from "./briefing";
+import { parseConfig } from "./config";
 import type { EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -251,21 +252,13 @@ crud.get("/usage/day", async (c) => {
 // -- Agent settings (model / thinking) --------------------------------------
 
 crud.get("/settings/agent", async (c) => {
-  let cfg: { model?: string; thinking?: boolean } = {};
-  try {
-    cfg = c.get("user").agent_config ? JSON.parse(c.get("user").agent_config!) : {};
-  } catch {
-    cfg = {};
-  }
-  return c.json({ model: cfg.model === "haiku" ? "haiku" : "sonnet", thinking: cfg.thinking !== false });
+  return c.json(parseConfig(c.get("user").agent_config));
 });
 
 crud.post("/settings/agent", async (c) => {
-  const body = await c.req.json<{ model?: string; thinking?: boolean }>();
-  const cfg = {
-    model: body.model === "haiku" ? "haiku" : "sonnet",
-    thinking: body.thinking !== false,
-  };
+  const body = await c.req.json<Record<string, unknown>>();
+  // parseConfig sanitizes: unknown fields drop, invalid values fall back.
+  const cfg = parseConfig(JSON.stringify(body));
   await c.env.DB.prepare(`UPDATE users SET agent_config = ? WHERE id = ?`)
     .bind(JSON.stringify(cfg), c.get("user").id)
     .run();

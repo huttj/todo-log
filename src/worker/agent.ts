@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import { BRIEFING_STYLE } from "./briefing";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
+import { resolveUseCase, modelParams } from "./config";
 import {
   now,
   insertRow,
@@ -48,9 +49,7 @@ import {
   messageSegments,
 } from "./db";
 
-// Sonnet 5 handles this structured extract-and-update work at ~half Opus cost;
-// bump back to claude-opus-5 if turn quality dips.
-const AGENT_MODEL = "claude-sonnet-5";
+// Model + thinking come from per-user settings (worker/config.ts).
 const MAX_TOOL_ITERATIONS = 8;
 const DAY = 86400;
 
@@ -1056,15 +1055,13 @@ export async function runTurn(
     i === TOOLS.length - 1 ? { ...t, cache_control: { type: "ephemeral", ttl: "1h" } } : t,
   );
 
-  // Per-user tuning: model + thinking (Chats page → agent settings).
-  let cfg: { model?: string; thinking?: boolean } = {};
-  try {
-    cfg = user.agent_config ? JSON.parse(user.agent_config) : {};
-  } catch {
-    cfg = {};
+  // Per-user tuning (Settings page): model + thinking level for chat turns.
+  // Planning sessions get at least "high" thinking when thinking is on.
+  const resolved = resolveUseCase(user, "chat");
+  if (planMode && resolved.thinking !== "off" && resolved.model === "sonnet") {
+    resolved.thinking = "high";
   }
-  const model = cfg.model === "haiku" ? "claude-haiku-4-5" : AGENT_MODEL;
-  const thinkingOn = cfg.thinking !== false;
+  const model = resolved.modelId;
 
   const messages: Anthropic.MessageParam[] = [
     ...conversationOrder(priorMessages)
@@ -1090,24 +1087,15 @@ export async function runTurn(
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     onEvent?.({ type: "iteration" });
     if (thinking && !thinking.endsWith("\n\n")) thinking += "\n\n";
-    // Haiku 4.5: no adaptive thinking and no effort param — omit both.
     const stream = client.messages.stream({
       model,
       max_tokens: 8192,
-      ...(model === AGENT_MODEL
-        ? {
-            thinking: thinkingOn
-              ? ({ type: "adaptive", display: "summarized" } as const)
-              : ({ type: "disabled" } as const),
-            // Routine filing doesn't need deep deliberation; planning gets more.
-            output_config: { effort: planMode ? "high" : "medium" },
-          }
-        : {}),
+      ...modelParams(resolved),
       cache_control: { type: "ephemeral" },
       system,
       tools,
       messages,
-    });
+    } as Parameters<typeof client.messages.stream>[0]);
     for await (const event of stream) {
       if (event.type === "content_block_delta") {
         if (event.delta.type === "text_delta") {

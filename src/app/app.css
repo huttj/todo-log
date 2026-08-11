@@ -2338,3 +2338,63 @@ header {
   border-radius: 0.35rem;
   border: 1px solid #ccc;
 }
+
+/* -- settings page -- */
+.settings section {
+  margin-top: 1.4rem;
+}
+
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  color: #444;
+  margin-bottom: 0.5rem;
+}
+
+.setting-row .uc {
+  min-width: 6.5rem;
+  font-weight: 600;
+}
+
+.setting-row select {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 0.35rem;
+  border: 1px solid #ccc;
+  background: #fff;
+}
+
+.hint-left {
+  color: #999;
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
+.spend-totals {
+  font-size: 0.9rem;
+  color: #444;
+  margin-bottom: 0.5rem;
+}
+
+.spend-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.spend-table th {
+  text-align: left;
+  color: #999;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem 0.2rem 0;
+  border-bottom: 1px solid #eceae4;
+}
+
+.spend-table td {
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  border-bottom: 1px solid #f4f2ec;
+}

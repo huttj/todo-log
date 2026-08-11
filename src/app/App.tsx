@@ -7,10 +7,12 @@ import {
   faBookOpen,
   faComments,
   faMagnifyingGlass,
+  faGear,
 } from "@fortawesome/free-solid-svg-icons";
 import Search from "./components/Search";
 import Bell from "./components/Bell";
 import Today from "./views/Today";
+import Settings from "./views/Settings";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -164,6 +166,9 @@ export default function App() {
             <FontAwesomeIcon icon={faMagnifyingGlass} />
           </button>
           <Bell refreshKey={refreshKey} />
+          <NavLink to="/settings" className="nav-search" title="Settings">
+            <FontAwesomeIcon icon={faGear} />
+          </NavLink>
         </div>
       </header>
 
@@ -177,6 +182,7 @@ export default function App() {
           <Route path="/logs/:id" element={<LogView {...viewProps} />} />
           <Route path="/sessions" element={<Sessions {...viewProps} />} />
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
+          <Route path="/settings" element={<Settings {...viewProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
