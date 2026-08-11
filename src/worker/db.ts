@@ -647,17 +647,41 @@ export async function undoBriefing(env: Env, userId: number): Promise<BriefingRo
   return getBriefing(env, userId);
 }
 
-// -- Today-view dismissals (per user, per day) ------------------------------
+// -- Today-view dismissals (JSON field on the briefing row) -----------------
+
+type DismissMap = Record<string, { key: string; label: string | null }[]>;
+
+async function readDismissMap(env: Env, userId: number): Promise<DismissMap> {
+  const row = await env.DB.prepare(`SELECT dismissed_json FROM briefings WHERE user_id = ?`)
+    .bind(userId)
+    .first<{ dismissed_json: string | null }>();
+  try {
+    return row?.dismissed_json ? (JSON.parse(row.dismissed_json) as DismissMap) : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeDismissMap(env: Env, userId: number, map: DismissMap): Promise<void> {
+  // Prune days older than a week — dismissals are day-scoped.
+  const floor = new Date(Date.now() - 7 * 86400_000).toISOString().slice(0, 10);
+  for (const d of Object.keys(map)) if (d < floor) delete map[d];
+  // content_json 'null' is a valid empty briefing for rows created by a
+  // dismissal before the first generation.
+  await env.DB.prepare(
+    `INSERT INTO briefings (user_id, content_json, generated_at, dismissed_json) VALUES (?, 'null', ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET dismissed_json = excluded.dismissed_json`,
+  )
+    .bind(userId, now(), JSON.stringify(map))
+    .run();
+}
 
 export async function listDismissals(
   env: Env,
   userId: number,
   day: string,
 ): Promise<{ key: string; label: string | null }[]> {
-  const r = await env.DB.prepare(`SELECT key, label FROM dismissals WHERE user_id = ? AND day = ?`)
-    .bind(userId, day)
-    .all<{ key: string; label: string | null }>();
-  return r.results;
+  return (await readDismissMap(env, userId))[day] ?? [];
 }
 
 export async function setDismissal(
@@ -668,18 +692,28 @@ export async function setDismissal(
   label: string | null,
   dismissed: boolean,
 ): Promise<void> {
-  if (!dismissed) {
-    await env.DB.prepare(`DELETE FROM dismissals WHERE user_id = ? AND day = ? AND key = ?`)
-      .bind(userId, day, key)
-      .run();
-    return;
+  const map = await readDismissMap(env, userId);
+  const list = (map[day] ?? []).filter((x) => x.key !== key);
+  if (dismissed) list.push({ key, label });
+  map[day] = list;
+  await writeDismissMap(env, userId, map);
+}
+
+/** Batch-add (the generator's re-hidden lines land in one write). */
+export async function addDismissals(
+  env: Env,
+  userId: number,
+  day: string,
+  entries: { key: string; label: string | null }[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const map = await readDismissMap(env, userId);
+  const list = map[day] ?? [];
+  for (const e of entries) {
+    if (!list.some((x) => x.key === e.key)) list.push(e);
   }
-  await env.DB.prepare(
-    `INSERT INTO dismissals (user_id, day, key, label, created_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(user_id, day, key) DO UPDATE SET label = excluded.label`,
-  )
-    .bind(userId, day, key, label, now())
-    .run();
+  map[day] = list;
+  await writeDismissMap(env, userId, map);
 }
 
 export async function saveMemory(env: Env, userId: number, key: string, content: string): Promise<void> {

@@ -16,7 +16,7 @@ import type {
   EntityType,
 } from "./types";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
-import { BRIEFING_STYLE } from "./briefing";
+import { BRIEFING_STYLE, rehiddenEntries, type Briefing } from "./briefing";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 import {
   now,
@@ -41,6 +41,8 @@ import {
   getNotificationById,
   getBriefing,
   setBriefing,
+  listDismissals,
+  addDismissals,
   saveMemory,
   listMemories,
   recentSessionEvents,
@@ -92,6 +94,12 @@ const UPDATE_BRIEFING_TOOL: Anthropic.Tool = {
           },
           required: ["name", "line"],
         },
+      },
+      rehidden: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Exact copies of lines from THIS rewrite that are the same underlying item as one the user dismissed (fetch the briefing to see dismissed_today) — they stay hidden after the update.",
       },
     },
     required: ["headline"],
@@ -660,7 +668,15 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
     case "fetch": {
       if (str(input.entity_type) === "briefing") {
         const b = await getBriefing(s.env, s.user.id);
-        return b ? b.content_json : "no briefing computed yet";
+        if (!b) return "no briefing computed yet";
+        const day = new Intl.DateTimeFormat("en-CA", {
+          timeZone: s.user.timezone ?? s.env.TIMEZONE,
+        }).format(new Date(now() * 1000));
+        const hidden = await listDismissals(s.env, s.user.id, day);
+        return JSON.stringify({
+          briefing: JSON.parse(b.content_json),
+          dismissed_today: hidden.map((h) => h.label ?? h.key),
+        });
       }
       const type = str(input.entity_type) as EntityType | null;
       const id = num(input.id);
@@ -698,20 +714,23 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
                 line: p.line as string,
               }))
           : [];
-      await setBriefing(
-        s.env,
-        s.user.id,
-        JSON.stringify({
-          headline,
-          today: arr(input.today),
-          today_more: arr(input.today_more),
-          oneoffs: arr(input.oneoffs),
-          oneoffs_more: arr(input.oneoffs_more),
-          coming: arr(input.coming),
-          coming_more: arr(input.coming_more),
-          projects: projArr(input.projects),
-          projects_more: projArr(input.projects_more),
-        }),
+      const next: Briefing = {
+        headline,
+        today: arr(input.today),
+        today_more: arr(input.today_more),
+        oneoffs: arr(input.oneoffs),
+        oneoffs_more: arr(input.oneoffs_more),
+        coming: arr(input.coming),
+        coming_more: arr(input.coming_more),
+        projects: projArr(input.projects),
+        projects_more: projArr(input.projects_more),
+      };
+      await setBriefing(s.env, s.user.id, JSON.stringify(next));
+      const day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: s.user.timezone ?? s.env.TIMEZONE,
+      }).format(new Date(now() * 1000));
+      await addDismissals(s.env, s.user.id, day, rehiddenEntries(next, arr(input.rehidden))).catch(
+        () => {},
       );
       const item: ChangeFeedItem = {
         event_id: 0,

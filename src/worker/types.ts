@@ -148,6 +148,8 @@ export interface BriefingRow {
   content_json: string;
   generated_at: number;
   cost_usd: number | null;
+  /** {day: [{key,label}]} — Today-view entries hidden by the user (or re-hidden by the generator). */
+  dismissed_json: string | null;
 }
 
 export interface AgentMemoryRow {

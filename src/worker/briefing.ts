@@ -16,7 +16,7 @@ import {
   listNotifications,
   setBriefing,
   listDismissals,
-  setDismissal,
+  addDismissals,
 } from "./db";
 
 const DAY = 86400;
@@ -62,6 +62,26 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
 - Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more").
 - Ground every line in real data — never invent. Second person, plain, brief.`;
+
+/** Map re-hidden output lines back to the Today view's dismissal keys. */
+export function rehiddenEntries(
+  briefing: Briefing,
+  lines: string[],
+): { key: string; label: string | null }[] {
+  const out: { key: string; label: string | null }[] = [];
+  for (const line of lines) {
+    let key: string | null = null;
+    if ([...briefing.today, ...briefing.today_more].includes(line)) key = `b:today:${line.slice(0, 80)}`;
+    else if ([...briefing.oneoffs, ...briefing.oneoffs_more].includes(line)) key = `b:oneoffs:${line.slice(0, 80)}`;
+    else if ([...briefing.coming, ...briefing.coming_more].includes(line)) key = `b:coming:${line.slice(0, 80)}`;
+    else {
+      const proj = [...briefing.projects, ...briefing.projects_more].find((p) => p.line === line);
+      if (proj) key = `b:proj:${proj.name}:${proj.line.slice(0, 60)}`;
+    }
+    if (key) out.push({ key, label: line.slice(0, 300) });
+  }
+  return out;
+}
 
 export async function generateBriefing(env: Env, user: UserRow): Promise<Briefing | null> {
   const t = now();
@@ -220,20 +240,9 @@ export async function generateBriefing(env: Env, user: UserRow): Promise<Briefin
       projects_more: parsed.projects_more ?? [],
     };
     await setBriefing(env, user.id, JSON.stringify(briefing), computeCost(resolved.modelId, usage));
-    // Regenerated equivalents of dismissed items start hidden: map each
-    // rehidden line back to its section and store the client-format key.
+    // Regenerated equivalents of dismissed items start hidden.
     const rehidden = (parsed as { rehidden?: string[] }).rehidden ?? [];
-    for (const line of rehidden) {
-      let key: string | null = null;
-      if ([...briefing.today, ...briefing.today_more].includes(line)) key = `b:today:${line.slice(0, 80)}`;
-      else if ([...briefing.oneoffs, ...briefing.oneoffs_more].includes(line)) key = `b:oneoffs:${line.slice(0, 80)}`;
-      else if ([...briefing.coming, ...briefing.coming_more].includes(line)) key = `b:coming:${line.slice(0, 80)}`;
-      else {
-        const proj = [...briefing.projects, ...briefing.projects_more].find((p) => p.line === line);
-        if (proj) key = `b:proj:${proj.name}:${proj.line.slice(0, 60)}`;
-      }
-      if (key) await setDismissal(env, user.id, day, key, line.slice(0, 300), true).catch(() => {});
-    }
+    await addDismissals(env, user.id, day, rehiddenEntries(briefing, rehidden)).catch(() => {});
     return briefing;
   } catch {
     console.error(`briefing: unparseable output for user ${user.id}: ${text.slice(0, 200)}`);
