@@ -14,6 +14,7 @@ interface SupportMessage {
   sender_id: number;
   text: string;
   r2_key: string | null;
+  as_admin?: number;
   created_at: number;
 }
 
@@ -139,10 +140,11 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
 
       <div className="support-chat">
         {messages.map((m) => (
-          <div key={m.id} className={`bubble ${mine(m) ? "user" : "assistant"} support-bubble`}>
-            {!mine(m) && m.sender_id !== m.user_id && (
-              <span className="support-who">Todo Log support</span>
-            )}
+          <div
+            key={m.id}
+            className={`bubble ${mine(m) ? "user" : "assistant"} support-bubble${m.as_admin ? " from-support" : ""}`}
+          >
+            {!!m.as_admin && <span className="support-who">Todo Log support</span>}
             <p>{m.text}</p>
             {m.r2_key && (
               <audio className="support-audio" controls preload="none" src={`/api/support/audio/${m.id}`} />

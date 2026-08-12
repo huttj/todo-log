@@ -3420,3 +3420,15 @@ button.back {
 .support-dock {
   max-height: 40vh;
 }
+
+/* Support replies keep their own look even when you sent them (admin
+   self-chat): light, accent-bordered, badged. */
+.support-bubble.from-support {
+  background: var(--surface);
+  color: inherit;
+  border: 1px solid var(--accent-border);
+}
+
+.bubble.user.from-support .support-when {
+  color: var(--muted);
+}

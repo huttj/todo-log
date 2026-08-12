@@ -15,6 +15,7 @@ export interface SupportMessageRow {
   sender_id: number;
   text: string;
   r2_key: string | null;
+  as_admin: number;
   created_at: number;
 }
 
@@ -34,16 +35,17 @@ async function addMessage(
   sender: UserRow,
   text: string,
   r2Key: string | null,
+  asAdmin: boolean,
 ): Promise<SupportMessageRow> {
   const row = await env.DB.prepare(
-    `INSERT INTO support_messages (user_id, sender_id, text, r2_key, created_at)
-     VALUES (?, ?, ?, ?, ?) RETURNING *`,
+    `INSERT INTO support_messages (user_id, sender_id, text, r2_key, as_admin, created_at)
+     VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
   )
-    .bind(threadUserId, sender.id, text, r2Key, now())
+    .bind(threadUserId, sender.id, text, r2Key, asAdmin ? 1 : 0, now())
     .first<SupportMessageRow>();
 
   const snippet = text.slice(0, 140);
-  const fromAdmin = isAdmin(env, sender.email) && sender.id !== threadUserId;
+  const fromAdmin = asAdmin && sender.id !== threadUserId;
   if (fromAdmin) {
     await setNotification(env, threadUserId, "support", "Support replied", snippet).catch(() => {});
     await pushToUser(env, threadUserId, {
@@ -77,6 +79,7 @@ async function storeVoice(
   sender: UserRow,
   audio: ArrayBuffer,
   contentType: string,
+  asAdmin: boolean,
 ): Promise<SupportMessageRow | { error: string }> {
   if (audio.byteLength === 0) return { error: "empty audio" };
   if (audio.byteLength > 25 * 1024 * 1024) return { error: "recording too large" };
@@ -88,7 +91,7 @@ async function storeVoice(
   }
   const key = `support/${threadUserId}/${Date.now()}-${sender.id}.webm`;
   await env.MEDIA.put(key, audio, { httpMetadata: { contentType } });
-  return addMessage(env, threadUserId, sender, text || "(inaudible)", key);
+  return addMessage(env, threadUserId, sender, text || "(inaudible)", key, asAdmin);
 }
 
 // -- User side ---------------------------------------------------------------
@@ -107,7 +110,7 @@ support.post("/support/messages", async (c) => {
   const text = body.text?.trim();
   if (!text) return c.json({ error: "text required" }, 400);
   const user = c.get("user");
-  return c.json(await addMessage(c.env, user.id, user, text.slice(0, 4000), null));
+  return c.json(await addMessage(c.env, user.id, user, text.slice(0, 4000), null, false));
 });
 
 support.post("/support/voice", async (c) => {
@@ -118,6 +121,7 @@ support.post("/support/voice", async (c) => {
     user,
     await c.req.arrayBuffer(),
     c.req.header("content-type") ?? "audio/webm",
+    false,
   );
   return "error" in result ? c.json(result, 400) : c.json(result);
 });
@@ -156,7 +160,7 @@ support.post("/support/threads/:uid/messages", async (c) => {
   const text = body.text?.trim();
   if (!text) return c.json({ error: "text required" }, 400);
   return c.json(
-    await addMessage(c.env, Number(c.req.param("uid")), c.get("user"), text.slice(0, 4000), null),
+    await addMessage(c.env, Number(c.req.param("uid")), c.get("user"), text.slice(0, 4000), null, true),
   );
 });
 
@@ -168,6 +172,7 @@ support.post("/support/threads/:uid/voice", async (c) => {
     c.get("user"),
     await c.req.arrayBuffer(),
     c.req.header("content-type") ?? "audio/webm",
+    true,
   );
   return "error" in result ? c.json(result, 400) : c.json(result);
 });
