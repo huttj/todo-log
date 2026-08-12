@@ -3105,14 +3105,22 @@ button.back {
   margin: 0.15rem 0 0.4rem;
 }
 
-/* App header sticks; page content scrolls beneath it. */
+/* App header is fixed — it never moves; content scrolls beneath it. */
 .app > header {
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 640px;
   z-index: 40;
   background: var(--bg);
-  padding-top: calc(0.4rem + env(safe-area-inset-top));
-  padding-bottom: 0.4rem;
+  padding: calc(0.4rem + env(safe-area-inset-top)) 1rem 0.4rem;
+}
+
+/* Content clears the fixed header (rem-based, so it scales with text size). */
+.app {
+  padding-top: calc(3.6rem + env(safe-area-inset-top));
 }
 
 /* Search page: clear button inside the box. */
