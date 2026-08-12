@@ -589,15 +589,11 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         timeZone: tz,
         ...(dayStart ? { weekday: "short", month: "short", day: "numeric" } : {}),
       })}${dayStart ? " (any time)" : ""}`;
-      const item: ChangeFeedItem = {
-        event_id: 0,
-        entity_type: "schedule",
-        entity_id: slot.id,
-        kind: "scheduled",
-        label: `Scheduled “${todo.title}” — ${when}`,
-      };
-      s.feed.push(item);
-      s.onEvent?.({ type: "feed", item });
+      await feedEvent(s, "todo", todo.id, "updated", `Scheduled “${todo.title}” — ${when}`, {
+        via: "schedule_todo",
+        slot_id: slot.id,
+        after: { scheduled_start: startAt, all_day: dayStart ? 1 : 0 },
+      });
       return JSON.stringify({ schedule_id: slot.id });
     }
     case "update_schedule": {
@@ -627,15 +623,12 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         status && status !== "planned"
           ? `Slot for “${todo?.title ?? slot.todo_id}”: ${status}`
           : `Rescheduled “${todo?.title ?? slot.todo_id}”`;
-      const item: ChangeFeedItem = {
-        event_id: 0,
-        entity_type: "schedule",
-        entity_id: slot.id,
-        kind: "scheduled",
-        label,
-      };
-      s.feed.push(item);
-      s.onEvent?.({ type: "feed", item });
+      await feedEvent(s, "todo", slot.todo_id, "updated", label, {
+        via: "update_schedule",
+        slot_id: slot.id,
+        slot_before: { scheduled_start: slot.scheduled_start, all_day: slot.all_day, status: slot.status },
+        after: cols,
+      });
       return "ok";
     }
     case "create_log": {
@@ -1181,7 +1174,7 @@ export async function runTurn(
       .map((b) => b.text)
       .join("\n")
       .trim();
-    if (text) reply = text;
+    if (text) reply = reply ? `${reply}\n\n${text}` : text;
 
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) break;
 

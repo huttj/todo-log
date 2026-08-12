@@ -582,9 +582,12 @@ export default function Capture(props: {
               updateEntry(item.assistantEntryId, (e) => ({ ...e, pending: false }));
               break;
             case "iteration":
-              // Reset visible reply text per iteration; thinking accumulates
-              // across the whole turn so it can be toggled afterwards.
-              updateEntry(item.assistantEntryId, (e) => ({ ...e, text: "" }));
+              // Text accumulates across iterations (the pre-action answer
+              // must survive the post-action confirmation) — just separate.
+              updateEntry(item.assistantEntryId, (e) => ({
+                ...e,
+                text: e.text ? `${e.text}\n\n` : "",
+              }));
               break;
             case "thinking":
               updateEntry(item.assistantEntryId, (e) => ({

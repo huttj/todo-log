@@ -515,11 +515,33 @@ crud.post("/events/:id/undo", async (c) => {
       .bind(event.entity_id, user.id)
       .run();
   } else if (event.kind === "updated" || event.kind === "status_changed") {
-    const payload = event.payload_json ? (JSON.parse(event.payload_json) as { before?: Record<string, unknown> }) : {};
-    if (!payload.before || Object.keys(payload.before).length === 0) {
+    const payload = event.payload_json
+      ? (JSON.parse(event.payload_json) as {
+          before?: Record<string, unknown>;
+          via?: string;
+          slot_id?: number;
+          slot_before?: Record<string, unknown>;
+        })
+      : {};
+    if (payload.via === "schedule_todo" && payload.slot_id) {
+      // Undo scheduling = remove the slot it created.
+      await c.env.DB.prepare(`DELETE FROM todo_schedules WHERE id = ? AND user_id = ?`)
+        .bind(payload.slot_id, user.id)
+        .run();
+    } else if (payload.via === "update_schedule" && payload.slot_id && payload.slot_before) {
+      const cols = payload.slot_before;
+      await c.env.DB.prepare(
+        `UPDATE todo_schedules SET ${Object.keys(cols)
+          .map((k) => `${k} = ?`)
+          .join(", ")} WHERE id = ? AND user_id = ?`,
+      )
+        .bind(...Object.values(cols), payload.slot_id, user.id)
+        .run();
+    } else if (!payload.before || Object.keys(payload.before).length === 0) {
       return c.json({ error: "nothing to restore" }, 400);
+    } else {
+      await updateRow(c.env, table, user.id, event.entity_id, payload.before);
     }
-    await updateRow(c.env, table, user.id, event.entity_id, payload.before);
   } else {
     return c.json({ error: `cannot undo ${event.kind}` }, 400);
   }

@@ -23,7 +23,7 @@ export default function Landing() {
         <p>
           Tasks don't stall because you're lazy. They stall on uncertainty, doubts, and decisions
           you haven't talked yourself through. Todo Log is a to-do list you can talk to — it files
-          the plan, catches the feelings, and learns with you as you go.
+          the plan, catches the feelings, briefs your morning, and learns how you work.
         </p>
         <div className="hero-cta">
           <a className="google-btn" href="#beta">
@@ -69,15 +69,57 @@ export default function Landing() {
           </div>
         </div>
         <div className="showcase-row">
+          <OverviewMockup />
+          <div className="showcase-copy">
+            <h3>Every morning: the picture</h3>
+            <p>
+              Todo Log writes you a daily overview — what today looks like, the few things that
+              deserve attention, the loose threads you mentioned once and never tracked, and a
+              momentum line per project. Check off what's done, wave off what can wait, and it
+              stays waved off. Gentle check-ins can reach your phone during the day.
+            </p>
+          </div>
+        </div>
+        <div className="showcase-row reverse">
           <ProjectsMockup />
           <div className="showcase-copy">
             <h3>Underneath: a real system, maintained for you</h3>
             <p>
-              Projects, todos, actions on a calendar, a journal in your exact words — all filed
-              immediately by an agent you correct just by talking. Every change is shown in a
-              feed, and every change is undoable. No filing, no gardening, no productivity-system
-              maintenance.
+              Projects with priorities in your own words (“urgent, but I hate it”), todos with
+              day-level scheduling, a journal in your exact voice — all filed immediately by an
+              agent you correct just by talking. Every change shows in a feed, and every change is
+              undoable. No filing, no gardening, no productivity-system maintenance.
             </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="feature-strip">
+        <h3>And it keeps getting more yours</h3>
+        <div className="feature-grid">
+          <div>
+            <strong>It learns your corrections</strong>
+            <p>Fix it once by talking; the lesson is distilled and applied to every future rant.</p>
+          </div>
+          <div>
+            <strong>Priorities, unflattened</strong>
+            <p>“Matters, but later this year” is a real priority here — no P1/P2 boxes.</p>
+          </div>
+          <div>
+            <strong>Your words, playable</strong>
+            <p>Every entry keeps its audio — tap any word of a transcript and hear yourself say it.</p>
+          </div>
+          <div>
+            <strong>Check-ins that find you</strong>
+            <p>On your schedule, a short specific note — never a nag — pushed to your devices.</p>
+          </div>
+          <div>
+            <strong>Done vs. not-today</strong>
+            <p>Completing and setting-aside are different moves, and the agent knows the difference.</p>
+          </div>
+          <div>
+            <strong>AI costs in the open</strong>
+            <p>See what every chat, day, and project costs — and pick the model that earns it.</p>
           </div>
         </div>
       </section>
@@ -98,7 +140,7 @@ export default function Landing() {
           <div>
             <h3>It's filed before you're done</h3>
             <p>
-              Todos created, actions logged, feelings journaled — and one good question back when
+              Todos created, days scheduled, feelings journaled — and one good question back when
               it helps: what's blocking you, or how did it go?
             </p>
           </div>
@@ -241,6 +283,25 @@ function ProjectsMockup() {
   );
 }
 
+function OverviewMockup() {
+  return (
+    <div className="mock mock-journal" aria-hidden="true">
+      <div className="mock-log">
+        <div className="mock-log-head">
+          <span>Overview · Tuesday</span>
+          <span className="mock-tag">today</span>
+        </div>
+        <p>A light day — one call to make before the contractor window closes Thursday.</p>
+        <ul className="mock-brief">
+          <li>Call the contractor for a ballpark first.</li>
+          <li>Did you send the deposit back to Sam?</li>
+          <li className="mock-dim">Kitchen renovation — moving. Next: measure the wall.</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 // -- Beta signup -------------------------------------------------------------
 
 function BetaForm() {
@@ -264,7 +325,7 @@ function BetaForm() {
   if (state === "done") {
     return (
       <section id="beta" className="beta">
-        <h3>You're on the list 🎉</h3>
+        <h3>You're on the list.</h3>
         <p>We'll be in touch at {email} when your spot opens up.</p>
       </section>
     );
