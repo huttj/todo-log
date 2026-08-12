@@ -366,7 +366,7 @@ export default function Today(props: {
       <section>
         <h2>{heading}</h2>
         {shown.length === 0 && !open && (
-          <p className="empty section-empty">Nothing to show — everything here is done or hidden.</p>
+          <p className="empty section-empty">Nothing to show.</p>
         )}
         {shown.map((e) => e.node)}
         {open && hidden.map((e) => e.node)}
@@ -401,7 +401,7 @@ export default function Today(props: {
             {action}
           </h2>
           {shown.length === 0 && !expanded && (
-            <p className="empty section-empty">Nothing to show — everything here is done or hidden.</p>
+            <p className="empty section-empty">Nothing to show.</p>
           )}
           <ul className={`brief-list ${key}`}>
             {shown.map((e) => (
