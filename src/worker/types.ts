@@ -12,6 +12,8 @@ export interface Env {
   /** Web push (unset = push disabled). */
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+  /** Email Routing send binding (unset = no signup emails). */
+  NOTIFY?: { send(message: unknown): Promise<void> };
 }
 
 export interface TranscriptWord {

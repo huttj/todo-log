@@ -6,6 +6,7 @@ import { insertProspect } from "./db";
 import { crud } from "./crud";
 import { capture } from "./capture";
 import { runSweep } from "./sweep";
+import { notifyOwnerOfSignup } from "./signup";
 
 const app = new Hono<AppContext>();
 
@@ -32,12 +33,14 @@ app.post("/api/prospects", async (c) => {
     wantsBetaCall?: boolean;
   }>();
   if (!body.email?.includes("@")) return c.json({ error: "valid email required" }, 400);
-  await insertProspect(c.env, {
+  const prospect = {
     email: body.email.trim(),
     name: body.name?.trim() || null,
     note: body.note?.trim() || null,
     wantsBetaCall: !!body.wantsBetaCall,
-  });
+  };
+  await insertProspect(c.env, prospect);
+  c.executionCtx.waitUntil(notifyOwnerOfSignup(c.env, prospect));
   return c.json({ ok: true });
 });
 
