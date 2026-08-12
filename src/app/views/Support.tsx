@@ -119,8 +119,6 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
     };
   }, [load]);
 
-  const mine = (m: SupportMessage) => m.sender_id === props.me?.id;
-
   return (
     <div className="tasks support-page">
       {threadUserId != null && (
@@ -142,7 +140,7 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
         {messages.map((m) => (
           <div
             key={m.id}
-            className={`bubble ${mine(m) ? "user" : "assistant"} support-bubble${m.as_admin ? " from-support" : ""}`}
+            className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}`}
           >
             {!!m.as_admin && <span className="support-who">Todo Log support</span>}
             <p>{m.text}</p>
