@@ -55,12 +55,13 @@ export default function Support(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (props.me?.is_admin && !threadParam) return <ThreadList />;
-  const threadUserId = props.me?.is_admin ? Number(threadParam) : undefined;
+  // Everyone — admins included — gets their own thread here; the admin inbox
+  // lives on the Settings Support tab. ?u= still deep-links a user's thread.
+  const threadUserId = props.me?.is_admin && threadParam ? Number(threadParam) : undefined;
   return <SupportThread me={props.me ?? null} threadUserId={threadUserId} />;
 }
 
-function ThreadList() {
+export function SupportThreadList() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const load = () => {
     api<{ threads: Thread[] }>("/support/threads").then((r) => setThreads(r.threads)).catch(() => {});
@@ -72,7 +73,7 @@ function ThreadList() {
   }, []);
 
   return (
-    <div className="tasks support-page">
+    <div className="support-inbox">
       <h2>Support chats</h2>
       {threads.length === 0 && <p className="empty">No support messages yet.</p>}
       {threads.map((t) => (

@@ -7,6 +7,7 @@ import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push";
 import { getThemePref, setThemePref, type ThemePref } from "../theme";
+import { SupportThreadList } from "./Support";
 
 type Model = "sonnet" | "opus" | "haiku";
 type Thinking = "off" | "low" | "medium" | "high";
@@ -132,7 +133,7 @@ export default function Settings(props: {
   onFocus: (ctx: CaptureContext | null) => void;
   me?: Me | null;
 }) {
-  const [tab, setTab] = useState<"settings" | "users">("settings");
+  const [tab, setTab] = useState<"settings" | "users" | "support">("settings");
   const [cfg, setCfg] = useState<AgentConfig | null>(null);
   const [urows, setUrows] = useState<UsageRow[]>([]);
   const [saved, setSaved] = useState(false);
@@ -309,11 +310,11 @@ export default function Settings(props: {
     </section>
   );
 
-  if (props.me?.is_admin && tab === "users") {
+  if (props.me?.is_admin && tab !== "settings") {
     return (
       <div className="tasks settings">
         <SettingsTabs tab={tab} onTab={setTab} />
-        <UsersPanel />
+        {tab === "users" ? <UsersPanel /> : <SupportThreadList />}
       </div>
     );
   }
@@ -543,18 +544,21 @@ export default function Settings(props: {
   );
 }
 
-function SettingsTabs(props: { tab: "settings" | "users"; onTab: (t: "settings" | "users") => void }) {
+type AdminTab = "settings" | "users" | "support";
+
+function SettingsTabs(props: { tab: AdminTab; onTab: (t: AdminTab) => void }) {
+  const tabs: { key: AdminTab; label: string }[] = [
+    { key: "settings", label: "Settings" },
+    { key: "users", label: "Users" },
+    { key: "support", label: "Support" },
+  ];
   return (
     <div className="settings-tabs">
-      <button
-        className={props.tab === "settings" ? "on" : ""}
-        onClick={() => props.onTab("settings")}
-      >
-        Settings
-      </button>
-      <button className={props.tab === "users" ? "on" : ""} onClick={() => props.onTab("users")}>
-        Users
-      </button>
+      {tabs.map((t) => (
+        <button key={t.key} className={props.tab === t.key ? "on" : ""} onClick={() => props.onTab(t.key)}>
+          {t.label}
+        </button>
+      ))}
     </div>
   );
 }
