@@ -3019,3 +3019,49 @@ button.back {
   color: var(--muted);
   flex-shrink: 0;
 }
+
+/* react-select follows the theme (its defaults are inline white). */
+.rs__control {
+  background: var(--surface) !important;
+}
+
+.rs__single-value,
+.rs__input-container {
+  color: var(--ink-2) !important;
+}
+
+.rs__placeholder {
+  color: var(--muted) !important;
+}
+
+.rs__indicator {
+  color: var(--muted) !important;
+}
+
+.rs__menu {
+  background: var(--surface) !important;
+  color: var(--ink-2);
+  border: 1px solid var(--border-2);
+}
+
+.rs__option {
+  background: var(--surface) !important;
+  color: var(--ink-2) !important;
+}
+
+.rs__option--is-focused {
+  background: var(--surface-2) !important;
+}
+
+.rs__option--is-selected {
+  background: var(--accent) !important;
+  color: var(--inverse-ink) !important;
+}
+
+.rs__multi-value__label {
+  color: var(--chip-ink) !important;
+}
+
+.rs__multi-value__remove {
+  color: var(--chip-ink) !important;
+}

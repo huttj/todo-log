@@ -32,7 +32,8 @@ export default function Bell(props: { refreshKey: number }) {
     return () => window.removeEventListener("pointerdown", onDown);
   }, [open]);
 
-  const unread = items.filter((n) => !n.read).length;
+  // Badge sticks until notifications are dismissed, not merely seen.
+  const unread = items.length;
 
   const toggle = () => {
     const next = !open;
