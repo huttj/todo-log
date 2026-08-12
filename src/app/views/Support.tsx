@@ -194,7 +194,7 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
     <div className="tasks support-page">
       {threadUserId != null && (
         <div className="page-nav">
-          <Link className="back" to="/support">
+          <Link className="back" to="/settings?tab=support">
             <FontAwesomeIcon icon={faChevronLeft} /> Support chats
           </Link>
         </div>

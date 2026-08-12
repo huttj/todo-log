@@ -1,6 +1,7 @@
 // Settings: spend roll-ups with filters, top-level agent defaults, per-use
 // model / thinking overrides, regeneration schedules, and agent memory.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import Select from "react-select";
 import { api, post, patch, type Me } from "../api";
 import { fmtCost } from "../fmt";
@@ -133,7 +134,10 @@ export default function Settings(props: {
   onFocus: (ctx: CaptureContext | null) => void;
   me?: Me | null;
 }) {
-  const [tab, setTab] = useState<"settings" | "users" | "support">("settings");
+  const [tabParams, setTabParams] = useSearchParams();
+  const tab = (tabParams.get("tab") ?? "settings") as "settings" | "users" | "support";
+  const setTab = (t: "settings" | "users" | "support") =>
+    setTabParams(t === "settings" ? {} : { tab: t });
   const [cfg, setCfg] = useState<AgentConfig | null>(null);
   const [urows, setUrows] = useState<UsageRow[]>([]);
   const [saved, setSaved] = useState(false);
