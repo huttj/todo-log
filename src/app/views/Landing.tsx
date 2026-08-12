@@ -3,10 +3,8 @@
 // emotion, not laziness. Two pillars: (1) talk through what's making it hard,
 // (2) a long-running feedback loop on your own efforts. Mockups are CSS-drawn
 // (no real user data); the beta form posts to the public /prospects endpoint.
-import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faPlay } from "@fortawesome/free-solid-svg-icons";
-import { post } from "../api";
 
 export default function Landing() {
   return (
@@ -302,65 +300,19 @@ function OverviewMockup() {
   );
 }
 
-// -- Beta signup -------------------------------------------------------------
+// -- Beta signup: Google first, so the lead IS the account ------------------
 
 function BetaForm() {
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [note, setNote] = useState("");
-  const [wantsCall, setWantsCall] = useState(false);
-  const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setState("sending");
-    try {
-      await post("/prospects", { email, name, note, wantsBetaCall: wantsCall });
-      setState("done");
-    } catch {
-      setState("error");
-    }
-  }
-
-  if (state === "done") {
-    return (
-      <section id="beta" className="beta">
-        <h3>You're on the list.</h3>
-        <p>We'll be in touch at {email} when your spot opens up.</p>
-      </section>
-    );
-  }
-
   return (
     <section id="beta" className="beta">
       <h3>Sign up for the beta</h3>
       <p>
-        Todo Log is in private beta. If you've got a project that keeps stalling — or a graveyard
-        of abandoned to-do apps — you're exactly who this is for.
+        Todo Log is in private beta. Sign in with Google to claim your spot — you'll land on the
+        waitlist, tell us what keeps stalling for you, and we'll email you when you're in.
       </p>
-      <form onSubmit={submit}>
-        <input
-          type="email"
-          required
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input placeholder="Your name (optional)" value={name} onChange={(e) => setName(e.target.value)} />
-        <textarea
-          placeholder="What keeps stalling for you? (optional)"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-        <label className="beta-call">
-          <input type="checkbox" checked={wantsCall} onChange={(e) => setWantsCall(e.target.checked)} />
-          I'm up for a beta user call
-        </label>
-        <button type="submit" disabled={state === "sending"}>
-          {state === "sending" ? "Sending…" : "Notify me"}
-        </button>
-        {state === "error" && <p className="error">Something went wrong — try again?</p>}
-      </form>
+      <a className="google-btn" href="/api/auth/google">
+        Sign up with Google
+      </a>
     </section>
   );
 }

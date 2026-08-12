@@ -72,6 +72,18 @@ export async function insertProspect(
   env: Env,
   input: { email: string; name: string | null; note: string | null; wantsBetaCall: boolean },
 ): Promise<void> {
+  const existing = await env.DB.prepare(`SELECT id FROM prospects WHERE lower(email) = lower(?)`)
+    .bind(input.email)
+    .first<{ id: number }>();
+  if (existing) {
+    await env.DB.prepare(
+      `UPDATE prospects SET name = COALESCE(?, name), note = COALESCE(?, note),
+         wants_beta_call = ? WHERE id = ?`,
+    )
+      .bind(input.name, input.note, input.wantsBetaCall ? 1 : 0, existing.id)
+      .run();
+    return;
+  }
   await env.DB.prepare(
     `INSERT INTO prospects (email, name, note, wants_beta_call, created_at) VALUES (?, ?, ?, ?, ?)`,
   )

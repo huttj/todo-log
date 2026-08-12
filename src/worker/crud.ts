@@ -420,10 +420,15 @@ const requireAdmin = async (
 crud.get("/admin/users", async (c) => {
   if (!(await requireAdmin(c))) return c.json({ error: "not found" }, 404);
   const users = await c.env.DB.prepare(
-    `SELECT id, email, name, enabled, created_at FROM users ORDER BY id`,
+    `SELECT u.id, u.email, u.name, u.enabled, u.created_at,
+            p.note AS prospect_note, p.wants_beta_call
+     FROM users u LEFT JOIN prospects p ON lower(p.email) = lower(u.email)
+     ORDER BY u.id`,
   ).all();
+  // Leads that never signed in (legacy email-only signups).
   const prospects = await c.env.DB.prepare(
-    `SELECT id, email, name, note, wants_beta_call, created_at FROM prospects ORDER BY id DESC`,
+    `SELECT id, email, name, note, wants_beta_call, created_at FROM prospects
+     WHERE lower(email) NOT IN (SELECT lower(email) FROM users) ORDER BY id DESC`,
   ).all();
   return c.json({ users: users.results, prospects: prospects.results });
 });

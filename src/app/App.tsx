@@ -263,7 +263,10 @@ function Waitlist(props: { email: string }) {
     return (
       <div className="splash">
         <h1>Todo Log</h1>
-        <p>Thanks — you're on the list. We'll be in touch at {props.email}.</p>
+        <p>
+          Thanks for signing up! Keep an eye on {props.email} — we'll let you know the moment
+          you're in.
+        </p>
       </div>
     );
   }
@@ -271,10 +274,13 @@ function Waitlist(props: { email: string }) {
   return (
     <div className="splash waitlist">
       <h1>Todo Log</h1>
-      <p>Todo Log isn't open yet. Leave your details and we'll let you know.</p>
+      <p>
+        You're on the waitlist. Tell us a bit about what keeps stalling for you (optional) — it
+        helps us pick beta testers.
+      </p>
       <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
       <textarea
-        placeholder="Anything you'd like us to know? (optional)"
+        placeholder="What keeps stalling for you? (optional)"
         value={note}
         onChange={(e) => setNote(e.target.value)}
       />

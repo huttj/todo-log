@@ -565,6 +565,8 @@ interface AdminUser {
   name: string | null;
   enabled: number;
   created_at: number;
+  prospect_note?: string | null;
+  wants_beta_call?: number | null;
 }
 
 interface AdminProspect {
@@ -615,6 +617,7 @@ function UsersPanel() {
               {u.name && <span className="user-mail">{u.email}</span>}
             </div>
             <span className="user-since">since {when(u.created_at)}</span>
+            {!!u.wants_beta_call && <span className="sched-chip">wants a call</span>}
             <label className="user-toggle">
               <input
                 type="checkbox"
@@ -623,13 +626,14 @@ function UsersPanel() {
               />
               {u.enabled ? "active" : "off"}
             </label>
+            {u.prospect_note && <p className="prospect-note">{u.prospect_note}</p>}
           </div>
         ))}
         {users.length === 0 && <p className="empty">No users yet.</p>}
       </section>
 
       <section>
-        <h2>Waitlist</h2>
+        <h2>Email-only leads</h2>
         {prospects.map((p) => (
           <div className="prospect-row" key={p.id}>
             <div className="user-id">
@@ -643,7 +647,8 @@ function UsersPanel() {
         ))}
         {prospects.length === 0 && <p className="empty">No signups yet.</p>}
         <p className="hint-left">
-          Waitlist signups become toggleable users after they sign in with Google.
+          These leads signed up by email before Google-first signup existed — they have no account
+          yet.
         </p>
       </section>
       {err && <p className="error">{err}</p>}

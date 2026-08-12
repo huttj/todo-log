@@ -9,12 +9,10 @@ import { now, upsertUser, saveGoogleTokens, getUser } from "./db";
 export type AppContext = { Bindings: Env; Variables: { user: UserRow } };
 
 const SESSION_TTL = 30 * 86400;
-const OAUTH_SCOPES = [
-  "openid",
-  "email",
-  "profile",
-  "https://www.googleapis.com/auth/calendar",
-].join(" ");
+// Basic scopes only: publishing the OAuth app needs no Google review this
+// way. Request the (sensitive) calendar scope incrementally if GCal sync
+// ever ships.
+const OAUTH_SCOPES = ["openid", "email", "profile"].join(" ");
 
 async function hmac(secret: string, data: string): Promise<string> {
   const key = await crypto.subtle.importKey(
