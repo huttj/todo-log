@@ -18,6 +18,8 @@ export default function SupportDock(props: {
   const [draft, setDraft] = useState("");
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState<"send" | "voice" | null>(null);
+  /** Parked audio from the last recording — attached when Send is hit. */
+  const [pendingAudio, setPendingAudio] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
@@ -39,8 +41,9 @@ export default function SupportDock(props: {
     setBusy("send");
     setError(null);
     try {
-      await post(`${base}/messages`, { text });
+      await post(`${base}/messages`, { text, r2_key: pendingAudio ?? undefined });
       setDraft("");
+      setPendingAudio(null);
       sent();
     } catch (e) {
       setError(String((e as Error).message ?? e));
@@ -70,16 +73,20 @@ export default function SupportDock(props: {
         if (blob.size < 1000) return;
         setBusy("voice");
         try {
-          const res = await fetch(`/api${base}/voice`, {
+          const res = await fetch(`/api/support/transcribe`, {
             method: "POST",
             headers: { "content-type": blob.type },
             body: blob,
           });
-          if (!res.ok) {
-            const err = (await res.json().catch(() => ({}))) as { error?: string };
-            throw new Error(err.error ?? "voice message failed");
-          }
-          sent();
+          const data = (await res.json().catch(() => ({}))) as {
+            text?: string;
+            r2_key?: string;
+            error?: string;
+          };
+          if (!res.ok) throw new Error(data.error ?? "transcription failed");
+          setDraft((d) => (d.trim() ? `${d.trimEnd()} ${data.text ?? ""}` : (data.text ?? "")));
+          setPendingAudio(data.r2_key ?? null);
+          draftRef.current?.focus();
         } catch (e) {
           setError(String((e as Error).message ?? e));
         } finally {
@@ -106,13 +113,21 @@ export default function SupportDock(props: {
           Close
         </button>
       </header>
-      {busy === "voice" && <p className="empty">Transcribing and sending…</p>}
+      {busy === "voice" && <p className="empty">Transcribing…</p>}
+      {pendingAudio && (
+        <p className="pending-audio">
+          voice note attached{" "}
+          <button className="link" onClick={() => setPendingAudio(null)} title="Send as text only">
+            ×
+          </button>
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
       <div className="composer">
         <div className="draft-area">
           <textarea
             ref={draftRef}
-            placeholder={recording ? "Recording — tap stop to send…" : "Talk or type…"}
+            placeholder={recording ? "Recording — stop puts the transcript here…" : "Talk or type…"}
             value={draft}
             rows={2}
             disabled={recording}
@@ -127,7 +142,7 @@ export default function SupportDock(props: {
         </div>
         <button
           className={`icon-btn mic-btn ${recording ? "recording" : ""}`}
-          title={recording ? "Stop and send" : "Record a voice note"}
+          title={recording ? "Stop recording (doesn't send)" : "Record a voice note"}
           onClick={() => (recording ? recorderRef.current?.stop() : void startVoice())}
         >
           <FontAwesomeIcon icon={recording ? faStop : faMicrophone} />

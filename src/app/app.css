@@ -3432,3 +3432,13 @@ button.back {
 .bubble.user.from-support .support-when {
   color: var(--muted);
 }
+
+.pending-audio {
+  font-size: 0.78rem;
+  color: var(--chip-ink);
+  background: var(--chip-bg);
+  border-radius: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  margin: 0.25rem 0;
+  display: inline-block;
+}

@@ -73,25 +73,9 @@ async function addMessage(
   return row!;
 }
 
-async function storeVoice(
-  env: Env,
-  threadUserId: number,
-  sender: UserRow,
-  audio: ArrayBuffer,
-  contentType: string,
-  asAdmin: boolean,
-): Promise<SupportMessageRow | { error: string }> {
-  if (audio.byteLength === 0) return { error: "empty audio" };
-  if (audio.byteLength > 25 * 1024 * 1024) return { error: "recording too large" };
-  let text: string;
-  try {
-    text = (await transcribe(env, audio)).text;
-  } catch {
-    return { error: "transcription failed — try again or type it" };
-  }
-  const key = `support/${threadUserId}/${Date.now()}-${sender.id}.webm`;
-  await env.MEDIA.put(key, audio, { httpMetadata: { contentType } });
-  return addMessage(env, threadUserId, sender, text || "(inaudible)", key, asAdmin);
+/** A message's attached audio must be one the sender transcribed themselves. */
+function ownAudioKey(sender: UserRow, key: unknown): string | null {
+  return typeof key === "string" && key.startsWith(`support/tmp/${sender.id}/`) ? key : null;
 }
 
 // -- User side ---------------------------------------------------------------
@@ -106,24 +90,33 @@ support.get("/support/messages", async (c) => {
 });
 
 support.post("/support/messages", async (c) => {
-  const body = await c.req.json<{ text?: string }>();
+  const body = await c.req.json<{ text?: string; r2_key?: string }>();
   const text = body.text?.trim();
   if (!text) return c.json({ error: "text required" }, 400);
   const user = c.get("user");
-  return c.json(await addMessage(c.env, user.id, user, text.slice(0, 4000), null, false));
+  return c.json(
+    await addMessage(c.env, user.id, user, text.slice(0, 4000), ownAudioKey(user, body.r2_key), false),
+  );
 });
 
-support.post("/support/voice", async (c) => {
+// Transcribe a voice note WITHOUT sending: audio parks in R2, transcript
+// goes to the composer, and Send remains an explicit act.
+support.post("/support/transcribe", async (c) => {
   const user = c.get("user");
-  const result = await storeVoice(
-    c.env,
-    user.id,
-    user,
-    await c.req.arrayBuffer(),
-    c.req.header("content-type") ?? "audio/webm",
-    false,
-  );
-  return "error" in result ? c.json(result, 400) : c.json(result);
+  const audio = await c.req.arrayBuffer();
+  if (audio.byteLength === 0) return c.json({ error: "empty audio" }, 400);
+  if (audio.byteLength > 25 * 1024 * 1024) return c.json({ error: "recording too large" }, 413);
+  let text: string;
+  try {
+    text = (await transcribe(c.env, audio)).text;
+  } catch {
+    return c.json({ error: "transcription failed — try again or type it" }, 502);
+  }
+  const key = `support/tmp/${user.id}/${Date.now()}.webm`;
+  await c.env.MEDIA.put(key, audio, {
+    httpMetadata: { contentType: c.req.header("content-type") ?? "audio/webm" },
+  });
+  return c.json({ text, r2_key: key });
 });
 
 // -- Admin side --------------------------------------------------------------
@@ -156,25 +149,20 @@ support.get("/support/threads/:uid/messages", async (c) => {
 
 support.post("/support/threads/:uid/messages", async (c) => {
   if (!adminOnly(c)) return c.json({ error: "not found" }, 404);
-  const body = await c.req.json<{ text?: string }>();
+  const body = await c.req.json<{ text?: string; r2_key?: string }>();
   const text = body.text?.trim();
   if (!text) return c.json({ error: "text required" }, 400);
+  const sender = c.get("user");
   return c.json(
-    await addMessage(c.env, Number(c.req.param("uid")), c.get("user"), text.slice(0, 4000), null, true),
+    await addMessage(
+      c.env,
+      Number(c.req.param("uid")),
+      sender,
+      text.slice(0, 4000),
+      ownAudioKey(sender, body.r2_key),
+      true,
+    ),
   );
-});
-
-support.post("/support/threads/:uid/voice", async (c) => {
-  if (!adminOnly(c)) return c.json({ error: "not found" }, 404);
-  const result = await storeVoice(
-    c.env,
-    Number(c.req.param("uid")),
-    c.get("user"),
-    await c.req.arrayBuffer(),
-    c.req.header("content-type") ?? "audio/webm",
-    true,
-  );
-  return "error" in result ? c.json(result, 400) : c.json(result);
 });
 
 // Audio playback: the thread's owner or any admin.
