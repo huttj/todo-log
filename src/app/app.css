@@ -3412,3 +3412,11 @@ button.back {
   border: 1px solid var(--border);
   align-self: flex-start;
 }
+
+.support-page {
+  padding-bottom: 8rem;
+}
+
+.support-dock {
+  max-height: 40vh;
+}

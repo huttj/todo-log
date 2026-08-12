@@ -16,6 +16,7 @@ import Today from "./views/Today";
 import Settings from "./views/Settings";
 import SearchResults from "./views/SearchResults";
 import Support from "./views/Support";
+import SupportDock from "./SupportDock";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -34,6 +35,9 @@ export default function App() {
   const [auth, setAuth] = useState<AuthState>("loading");
   const location = useLocation();
   useEffect(() => trackPath(location.pathname), [location.pathname]);
+  useEffect(() => {
+    if (location.pathname !== "/support") setSupportOpen(false);
+  }, [location.pathname]);
 
   // Cmd/Ctrl+K opens omni search from anywhere.
   useEffect(() => {
@@ -88,7 +92,19 @@ export default function App() {
   const gestureFired = useRef(false);
   const [talkHint, setTalkHint] = useState(false);
 
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportAutoStart, setSupportAutoStart] = useState(false);
+  const onSupportPage = location.pathname === "/support";
+  const supportThreadParam = onSupportPage
+    ? new URLSearchParams(location.search).get("u")
+    : null;
+
   const openCapture = (autoStart: boolean) => {
+    if (onSupportPage) {
+      setSupportAutoStart(autoStart);
+      setSupportOpen(true);
+      return;
+    }
     setCaptureMode(undefined);
     setCaptureReplyTo(undefined);
     setCaptureSeed(undefined);
@@ -210,7 +226,7 @@ export default function App() {
         </Routes>
       </main>
 
-      {!captureOpen && (
+      {!captureOpen && !supportOpen && (
         <footer>
           {talkHint && <span className="talk-hint">↑ drag up or hold to record</span>}
           <button
@@ -227,6 +243,14 @@ export default function App() {
       )}
 
       {searchOpen && <Search onClose={() => setSearchOpen(false)} />}
+
+      {supportOpen && (
+        <SupportDock
+          threadUserId={supportThreadParam ? Number(supportThreadParam) : undefined}
+          autoStart={supportAutoStart}
+          onClose={() => setSupportOpen(false)}
+        />
+      )}
 
       {captureOpen && (
         <Capture

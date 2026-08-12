@@ -3,14 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faMicrophone,
-  faStop,
-  faPaperPlane,
-  faChevronLeft,
-  faPlay,
-} from "@fortawesome/free-solid-svg-icons";
-import { api, post, type Me } from "../api";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
+import { api, type Me } from "../api";
+import { SUPPORT_SENT_EVENT } from "../SupportDock";
 import type { CaptureContext } from "../Capture";
 
 interface SupportMessage {
@@ -97,11 +92,6 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
   const { threadUserId } = props;
   const base = threadUserId != null ? `/support/threads/${threadUserId}` : "/support";
   const [messages, setMessages] = useState<SupportMessage[]>([]);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState<"send" | "voice" | null>(null);
-  const [recording, setRecording] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const lastIdRef = useRef(0);
 
@@ -121,72 +111,12 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
   useEffect(() => {
     load();
     const t = window.setInterval(load, POLL_MS);
-    return () => window.clearInterval(t);
+    window.addEventListener(SUPPORT_SENT_EVENT, load);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener(SUPPORT_SENT_EVENT, load);
+    };
   }, [load]);
-
-  async function sendText() {
-    const text = draft.trim();
-    if (!text || busy) return;
-    setBusy("send");
-    setError(null);
-    try {
-      await post(`${base}/messages`, { text });
-      setDraft("");
-      load();
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function startVoice() {
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mt = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/mp4")
-          ? "audio/mp4"
-          : "";
-      const rec = new MediaRecorder(stream, mt ? { mimeType: mt } : undefined);
-      const chunks: Blob[] = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-      rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setRecording(false);
-        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
-        if (blob.size < 1000) return;
-        setBusy("voice");
-        try {
-          const res = await fetch(`/api${base}/voice`, {
-            method: "POST",
-            headers: { "content-type": blob.type },
-            body: blob,
-          });
-          if (!res.ok) {
-            const err = (await res.json().catch(() => ({}))) as { error?: string };
-            throw new Error(err.error ?? "voice message failed");
-          }
-          load();
-        } catch (e) {
-          setError(String((e as Error).message ?? e));
-        } finally {
-          setBusy(null);
-        }
-      };
-      // Support notes cap at 2 minutes — keeps Whisper accurate.
-      const stopTimer = window.setTimeout(() => rec.state === "recording" && rec.stop(), 120_000);
-      rec.onerror = () => window.clearTimeout(stopTimer);
-      recorderRef.current = rec;
-      rec.start();
-      setRecording(true);
-    } catch (e) {
-      setError(String((e as Error).message ?? e));
-    }
-  }
 
   const mine = (m: SupportMessage) => m.sender_id === props.me?.id;
 
@@ -202,8 +132,8 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
       {threadUserId == null && <h2>Support</h2>}
       {threadUserId == null && messages.length === 0 && (
         <p className="empty">
-          Something broken, confusing, or missing? Talk or type — a human reads this and will get
-          back to you (you'll get a notification).
+          Something broken, confusing, or missing? Hit Talk below — a human reads this and will
+          get back to you (you'll get a notification).
         </p>
       )}
 
@@ -215,48 +145,12 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
             )}
             <p>{m.text}</p>
             {m.r2_key && (
-              <audio className="support-audio" controls preload="none" src={`/api/support/audio/${m.id}`}>
-                <FontAwesomeIcon icon={faPlay} />
-              </audio>
+              <audio className="support-audio" controls preload="none" src={`/api/support/audio/${m.id}`} />
             )}
             <span className="support-when">{when(m.created_at)}</span>
           </div>
         ))}
         <div ref={endRef} />
-      </div>
-
-      {busy === "voice" && <p className="empty">Transcribing your voice note…</p>}
-      {error && <p className="error">{error}</p>}
-
-      <div className="composer support-composer">
-        <textarea
-          placeholder={recording ? "Recording — tap stop to send…" : "Talk or type…"}
-          value={draft}
-          rows={2}
-          disabled={recording}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault();
-              void sendText();
-            }
-          }}
-        />
-        <button
-          className={`icon-btn mic-btn ${recording ? "recording" : ""}`}
-          title={recording ? "Stop and send" : "Record a voice note"}
-          onClick={() => (recording ? recorderRef.current?.stop() : void startVoice())}
-        >
-          <FontAwesomeIcon icon={recording ? faStop : faMicrophone} />
-        </button>
-        <button
-          className="icon-btn send-btn"
-          disabled={!draft.trim() || busy != null}
-          title="Send"
-          onClick={() => void sendText()}
-        >
-          <FontAwesomeIcon icon={faPaperPlane} />
-        </button>
       </div>
     </div>
   );
