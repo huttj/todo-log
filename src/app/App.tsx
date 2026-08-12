@@ -90,8 +90,12 @@ export default function App() {
     setCaptureMode(undefined);
     setCaptureReplyTo(undefined);
     setCaptureSeed(undefined);
-    setCaptureResume(undefined);
+    // On a chat page, Talk continues that chat instead of starting fresh.
+    setCaptureResume(
+      focus?.type === "session" ? { id: focus.id, label: focus.label } : undefined,
+    );
     setCaptureAutoStart(autoStart);
+    setCaptureKey((k) => k + 1);
     setCaptureOpen(true);
   };
 

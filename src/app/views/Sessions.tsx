@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan, faPlay, faUpRightAndDownLeftFromCenter } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faPlay, faCommentDots } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   del,
@@ -143,7 +143,7 @@ export function Sessions(props: {
               <div
                 key={s.id}
                 className="session-row"
-                onClick={() => requestTalk(null, { resume: { id: s.id, label: timeLabel } })}
+                onClick={() => navigate(`/sessions/${s.id}`)}
               >
                 <div className="session-head">
                   <span className="time">
@@ -159,13 +159,13 @@ export function Sessions(props: {
                   </span>
                   <button
                     className="link expand"
-                    title="Open full view"
+                    title="Continue this chat"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/sessions/${s.id}`);
+                      requestTalk(null, { resume: { id: s.id, label: timeLabel } });
                     }}
                   >
-                    <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} />
+                    <FontAwesomeIcon icon={faCommentDots} />
                   </button>
                 </div>
                 {s.first_text && <p className="snippet">{s.first_text.slice(0, 140)}</p>}
@@ -222,7 +222,8 @@ export function SessionView(props: {
     api<Project[]>("/projects").then(setProjects).catch(() => {});
   }, [props.refreshKey, sessionId]);
 
-  // Talk from a replay page talks ABOUT this chat, not where the chat happened.
+  // Talk from the chat page RESUMES this chat (App maps a session focus to a
+  // dock resume).
   useEffect(() => {
     if (!data) return;
     const when = data.session.started_at
