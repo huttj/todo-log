@@ -344,6 +344,49 @@ export default function Capture(props: {
     return m.id;
   }, [ensureSession]);
 
+  const [micLost, setMicLost] = useState(false);
+
+  /** Losing the mic mid-recording is catastrophic — be LOUD about it:
+   * vibration, a triple beep, a system notification, and a red banner. */
+  const micAlarm = () => {
+    try {
+      navigator.vibrate?.([200, 100, 200, 100, 500]);
+    } catch {
+      /* unsupported */
+    }
+    try {
+      const ctx = new AudioContext();
+      const beep = (at: number, freq: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + at);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + at + 0.25);
+        osc.start(ctx.currentTime + at);
+        osc.stop(ctx.currentTime + at + 0.3);
+      };
+      beep(0, 880);
+      beep(0.35, 587);
+      beep(0.7, 880);
+      window.setTimeout(() => void ctx.close().catch(() => {}), 1500);
+    } catch {
+      /* no audio */
+    }
+    if ("serviceWorker" in navigator && "Notification" in window && Notification.permission === "granted") {
+      void navigator.serviceWorker.ready
+        .then((reg) =>
+          reg.showNotification("Recording stopped", {
+            body: "The microphone was cut off — everything captured so far is saved. Tap to continue.",
+            icon: "/apple-touch-icon.png",
+            data: { url: "/" },
+          }),
+        )
+        .catch(() => {});
+    }
+  };
+
   /** iOS kills the mic on screen lock/background. Detect it instead of
    * pretending to record into a dead track. */
   const handleMicLost = useCallback(() => {
@@ -353,9 +396,8 @@ export default function Capture(props: {
       stopSegment();
       recordingRef.current = false;
       setRecording(false);
-      setError(
-        "The system cut off the microphone (screen lock or app switch). Recording stopped — everything captured so far is saved. Tap the mic to continue.",
-      );
+      setMicLost(true);
+      micAlarm();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -457,6 +499,7 @@ export default function Capture(props: {
   }, []);
 
   const startRecording = useCallback(() => {
+    setMicLost(false);
     recordingRef.current = true;
     setRecording(true);
     startSegment().catch((err) => {
@@ -882,6 +925,16 @@ export default function Capture(props: {
       ref={dockRef}
       className={`capture-dock ${dockHeight != null ? "resized" : ""}`}
       style={dockHeight != null ? { height: dockHeight, maxHeight: "none" } : undefined}
+      onClickCapture={(e) => {
+        // Navigating from a tall dock: drop to half height so the page the
+        // link opened is actually visible.
+        const a = (e.target as HTMLElement).closest("a");
+        if (!a || a.target === "_blank") return;
+        const rect = dockRef.current?.getBoundingClientRect();
+        if (rect && rect.height > window.innerHeight * 0.6) {
+          setDockHeight(Math.round(window.innerHeight * 0.45));
+        }
+      }}
     >
       <div
         className="dock-handle"
@@ -1072,6 +1125,13 @@ export default function Capture(props: {
             );
           })}
           <div ref={chatEndRef} />
+        </div>
+      )}
+
+      {micLost && (
+        <div className="mic-alarm">
+          Microphone was cut off — recording STOPPED. Everything captured so far is saved. Tap the
+          mic to continue.
         </div>
       )}
 

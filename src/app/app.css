@@ -3233,3 +3233,21 @@ button.back {
 .bubble > .md:last-child {
   margin-bottom: 0.1rem;
 }
+
+/* Mic-loss alarm: unmissable. */
+.mic-alarm {
+  background: var(--danger);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.88rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  margin: 0.3rem 0;
+  animation: alarm-pulse 1.2s ease-in-out 3;
+}
+
+@keyframes alarm-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
