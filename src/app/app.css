@@ -27,6 +27,9 @@
   --warn-bg: #faf4e2;
   --warn-border: #eadfc0;
   --warn-ink: #7a6a3a;
+  --pill2-bg: #ece9f6;
+  --pill2-ink: #5b4a8a;
+  --danger-bg: #f6dedc;
 }
 
 html.dark {
@@ -58,6 +61,9 @@ html.dark {
   --warn-bg: #333020;
   --warn-border: #4a4430;
   --warn-ink: #cdbd82;
+  --pill2-bg: #322c44;
+  --pill2-ink: #b7a9dd;
+  --danger-bg: #472723;
 }
 
 * {
@@ -287,8 +293,8 @@ nav a.active svg {
 /* -- sessions (chat history) -- */
 .session-row {
   background: var(--surface);
-  border: 1px solid var(--surface-3);
-  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
   padding: 0.65rem 0.85rem;
   margin-bottom: 0.55rem;
   cursor: pointer;
@@ -489,8 +495,8 @@ footer .capture {
 
 .kind {
   font-size: 0.7rem;
-  background: #ece9f6;
-  color: #5b4a8a;
+  background: var(--pill2-bg);
+  color: var(--pill2-ink);
   border-radius: 0.6rem;
   padding: 0.1rem 0.5rem;
 }
@@ -618,8 +624,8 @@ select {
 /* -- logs -- */
 .log-card {
   background: var(--surface);
-  border: 1px solid var(--surface-3);
-  border-radius: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
   padding: 0.8rem 0.95rem;
   margin-bottom: 0.7rem;
 }
@@ -634,8 +640,8 @@ select {
 }
 
 .log-card.reflection {
-  border-color: #d9d2ec;
-  background: #fbfaff;
+  border-color: var(--border);
+  background: var(--surface);
 }
 
 .log-head {
@@ -860,7 +866,7 @@ blockquote audio {
   align-self: center;
   font-size: 0.78rem;
   color: var(--muted);
-  background: #f0eee8;
+  background: var(--surface-2);
   border-radius: 0.8rem;
   padding: 0.2rem 0.7rem;
 }
@@ -1000,7 +1006,7 @@ blockquote audio {
 }
 
 .pill.rec {
-  background: #f6dedc;
+  background: var(--danger-bg);
   color: var(--danger);
   animation: fade-pulse 1.4s infinite;
 }
@@ -1250,7 +1256,7 @@ blockquote audio {
   font-style: normal;
   font-size: 0.85rem;
   color: var(--ink-5);
-  background: #f4f3ef;
+  background: var(--surface-3);
   border-radius: 0.4rem;
   padding: 0.4rem 0.6rem;
   margin-top: 0.3rem;
@@ -1319,7 +1325,7 @@ blockquote audio {
 
 .play-btn:hover,
 .speed-btn:hover {
-  background: #d5d1c4;
+  background: var(--border-2);
 }
 
 .word-transcript span {
@@ -1346,9 +1352,9 @@ blockquote audio {
 
 .project-card {
   text-align: left;
-  border: 1px solid #e5e3dd;
+  border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: 0.7rem;
+  border-radius: 0.8rem;
   padding: 0.7rem 0.9rem;
   cursor: pointer;
   display: flex;
@@ -1358,7 +1364,7 @@ blockquote audio {
 }
 
 .project-card:hover {
-  border-color: #c9c5ba;
+  border-color: var(--border-2);
 }
 
 .project-card .name {
@@ -1520,7 +1526,7 @@ blockquote audio {
 
 /* -- mockups -- */
 .mock {
-  border: 1px solid #e4e2dc;
+  border: 1px solid var(--border);
   border-radius: 1rem;
   background: var(--surface);
   box-shadow: 0 12px 32px rgba(26, 26, 26, 0.07);
@@ -1733,8 +1739,8 @@ blockquote audio {
 }
 
 .mock-tag {
-  background: #eceafd;
-  color: #5b54c0;
+  background: var(--pill2-bg);
+  color: var(--pill2-ink);
   border-radius: 0.7rem;
   padding: 0.1rem 0.55rem;
   font-size: 0.72rem;
@@ -2183,7 +2189,7 @@ header {
 }
 
 .q-chip {
-  border: 1px solid #cfccc2;
+  border: 1px solid var(--border-3);
   background: var(--surface);
   border-radius: 1rem;
   padding: 0.3rem 0.75rem;
