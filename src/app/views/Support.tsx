@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft, faPlay, faStop } from "@fortawesome/free-solid-svg-icons";
 import { api, type Me } from "../api";
 import { SUPPORT_SENT_EVENT } from "../SupportDock";
 import type { CaptureContext } from "../Capture";
@@ -93,6 +93,7 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
   const { threadUserId } = props;
   const base = threadUserId != null ? `/support/threads/${threadUserId}` : "/support";
   const [messages, setMessages] = useState<SupportMessage[]>([]);
+  const [openAudio, setOpenAudio] = useState<Set<number>>(new Set());
   const endRef = useRef<HTMLDivElement | null>(null);
   const lastIdRef = useRef(0);
 
@@ -119,6 +120,14 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
     };
   }, [load]);
 
+  const toggleAudio = (id: number) =>
+    setOpenAudio((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   return (
     <div className="tasks support-page">
       {threadUserId != null && (
@@ -140,12 +149,31 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
         {messages.map((m) => (
           <div
             key={m.id}
-            className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}`}
+            className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}${m.r2_key ? " has-audio" : ""}`}
           >
             {!!m.as_admin && <span className="support-who">Todo Log support</span>}
-            <p>{m.text}</p>
+            <p
+              className={m.r2_key ? "clickable-text" : undefined}
+              onClick={m.r2_key ? () => toggleAudio(m.id) : undefined}
+            >
+              {m.text}
+            </p>
+            {m.r2_key && openAudio.has(m.id) && (
+              <audio
+                className="support-audio"
+                controls
+                autoPlay
+                src={`/api/support/audio/${m.id}`}
+              />
+            )}
             {m.r2_key && (
-              <audio className="support-audio" controls preload="none" src={`/api/support/audio/${m.id}`} />
+              <button
+                className="msg-play corner"
+                title={openAudio.has(m.id) ? "Hide the player" : "Play the recording"}
+                onClick={() => toggleAudio(m.id)}
+              >
+                <FontAwesomeIcon icon={openAudio.has(m.id) ? faStop : faPlay} />
+              </button>
             )}
             <span className="support-when">{when(m.created_at)}</span>
           </div>

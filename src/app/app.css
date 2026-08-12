@@ -3442,3 +3442,7 @@ button.back {
   margin: 0.25rem 0;
   display: inline-block;
 }
+
+.support-bubble.has-audio {
+  padding-right: 2rem;
+}
