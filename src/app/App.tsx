@@ -198,7 +198,7 @@ export default function App() {
           <Route path="/logs/:id" element={<LogView {...viewProps} />} />
           <Route path="/sessions" element={<Sessions {...viewProps} />} />
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
-          <Route path="/settings" element={<Settings {...viewProps} />} />
+          <Route path="/settings" element={<Settings {...viewProps} me={me} />} />
           <Route path="/search" element={<SearchResults {...viewProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

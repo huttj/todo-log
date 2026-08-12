@@ -2,7 +2,7 @@
 // model / thinking overrides, regeneration schedules, and agent memory.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Select from "react-select";
-import { api, post } from "../api";
+import { api, post, patch, type Me } from "../api";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push";
@@ -130,7 +130,9 @@ const daysAgoISO = (n: number) => {
 export default function Settings(props: {
   refreshKey: number;
   onFocus: (ctx: CaptureContext | null) => void;
+  me?: Me | null;
 }) {
+  const [tab, setTab] = useState<"settings" | "users">("settings");
   const [cfg, setCfg] = useState<AgentConfig | null>(null);
   const [urows, setUrows] = useState<UsageRow[]>([]);
   const [saved, setSaved] = useState(false);
@@ -307,8 +309,18 @@ export default function Settings(props: {
     </section>
   );
 
+  if (props.me?.is_admin && tab === "users") {
+    return (
+      <div className="tasks settings">
+        <SettingsTabs tab={tab} onTab={setTab} />
+        <UsersPanel />
+      </div>
+    );
+  }
+
   return (
     <div className="tasks settings">
+      {props.me?.is_admin && <SettingsTabs tab={tab} onTab={setTab} />}
       <section>
         <h2>Spend</h2>
         <p className="spend-totals">
@@ -528,6 +540,114 @@ export default function Settings(props: {
 
       {saved && <p className="hint-left">saved</p>}
     </div>
+  );
+}
+
+function SettingsTabs(props: { tab: "settings" | "users"; onTab: (t: "settings" | "users") => void }) {
+  return (
+    <div className="settings-tabs">
+      <button
+        className={props.tab === "settings" ? "on" : ""}
+        onClick={() => props.onTab("settings")}
+      >
+        Settings
+      </button>
+      <button className={props.tab === "users" ? "on" : ""} onClick={() => props.onTab("users")}>
+        Users
+      </button>
+    </div>
+  );
+}
+
+interface AdminUser {
+  id: number;
+  email: string;
+  name: string | null;
+  enabled: number;
+  created_at: number;
+}
+
+interface AdminProspect {
+  id: number;
+  email: string;
+  name: string | null;
+  note: string | null;
+  wants_beta_call: number;
+  created_at: number;
+}
+
+function UsersPanel() {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [prospects, setProspects] = useState<AdminProspect[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = () => {
+    api<{ users: AdminUser[]; prospects: AdminProspect[] }>("/admin/users")
+      .then((r) => {
+        setUsers(r.users);
+        setProspects(r.prospects);
+      })
+      .catch(() => setErr("couldn't load users"));
+  };
+  useEffect(load, []);
+
+  async function toggle(u: AdminUser, enabled: boolean) {
+    setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, enabled: enabled ? 1 : 0 } : x)));
+    try {
+      await patch(`/admin/users/${u.id}`, { enabled });
+    } catch (e) {
+      setErr(String((e as Error).message ?? e));
+      load();
+    }
+  }
+
+  const when = (ts: number) =>
+    new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  return (
+    <>
+      <section>
+        <h2>Users</h2>
+        {users.map((u) => (
+          <div className="user-row" key={u.id}>
+            <div className="user-id">
+              <strong>{u.name ?? u.email}</strong>
+              {u.name && <span className="user-mail">{u.email}</span>}
+            </div>
+            <span className="user-since">since {when(u.created_at)}</span>
+            <label className="user-toggle">
+              <input
+                type="checkbox"
+                checked={!!u.enabled}
+                onChange={(e) => void toggle(u, e.target.checked)}
+              />
+              {u.enabled ? "active" : "off"}
+            </label>
+          </div>
+        ))}
+        {users.length === 0 && <p className="empty">No users yet.</p>}
+      </section>
+
+      <section>
+        <h2>Waitlist</h2>
+        {prospects.map((p) => (
+          <div className="prospect-row" key={p.id}>
+            <div className="user-id">
+              <a href={`mailto:${p.email}`}>{p.email}</a>
+              {p.name && <span className="user-mail">{p.name}</span>}
+              {!!p.wants_beta_call && <span className="sched-chip">wants a call</span>}
+            </div>
+            <span className="user-since">{when(p.created_at)}</span>
+            {p.note && <p className="prospect-note">{p.note}</p>}
+          </div>
+        ))}
+        {prospects.length === 0 && <p className="empty">No signups yet.</p>}
+        <p className="hint-left">
+          Waitlist signups become toggleable users after they sign in with Google.
+        </p>
+      </section>
+      {err && <p className="error">{err}</p>}
+    </>
   );
 }
 

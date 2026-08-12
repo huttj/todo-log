@@ -3251,3 +3251,81 @@ button.back {
     opacity: 0.55;
   }
 }
+
+/* -- admin users tab -- */
+.settings-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.settings-tabs button {
+  border: 1px solid var(--border-3);
+  background: var(--surface);
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--ink-3);
+}
+
+.settings-tabs button.on {
+  background: var(--surface-2);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.user-row,
+.prospect-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.88rem;
+}
+
+.user-id {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.user-mail {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.user-since {
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.user-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--ink-4);
+  cursor: pointer;
+}
+
+.prospect-note {
+  width: 100%;
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  color: var(--ink-5);
+}
+
+.prospect-row a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}

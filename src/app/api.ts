@@ -3,6 +3,7 @@ export interface Me {
   email: string;
   name: string | null;
   enabled: boolean;
+  is_admin?: boolean;
 }
 
 export interface Project {

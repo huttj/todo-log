@@ -28,6 +28,7 @@ import { parseConfig } from "./config";
 import { listMemories, saveMemory, listDismissals, setDismissal, resolvePlannedSlots } from "./db";
 import { saveSubscription, pushToUser } from "./push";
 import { checkinForUser } from "./sweep";
+import { isAdmin } from "./signup";
 import type { Env, EntityType, ProjectRow, TodoRow } from "./types";
 
 export const crud = new Hono<AppContext>();
@@ -408,6 +409,41 @@ crud.post("/push/test", async (c) => {
 crud.post("/checkin/run", async (c) => {
   const result = await checkinForUser(c.env, c.get("user"), now());
   return c.json({ result });
+});
+
+// -- Admin: user management (allowlisted operator only) ---------------------
+
+const requireAdmin = async (
+  c: { env: Env; get: (k: "user") => { email: string } },
+): Promise<boolean> => isAdmin(c.env, c.get("user").email);
+
+crud.get("/admin/users", async (c) => {
+  if (!(await requireAdmin(c))) return c.json({ error: "not found" }, 404);
+  const users = await c.env.DB.prepare(
+    `SELECT id, email, name, enabled, created_at FROM users ORDER BY id`,
+  ).all();
+  const prospects = await c.env.DB.prepare(
+    `SELECT id, email, name, note, wants_beta_call, created_at FROM prospects ORDER BY id DESC`,
+  ).all();
+  return c.json({ users: users.results, prospects: prospects.results });
+});
+
+crud.patch("/admin/users/:id", async (c) => {
+  if (!(await requireAdmin(c))) return c.json({ error: "not found" }, 404);
+  const id = Number(c.req.param("id"));
+  const body = await c.req.json<{ enabled?: boolean }>();
+  if (typeof body.enabled !== "boolean") return c.json({ error: "enabled required" }, 400);
+  const target = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
+    .bind(id)
+    .first<{ id: number; email: string }>();
+  if (!target) return c.json({ error: "not found" }, 404);
+  if (isAdmin(c.env, target.email) && !body.enabled) {
+    return c.json({ error: "can't disable an admin account" }, 400);
+  }
+  await c.env.DB.prepare(`UPDATE users SET enabled = ? WHERE id = ?`)
+    .bind(body.enabled ? 1 : 0, id)
+    .run();
+  return c.json({ ok: true });
 });
 
 // -- Agent memory (the save_memory notes, user-editable) --------------------

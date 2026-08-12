@@ -13,9 +13,18 @@ interface Prospect {
   wantsBetaCall: boolean;
 }
 
+/** Admin = an allowlisted email (the operator). */
+export function isAdmin(env: Env, email: string): boolean {
+  return env.ALLOWLIST_EMAILS.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .includes(email.trim().toLowerCase());
+}
+
 export async function notifyOwnerOfSignup(env: Env, p: Prospect): Promise<void> {
-  const owner = await env.DB.prepare(`SELECT * FROM users WHERE enabled = 1 ORDER BY id LIMIT 1`)
-    .first<UserRow>();
+  // Signups notify ONLY the admin — never other enabled users.
+  const users = await env.DB.prepare(`SELECT * FROM users WHERE enabled = 1 ORDER BY id`)
+    .all<UserRow>();
+  const owner = users.results.find((u) => isAdmin(env, u.email));
   if (!owner) return;
 
   const title = `Beta signup: ${p.email}`;

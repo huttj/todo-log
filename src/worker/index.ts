@@ -6,7 +6,7 @@ import { insertProspect } from "./db";
 import { crud } from "./crud";
 import { capture } from "./capture";
 import { runSweep } from "./sweep";
-import { notifyOwnerOfSignup } from "./signup";
+import { notifyOwnerOfSignup, isAdmin } from "./signup";
 
 const app = new Hono<AppContext>();
 
@@ -17,7 +17,7 @@ app.get("/api/auth/google", authStart);
 app.get("/api/auth/google/callback", authCallback);
 app.get("/api/me", requireUser, (c) => {
   const { id, email, name, enabled } = c.get("user");
-  return c.json({ id, email, name, enabled: !!enabled });
+  return c.json({ id, email, name, enabled: !!enabled, is_admin: isAdmin(c.env, email) });
 });
 app.post("/api/auth/signout", (c) => {
   c.header("set-cookie", "session=; Path=/; Max-Age=0; HttpOnly");
