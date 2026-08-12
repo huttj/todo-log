@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faPlay, faStop } from "@fortawesome/free-solid-svg-icons";
-import { api, type Me } from "../api";
+import { faChevronLeft, faPlay } from "@fortawesome/free-solid-svg-icons";
+import { api, type Me, type SegmentDetail, type TranscriptWord } from "../api";
+import TranscriptPlayer from "../components/TranscriptPlayer";
 import { SUPPORT_SENT_EVENT } from "../SupportDock";
 import type { CaptureContext } from "../Capture";
 
@@ -14,6 +15,7 @@ interface SupportMessage {
   sender_id: number;
   text: string;
   r2_key: string | null;
+  words_json?: string | null;
   as_admin?: number;
   created_at: number;
 }
@@ -93,7 +95,8 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
   const { threadUserId } = props;
   const base = threadUserId != null ? `/support/threads/${threadUserId}` : "/support";
   const [messages, setMessages] = useState<SupportMessage[]>([]);
-  const [openAudio, setOpenAudio] = useState<Set<number>>(new Set());
+  // msgId -> flat word index to start playback from (the shared player).
+  const [openAudio, setOpenAudio] = useState<Map<number, number>>(new Map());
   const endRef = useRef<HTMLDivElement | null>(null);
   const lastIdRef = useRef(0);
 
@@ -120,13 +123,30 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
     };
   }, [load]);
 
-  const toggleAudio = (id: number) =>
+  const openPlayer = (id: number, startIdx = 0) =>
+    setOpenAudio((s) => new Map(s).set(id, startIdx));
+  const closePlayer = (id: number) =>
     setOpenAudio((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const next = new Map(s);
+      next.delete(id);
       return next;
     });
+
+  /** One pseudo-segment per voice note feeds the shared TranscriptPlayer. */
+  const segmentFor = (m: SupportMessage): SegmentDetail => {
+    let words: TranscriptWord[] | null = null;
+    try {
+      words = m.words_json ? (JSON.parse(m.words_json) as TranscriptWord[]) : null;
+    } catch {
+      words = null;
+    }
+    return {
+      id: m.id,
+      transcript: m.text,
+      duration_sec: words?.length ? words[words.length - 1].end : null,
+      words,
+    };
+  };
 
   return (
     <div className="tasks support-page">
@@ -152,27 +172,34 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
             className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}${m.r2_key ? " has-audio" : ""}`}
           >
             {!!m.as_admin && <span className="support-who">Todo Log support</span>}
-            <p
-              className={m.r2_key ? "clickable-text" : undefined}
-              onClick={m.r2_key ? () => toggleAudio(m.id) : undefined}
-            >
-              {m.text}
-            </p>
-            {m.r2_key && openAudio.has(m.id) && (
-              <audio
-                className="support-audio"
-                controls
+            {m.r2_key && openAudio.has(m.id) ? (
+              <TranscriptPlayer
+                minimal
                 autoPlay
-                src={`/api/support/audio/${m.id}`}
+                segments={[segmentFor(m)]}
+                audioUrl={() => `/api/support/audio/${m.id}`}
+                startWordIndex={openAudio.get(m.id)}
+                fallbackText={m.text}
+                onClose={() => closePlayer(m.id)}
               />
+            ) : m.r2_key ? (
+              <p className="clickable-text" title="Tap a word to play from there">
+                {m.text.split(/\s+/).map((w, wi) => (
+                  <span key={wi} onClick={() => openPlayer(m.id, wi)}>
+                    {w}{" "}
+                  </span>
+                ))}
+              </p>
+            ) : (
+              <p>{m.text}</p>
             )}
-            {m.r2_key && (
+            {m.r2_key && !openAudio.has(m.id) && (
               <button
                 className="msg-play corner"
-                title={openAudio.has(m.id) ? "Hide the player" : "Play the recording"}
-                onClick={() => toggleAudio(m.id)}
+                title="Play the recording"
+                onClick={() => openPlayer(m.id, 0)}
               >
-                <FontAwesomeIcon icon={openAudio.has(m.id) ? faStop : faPlay} />
+                <FontAwesomeIcon icon={faPlay} />
               </button>
             )}
             <span className="support-when">{when(m.created_at)}</span>

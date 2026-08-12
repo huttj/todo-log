@@ -15,6 +15,7 @@ export interface SupportMessageRow {
   sender_id: number;
   text: string;
   r2_key: string | null;
+  words_json: string | null;
   as_admin: number;
   created_at: number;
 }
@@ -36,12 +37,13 @@ async function addMessage(
   text: string,
   r2Key: string | null,
   asAdmin: boolean,
+  wordsJson: string | null = null,
 ): Promise<SupportMessageRow> {
   const row = await env.DB.prepare(
-    `INSERT INTO support_messages (user_id, sender_id, text, r2_key, as_admin, created_at)
-     VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
+    `INSERT INTO support_messages (user_id, sender_id, text, r2_key, words_json, as_admin, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`,
   )
-    .bind(threadUserId, sender.id, text, r2Key, asAdmin ? 1 : 0, now())
+    .bind(threadUserId, sender.id, text, r2Key, r2Key ? wordsJson : null, asAdmin ? 1 : 0, now())
     .first<SupportMessageRow>();
 
   const snippet = text.slice(0, 140);
@@ -78,6 +80,15 @@ function ownAudioKey(sender: UserRow, key: unknown): string | null {
   return typeof key === "string" && key.startsWith(`support/tmp/${sender.id}/`) ? key : null;
 }
 
+/** Word timings from the client's transcribe round-trip (bounded, shape-checked). */
+function cleanWords(v: unknown): string | null {
+  if (!Array.isArray(v) || v.length === 0 || v.length > 2000) return null;
+  const words = (v as Record<string, unknown>[])
+    .filter((w) => typeof w.word === "string" && typeof w.start === "number" && typeof w.end === "number")
+    .map((w) => ({ word: w.word, start: w.start, end: w.end }));
+  return words.length ? JSON.stringify(words) : null;
+}
+
 // -- User side ---------------------------------------------------------------
 
 support.get("/support/messages", async (c) => {
@@ -90,12 +101,20 @@ support.get("/support/messages", async (c) => {
 });
 
 support.post("/support/messages", async (c) => {
-  const body = await c.req.json<{ text?: string; r2_key?: string }>();
+  const body = await c.req.json<{ text?: string; r2_key?: string; words?: unknown }>();
   const text = body.text?.trim();
   if (!text) return c.json({ error: "text required" }, 400);
   const user = c.get("user");
   return c.json(
-    await addMessage(c.env, user.id, user, text.slice(0, 4000), ownAudioKey(user, body.r2_key), false),
+    await addMessage(
+      c.env,
+      user.id,
+      user,
+      text.slice(0, 4000),
+      ownAudioKey(user, body.r2_key),
+      false,
+      cleanWords(body.words),
+    ),
   );
 });
 
@@ -107,8 +126,11 @@ support.post("/support/transcribe", async (c) => {
   if (audio.byteLength === 0) return c.json({ error: "empty audio" }, 400);
   if (audio.byteLength > 25 * 1024 * 1024) return c.json({ error: "recording too large" }, 413);
   let text: string;
+  let words: unknown = null;
   try {
-    text = (await transcribe(c.env, audio)).text;
+    const t = await transcribe(c.env, audio);
+    text = t.text;
+    words = t.words;
   } catch {
     return c.json({ error: "transcription failed — try again or type it" }, 502);
   }
@@ -116,7 +138,7 @@ support.post("/support/transcribe", async (c) => {
   await c.env.MEDIA.put(key, audio, {
     httpMetadata: { contentType: c.req.header("content-type") ?? "audio/webm" },
   });
-  return c.json({ text, r2_key: key });
+  return c.json({ text, r2_key: key, words });
 });
 
 // -- Admin side --------------------------------------------------------------
@@ -149,7 +171,7 @@ support.get("/support/threads/:uid/messages", async (c) => {
 
 support.post("/support/threads/:uid/messages", async (c) => {
   if (!adminOnly(c)) return c.json({ error: "not found" }, 404);
-  const body = await c.req.json<{ text?: string; r2_key?: string }>();
+  const body = await c.req.json<{ text?: string; r2_key?: string; words?: unknown }>();
   const text = body.text?.trim();
   if (!text) return c.json({ error: "text required" }, 400);
   const sender = c.get("user");
@@ -161,6 +183,7 @@ support.post("/support/threads/:uid/messages", async (c) => {
       text.slice(0, 4000),
       ownAudioKey(sender, body.r2_key),
       true,
+      cleanWords(body.words),
     ),
   );
 });

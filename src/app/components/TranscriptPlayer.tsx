@@ -17,6 +17,10 @@ export default function TranscriptPlayer(props: {
   minimal?: boolean;
   /** Flat word index (across segments) to start playback from. */
   startWordIndex?: number;
+  /** Pre-supplied segments (skips fetching) — e.g. support voice notes. */
+  segments?: SegmentDetail[];
+  /** Audio URL per segment id (defaults to the capture pipeline's). */
+  audioUrl?: (segId: number) => string;
   /** Shown while segments load, so the text never blinks out. */
   fallbackText?: string;
   onClose?: () => void;
@@ -39,9 +43,20 @@ export default function TranscriptPlayer(props: {
   const total = useMemo(() => (segs ?? []).reduce((acc, s) => acc + segDuration(s), 0), [segs]);
   const baseOf = (idx: number) => (segs ?? []).slice(0, idx).reduce((acc, s) => acc + segDuration(s), 0);
 
+  const urlFor = (segId: number) => props.audioUrl?.(segId) ?? `/api/audio/${segId}`;
+
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      if (props.segments) {
+        playersRef.current = props.segments.map((s) => {
+          const a = new Audio(urlFor(s.id));
+          a.preload = "auto";
+          return a;
+        });
+        setSegs(props.segments);
+        return;
+      }
       let list: { id: number }[] = [];
       if (props.logId != null) {
         list = (await api<LogTranscript>(`/logs/${props.logId}/transcript`)).segments;
@@ -51,7 +66,7 @@ export default function TranscriptPlayer(props: {
       const details = await Promise.all(list.map((s) => api<SegmentDetail>(`/segments/${s.id}`)));
       if (!alive) return;
       playersRef.current = details.map((s) => {
-        const a = new Audio(`/api/audio/${s.id}`);
+        const a = new Audio(urlFor(s.id));
         a.preload = "auto";
         return a;
       });
@@ -132,7 +147,7 @@ export default function TranscriptPlayer(props: {
       // segment's start — that overlap is what kills the audible gap.
       if (!opts.overlapPrev) prev.pause();
     }
-    const audio = playersRef.current[segIdx] ?? new Audio(`/api/audio/${segs[segIdx].id}`);
+    const audio = playersRef.current[segIdx] ?? new Audio(urlFor(segs[segIdx].id));
     audioRef.current = audio;
     audio.playbackRate = speedRef.current;
     audio.currentTime = at;

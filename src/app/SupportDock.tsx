@@ -20,6 +20,7 @@ export default function SupportDock(props: {
   const [busy, setBusy] = useState<"send" | "voice" | null>(null);
   /** Parked audio from the last recording — attached when Send is hit. */
   const [pendingAudio, setPendingAudio] = useState<string | null>(null);
+  const pendingWordsRef = useRef<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
@@ -41,9 +42,14 @@ export default function SupportDock(props: {
     setBusy("send");
     setError(null);
     try {
-      await post(`${base}/messages`, { text, r2_key: pendingAudio ?? undefined });
+      await post(`${base}/messages`, {
+        text,
+        r2_key: pendingAudio ?? undefined,
+        words: pendingAudio ? (pendingWordsRef.current ?? undefined) : undefined,
+      });
       setDraft("");
       setPendingAudio(null);
+      pendingWordsRef.current = null;
       sent();
     } catch (e) {
       setError(String((e as Error).message ?? e));
@@ -81,11 +87,13 @@ export default function SupportDock(props: {
           const data = (await res.json().catch(() => ({}))) as {
             text?: string;
             r2_key?: string;
+            words?: unknown;
             error?: string;
           };
           if (!res.ok) throw new Error(data.error ?? "transcription failed");
           setDraft((d) => (d.trim() ? `${d.trimEnd()} ${data.text ?? ""}` : (data.text ?? "")));
           setPendingAudio(data.r2_key ?? null);
+          pendingWordsRef.current = data.words ?? null;
           draftRef.current?.focus();
         } catch (e) {
           setError(String((e as Error).message ?? e));
