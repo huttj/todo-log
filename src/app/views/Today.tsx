@@ -385,7 +385,13 @@ export default function Today(props: {
   const briefCard = (key: string, heading: string, main: Entry[], more: Entry[], action?: ReactNode) => {
     if (main.length + more.length === 0) return null;
     const shown = main.filter((e) => !dismissed.has(e.k));
-    const hidden = [...main.filter((e) => dismissed.has(e.k)), ...more];
+    // Fold order: agent-deprioritized, then user-hidden, then completed.
+    const all = [...main, ...more];
+    const hidden = [
+      ...more.filter((e) => !dismissed.has(e.k)),
+      ...all.filter((e) => dismissed.has(e.k) && !doneKeys.has(e.k)),
+      ...all.filter((e) => dismissed.has(e.k) && doneKeys.has(e.k)),
+    ];
     const expanded = seeMore.has(key);
     return (
       <div className="briefing brief-card">
