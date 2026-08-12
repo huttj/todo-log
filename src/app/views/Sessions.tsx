@@ -17,6 +17,8 @@ import EventFeed from "../components/EventFeed";
 import TranscriptPlayer from "../components/TranscriptPlayer";
 import Markdown from "../components/Markdown";
 import { fmtCost } from "../fmt";
+import { feedIcon } from "../feedIcons";
+import type { MessagePart } from "../api";
 import { requestTalk } from "../talk";
 import type { CaptureContext } from "../Capture";
 
@@ -344,7 +346,41 @@ export function SessionView(props: {
                 </>
               )}
               {m.role === "assistant" ? (
-                <Markdown text={m.text ?? ""} />
+                (() => {
+                  let parts: MessagePart[] | null = null;
+                  try {
+                    parts = m.parts_json ? (JSON.parse(m.parts_json) as MessagePart[]) : null;
+                  } catch {
+                    parts = null;
+                  }
+                  if (!parts || parts.length === 0) return <Markdown text={m.text ?? ""} />;
+                  return parts.map((pt, pi) =>
+                    pt.t === "text" ? (
+                      pt.text.trim() ? <Markdown key={pi} text={pt.text} /> : null
+                    ) : (
+                      <ul className="feed" key={pi}>
+                        <li className={pt.item.kind === "undone" ? "undone" : ""}>
+                          <FontAwesomeIcon
+                            className="feed-ic"
+                            icon={feedIcon(pt.item.entity_type, pt.item.kind)}
+                          />
+                          {(() => {
+                            const base = { todo: "todos", project: "projects", log: "logs" }[
+                              pt.item.entity_type
+                            ];
+                            return base && pt.item.entity_id > 0 ? (
+                              <Link className="feed-link" to={`/${base}/${pt.item.entity_id}`}>
+                                {pt.item.label}
+                              </Link>
+                            ) : (
+                              <span>{pt.item.label}</span>
+                            );
+                          })()}
+                        </li>
+                      </ul>
+                    ),
+                  );
+                })()
               ) : playerOpen ? null : hasAudio ? (
                 <p className="clickable-text" title="Tap a word to play from there">
                   {(m.text ?? "").split(/\s+/).map((w, wi) => (
@@ -382,7 +418,7 @@ export function SessionView(props: {
                   )}
                 </>
               )}
-              {feed && feed.length > 0 && (
+              {feed && feed.length > 0 && !m.parts_json && (
                 <EventFeed
                   events={feed}
                   todos={todos}

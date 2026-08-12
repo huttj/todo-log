@@ -176,6 +176,8 @@ export interface MessageRow {
   reply_to: number | null;
   /** Assistant only: ask_user questions (JSON), rendered as chips. */
   questions_json: string | null;
+  /** Assistant only: interleaved timeline of text + feed items (JSON). */
+  parts_json: string | null;
   created_at: number;
 }
 

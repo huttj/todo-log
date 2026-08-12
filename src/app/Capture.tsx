@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMicrophone, faStop, faPaperPlane, faPlay, faPause, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import "@fortawesome/fontawesome-svg-core/styles.css";
-import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem } from "./api";
+import { post, api, uploadSegment, type CaptureSession, type Segment, type FeedItem, type MessagePart } from "./api";
 import { requestTalk } from "./talk";
 import Markdown from "./components/Markdown";
 import { fmtCost } from "./fmt";
@@ -36,6 +36,8 @@ interface ChatEntry {
   role: "user" | "assistant";
   text: string;
   thinking?: string;
+  /** Assistant: the interleaved timeline (text + actions in true order). */
+  parts?: MessagePart[];
   feed?: FeedItem[];
   live?: boolean;
   /** Assistant entry whose turn hasn't reached the agent yet (voice note
@@ -149,6 +151,7 @@ export default function Capture(props: {
         thinking?: string | null;
         reply_to?: number | null;
         questions_json?: string | null;
+        parts_json?: string | null;
       }[];
       events?: { id: number; message_id?: number | null; entity_type: string; entity_id: number; kind: string }[];
       audio_message_ids?: number[];
@@ -196,11 +199,25 @@ export default function Capture(props: {
           });
           const replies = byReply.get(m.id) ?? (orphans.length ? [orphans.shift()!] : []);
           for (const a of replies) {
+            let parts: MessagePart[] | undefined;
+            try {
+              parts = a.parts_json ? (JSON.parse(a.parts_json) as MessagePart[]) : undefined;
+            } catch {
+              parts = undefined;
+            }
+            if (!parts || parts.length === 0) {
+              // Legacy messages: prose first, actions at the end.
+              parts = [
+                ...(a.text ? [{ t: "text", text: a.text } as MessagePart] : []),
+                ...feedFor(m.id).map((f) => ({ t: "feed", item: f }) as MessagePart),
+              ];
+            }
             entries.push({
               id: ++entrySeq,
               role: "assistant",
               text: a.text ?? "",
               thinking: a.thinking ?? undefined,
+              parts,
               feed: feedFor(m.id),
               cost: costFor(m.id),
               questions: a.questions_json ? JSON.parse(a.questions_json) : undefined,
@@ -465,6 +482,7 @@ export default function Capture(props: {
         role: "assistant",
         text: "",
         thinking: "",
+        parts: [],
         feed: [],
         live: true,
         pending: true,
@@ -491,7 +509,7 @@ export default function Capture(props: {
     setChat((c) => [
       ...c,
       { id: item.userEntryId, role: "user", text },
-      { id: item.assistantEntryId, role: "assistant", text: "", thinking: "", feed: [], live: true, pending: true },
+      { id: item.assistantEntryId, role: "assistant", text: "", thinking: "", parts: [], feed: [], live: true, pending: true },
     ]);
     queueRef.current.push(item);
     void processQueue();
@@ -572,7 +590,7 @@ export default function Capture(props: {
             | { type: "delta"; text: string }
             | { type: "feed"; item: FeedItem }
             | { type: "questions"; questions: { question: string; suggestions?: string[] }[] }
-            | { type: "done"; reply: string; feed: FeedItem[]; cost_usd?: number }
+            | { type: "done"; reply: string; feed: FeedItem[]; parts?: MessagePart[]; cost_usd?: number }
             | { type: "error"; error: string };
           switch (evt.type) {
             case "text":
@@ -582,12 +600,7 @@ export default function Capture(props: {
               updateEntry(item.assistantEntryId, (e) => ({ ...e, pending: false }));
               break;
             case "iteration":
-              // Text accumulates across iterations (the pre-action answer
-              // must survive the post-action confirmation) — just separate.
-              updateEntry(item.assistantEntryId, (e) => ({
-                ...e,
-                text: e.text ? `${e.text}\n\n` : "",
-              }));
+              // Parts carry the ordering; nothing to reset.
               break;
             case "thinking":
               updateEntry(item.assistantEntryId, (e) => ({
@@ -596,12 +609,22 @@ export default function Capture(props: {
               }));
               break;
             case "delta":
-              updateEntry(item.assistantEntryId, (e) => ({ ...e, text: e.text + evt.text }));
+              updateEntry(item.assistantEntryId, (e) => {
+                const parts = [...(e.parts ?? [])];
+                const last = parts[parts.length - 1];
+                if (last && last.t === "text") {
+                  parts[parts.length - 1] = { t: "text", text: last.text + evt.text };
+                } else {
+                  parts.push({ t: "text", text: evt.text });
+                }
+                return { ...e, parts };
+              });
               break;
             case "feed":
               updateEntry(item.assistantEntryId, (e) => ({
                 ...e,
                 feed: [...(e.feed ?? []), evt.item],
+                parts: [...(e.parts ?? []), { t: "feed", item: evt.item }],
               }));
               break;
             case "questions":
@@ -615,6 +638,7 @@ export default function Capture(props: {
                 ...e,
                 text: evt.reply,
                 feed: evt.feed,
+                parts: evt.parts ?? e.parts,
                 cost: evt.cost_usd,
                 live: false,
               }));
@@ -643,14 +667,18 @@ export default function Capture(props: {
           ...entry,
           live: false,
           pending: false,
-          text: entry.text || "(send failed — restored to the composer below; retry the stuck segment or send again)",
+          parts: entry.parts?.length
+            ? entry.parts
+            : [{ t: "text", text: "(send failed — restored to the composer below; retry the stuck segment or send again)" }],
         }));
       } else {
         updateEntry(item.assistantEntryId, (entry) => ({
           ...entry,
           live: false,
           pending: false,
-          text: entry.text || "(send failed — the audio is saved server-side)",
+          parts: entry.parts?.length
+            ? entry.parts
+            : [{ t: "text", text: "(send failed — the audio is saved server-side)" }],
         }));
       }
     }
@@ -663,6 +691,11 @@ export default function Capture(props: {
         c.map((entry) => ({
           ...entry,
           feed: entry.feed?.map((f) => (f.event_id === eventId ? { ...f, kind: "undone" } : f)),
+          parts: entry.parts?.map((pt) =>
+            pt.t === "feed" && pt.item.event_id === eventId
+              ? { ...pt, item: { ...pt.item, kind: "undone" } }
+              : pt,
+          ),
         })),
       );
       props.onChanged();
@@ -672,12 +705,14 @@ export default function Capture(props: {
   }
 
   /** Briefing updates aren't audit events — undo swaps the stored briefing. */
-  async function undoBriefingItem(entryId: number, feedIndex: number) {
+  async function undoBriefingItem(entryId: number, partIndex: number) {
     try {
       await post("/briefing/undo");
       updateEntry(entryId, (e) => ({
         ...e,
-        feed: e.feed?.map((f, i) => (i === feedIndex ? { ...f, kind: "undone" } : f)),
+        parts: e.parts?.map((pt, i) =>
+          i === partIndex && pt.t === "feed" ? { ...pt, item: { ...pt.item, kind: "undone" } } : pt,
+        ),
       }));
       props.onChanged();
     } catch (e) {
@@ -867,29 +902,65 @@ export default function Capture(props: {
                     {entry.showThinking && <p className="thinking expanded">{entry.thinking}</p>}
                   </>
                 )}
-                {entry.text && !playerOpen ? (
-                  entry.role === "assistant" ? (
-                    <Markdown text={entry.text} />
-                  ) : (
-                    entry.hasAudio && entry.msgId && !entry.transcribing ? (
-                      <p className="clickable-text" title="Tap a word to play from there">
-                        {entry.text.split(/\s+/).map((w, wi) => (
-                          <span
-                            key={wi}
-                            onClick={() =>
-                              updateEntry(entry.id, (e) => ({ ...e, showPlayer: true, playerStart: wi }))
-                            }
-                          >
-                            {w}{" "}
-                          </span>
-                        ))}
-                      </p>
+                {entry.role === "assistant" &&
+                  (entry.parts ?? []).map((pt, pi) =>
+                    pt.t === "text" ? (
+                      pt.text.trim() ? <Markdown key={pi} text={pt.text} /> : null
                     ) : (
-                      <p>{entry.text}</p>
-                    )
+                      <ul className="feed" key={pi}>
+                        {(() => {
+                          const f = pt.item;
+                          const base = { todo: "todos", project: "projects", log: "logs" }[f.entity_type];
+                          return (
+                            <li className={f.kind === "undone" ? "undone" : ""}>
+                              <FontAwesomeIcon className="feed-ic" icon={feedIcon(f.entity_type, f.kind)} />
+                              {base && f.entity_id > 0 ? (
+                                <Link className="feed-link" to={`/${base}/${f.entity_id}`}>
+                                  {f.label}
+                                </Link>
+                              ) : (
+                                <span>{f.label}</span>
+                              )}
+                              {f.kind !== "undone" &&
+                                !entry.live &&
+                                (f.event_id !== 0 || f.kind === "briefing_updated") && (
+                                  <button
+                                    onClick={() =>
+                                      f.kind === "briefing_updated"
+                                        ? undoBriefingItem(entry.id, pi)
+                                        : undo(f.event_id)
+                                    }
+                                  >
+                                    undo
+                                  </button>
+                                )}
+                            </li>
+                          );
+                        })()}
+                      </ul>
+                    ),
+                  )}
+                {entry.role === "assistant" &&
+                  entry.live &&
+                  (entry.parts?.length ?? 0) === 0 &&
+                  !entry.thinking && <TypingDots />}
+                {entry.role === "user" && entry.text && !playerOpen ? (
+                  entry.hasAudio && entry.msgId && !entry.transcribing ? (
+                    <p className="clickable-text" title="Tap a word to play from there">
+                      {entry.text.split(/\s+/).map((w, wi) => (
+                        <span
+                          key={wi}
+                          onClick={() =>
+                            updateEntry(entry.id, (e) => ({ ...e, showPlayer: true, playerStart: wi }))
+                          }
+                        >
+                          {w}{" "}
+                        </span>
+                      ))}
+                    </p>
+                  ) : (
+                    <p>{entry.text}</p>
                   )
-                ) : entry.live ? (
-                  <TypingDots />
                 ) : null}
                 {entry.role === "assistant" && entry.questions && entry.questions.length > 0 && (
                   <div className="q-block">
@@ -949,55 +1020,6 @@ export default function Capture(props: {
                       </button>
                     )}
                   </>
-                )}
-                {entry.feed && entry.feed.length > 0 && (
-                  <ul className="feed">
-                    {(entry.feed.length > 5 && !entry.showFeed
-                      ? entry.feed.slice(0, 4)
-                      : entry.feed
-                    ).map((f, fi) => {
-                      const base = { todo: "todos", project: "projects", log: "logs" }[f.entity_type];
-                      return (
-                      <li key={`${f.event_id}-${fi}`} className={f.kind === "undone" ? "undone" : ""}>
-                        <FontAwesomeIcon className="feed-ic" icon={feedIcon(f.entity_type, f.kind)} />
-                        {base && f.entity_id > 0 ? (
-                          <Link className="feed-link" to={`/${base}/${f.entity_id}`}>
-                            {f.label}
-                          </Link>
-                        ) : (
-                          <span>{f.label}</span>
-                        )}
-                        {f.kind !== "undone" &&
-                          !entry.live &&
-                          (f.event_id !== 0 || f.kind === "briefing_updated") && (
-                            <button
-                              onClick={() =>
-                                f.kind === "briefing_updated"
-                                  ? undoBriefingItem(entry.id, fi)
-                                  : undo(f.event_id)
-                              }
-                            >
-                              undo
-                            </button>
-                          )}
-                      </li>
-                      );
-                    })}
-                    {entry.feed.length > 5 && (
-                      <li className="feed-toggle">
-                        <button
-                          className="link"
-                          onClick={() =>
-                            updateEntry(entry.id, (e) => ({ ...e, showFeed: !e.showFeed }))
-                          }
-                        >
-                          {entry.showFeed
-                            ? "show fewer"
-                            : `+${entry.feed.length - 4} more changes`}
-                        </button>
-                      </li>
-                    )}
-                  </ul>
                 )}
               </div>
             );

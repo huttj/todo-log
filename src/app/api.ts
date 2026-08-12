@@ -155,6 +155,7 @@ export interface Message {
   thinking?: string | null;
   reply_to?: number | null;
   questions_json?: string | null;
+  parts_json?: string | null;
 }
 
 export interface Segment {
@@ -163,6 +164,8 @@ export interface Segment {
   transcript: string | null;
   duration_sec: number | null;
 }
+
+export type MessagePart = { t: "text"; text: string } | { t: "feed"; item: FeedItem };
 
 export interface FeedItem {
   event_id: number;

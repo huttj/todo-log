@@ -297,9 +297,16 @@ capture.post("/messages/:id/send", async (c) => {
           thinking: result.thinking || null,
           reply_to: message.id,
           questions_json: result.questions.length ? JSON.stringify(result.questions) : null,
+          parts_json: JSON.stringify(result.parts),
           created_at: now(),
         });
-        await emit({ type: "done", reply: result.reply, feed: result.feed, cost_usd: result.costUsd });
+        await emit({
+          type: "done",
+          reply: result.reply,
+          feed: result.feed,
+          parts: result.parts,
+          cost_usd: result.costUsd,
+        });
         await writer.close().catch(() => {});
       } catch (err) {
         await emit({ type: "error", error: err instanceof Error ? err.message : String(err) });

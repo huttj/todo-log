@@ -419,12 +419,17 @@ export interface AskedQuestion {
   suggestions: string[];
 }
 
+/** One step of the turn's timeline: prose or a change-feed item, in true
+ * chronological order (so actions sit between the text around them). */
+export type TurnPart = { t: "text"; text: string } | { t: "feed"; item: ChangeFeedItem };
+
 interface TurnState {
   env: Env;
   user: UserRow;
   session: SessionRow;
   messageId: number;
   feed: ChangeFeedItem[];
+  parts: TurnPart[];
   createdLogIds: number[];
   questions: AskedQuestion[];
   onEvent?: (e: TurnEvent) => void;
@@ -457,6 +462,7 @@ async function feedEvent(
   });
   const item: ChangeFeedItem = { event_id: e.id, entity_type: entityType, entity_id: entityId, kind, label };
   s.feed.push(item);
+  s.parts.push({ t: "feed", item });
   s.onEvent?.({ type: "feed", item });
 }
 
@@ -756,6 +762,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         label: "Updated today's briefing",
       };
       s.feed.push(item);
+      s.parts.push({ t: "feed", item });
       s.onEvent?.({ type: "feed", item });
       return "briefing updated";
     }
@@ -1023,6 +1030,8 @@ async function describeContextEntity(env: Env, session: SessionRow, userId: numb
 export interface TurnResult {
   reply: string;
   feed: ChangeFeedItem[];
+  /** Interleaved timeline (text and feed items in order). */
+  parts: TurnPart[];
   /** Accumulated (summarized) thinking across all iterations, for replay. */
   thinking: string;
   questions: AskedQuestion[];
@@ -1128,6 +1137,7 @@ export async function runTurn(
     session,
     messageId,
     feed: [],
+    parts: [],
     createdLogIds: [],
     questions: [],
     onEvent,
@@ -1174,7 +1184,10 @@ export async function runTurn(
       .map((b) => b.text)
       .join("\n")
       .trim();
-    if (text) reply = reply ? `${reply}\n\n${text}` : text;
+    if (text) {
+      reply = reply ? `${reply}\n\n${text}` : text;
+      state.parts.push({ t: "text", text });
+    }
 
     if (response.stop_reason !== "tool_use" || toolUses.length === 0) break;
 
@@ -1216,9 +1229,12 @@ export async function runTurn(
     usage,
   });
 
+  if (state.parts.length === 0) state.parts.push({ t: "text", text: reply || "Noted." });
+
   return {
     reply: reply || "Noted.",
     feed: state.feed,
+    parts: state.parts,
     thinking: thinking.trim(),
     questions: state.questions,
     costUsd: computeCost(model, usage),
