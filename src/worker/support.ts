@@ -93,7 +93,9 @@ function cleanWords(v: unknown): string | null {
 
 support.get("/support/messages", async (c) => {
   const r = await c.env.DB.prepare(
-    `SELECT * FROM support_messages WHERE user_id = ? ORDER BY id`,
+    `SELECT m.*, u.name AS sender_name, u.email AS sender_email
+     FROM support_messages m JOIN users u ON u.id = m.sender_id
+     WHERE m.user_id = ? ORDER BY m.id`,
   )
     .bind(c.get("user").id)
     .all<SupportMessageRow>();
@@ -162,7 +164,9 @@ support.get("/support/threads", async (c) => {
 support.get("/support/threads/:uid/messages", async (c) => {
   if (!adminOnly(c)) return c.json({ error: "not found" }, 404);
   const r = await c.env.DB.prepare(
-    `SELECT * FROM support_messages WHERE user_id = ? ORDER BY id`,
+    `SELECT m.*, u.name AS sender_name, u.email AS sender_email
+     FROM support_messages m JOIN users u ON u.id = m.sender_id
+     WHERE m.user_id = ? ORDER BY m.id`,
   )
     .bind(Number(c.req.param("uid")))
     .all<SupportMessageRow>();

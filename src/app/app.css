@@ -3446,3 +3446,8 @@ button.back {
 .support-bubble.has-audio {
   padding-right: 2rem;
 }
+
+.support-who.user-who {
+  color: var(--inverse-ink);
+  opacity: 0.75;
+}

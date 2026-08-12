@@ -17,6 +17,8 @@ interface SupportMessage {
   r2_key: string | null;
   words_json?: string | null;
   as_admin?: number;
+  sender_name?: string | null;
+  sender_email?: string | null;
   created_at: number;
 }
 
@@ -171,7 +173,14 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
             key={m.id}
             className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}${m.r2_key ? " has-audio" : ""}`}
           >
-            {!!m.as_admin && <span className="support-who">Todo Log support</span>}
+            {!!m.as_admin && (
+              <span className="support-who">
+                {m.sender_name ? `${m.sender_name} · Todo Log support` : "Todo Log support"}
+              </span>
+            )}
+            {!m.as_admin && threadUserId != null && (
+              <span className="support-who user-who">{m.sender_name ?? m.sender_email}</span>
+            )}
             {m.r2_key && openAudio.has(m.id) ? (
               <TranscriptPlayer
                 minimal
