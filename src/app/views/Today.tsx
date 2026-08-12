@@ -296,8 +296,13 @@ export default function Today(props: {
 
   const todoTitle = useMemo(() => new Map(todos.map((t) => [t.id, t.title])), [todos]);
   const projectName = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
+  // A todo already visible as a schedule row (today's or slipped) doesn't
+  // repeat under In flight.
   const inFlight = todos.filter(
-    (t) => t.status === "in_progress" && !scheduled.some((s) => s.id === t.id),
+    (t) =>
+      t.status === "in_progress" &&
+      !scheduled.some((s) => s.id === t.id) &&
+      !overdue.some((s) => s.id === t.id),
   );
 
   const scheduledRow = (s: ScheduleEntry, showDay = false, restore = false) => (

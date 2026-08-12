@@ -202,7 +202,7 @@ export async function checkinForUser(
   ]);
   const open = schedule.filter((s) => s.slot_status === "planned");
   const inFlight = todos.filter(
-    (td) => (td.status === "in_progress" || td.status === "scheduled") && !open.some((o) => o.id === td.id),
+    (td) => td.status === "in_progress" && !open.some((o) => o.id === td.id),
   );
   if (open.length === 0 && inFlight.length === 0) return "nothing-open";
 

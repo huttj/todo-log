@@ -6,7 +6,7 @@ import LogCard from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
 import { navHistory } from "../nav";
 
-const TODO_STATUSES = ["idea", "scheduled", "in_progress", "done", "abandoned"] as const;
+const TODO_STATUSES = ["idea", "in_progress", "done", "abandoned"] as const;
 
 export default function TodoView(props: {
   refreshKey: number;

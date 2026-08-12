@@ -213,7 +213,7 @@ const TOOLS: Anthropic.Tool[] = [
         scheduled_start: WHEN,
         status: {
           type: ["string", "null"],
-          enum: ["idea", "scheduled", "in_progress", "done", "abandoned", null],
+          enum: ["idea", "in_progress", "done", "abandoned", null],
         },
       },
       required: ["title"],
@@ -233,7 +233,7 @@ const TOOLS: Anthropic.Tool[] = [
         project_id: ID,
         status: {
           type: ["string", "null"],
-          enum: ["idea", "scheduled", "in_progress", "done", "abandoned", null],
+          enum: ["idea", "in_progress", "done", "abandoned", null],
         },
       },
       required: ["todo_id"],
@@ -242,7 +242,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "schedule_todo",
     description:
-      "Add a schedule slot to a todo — the same todo can be scheduled multiple times (e.g. practice Tue AND Thu). `scheduled_date` (YYYY-MM-DD) for day-level (\"any time\" — never invent an hour), `scheduled_start` (ISO with offset) when the user gives a time. Sets the todo's status to scheduled if it was just an idea.",
+      "Add a schedule slot to a todo — the same todo can be scheduled multiple times (e.g. practice Tue AND Thu). `scheduled_date` (YYYY-MM-DD) for day-level (\"any time\" — never invent an hour), `scheduled_start` (ISO with offset) when the user gives a time. Scheduling never changes the todo's status — work state and time commitments are separate.",
     input_schema: {
       type: "object",
       properties: {
@@ -529,7 +529,10 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         title: str(input.title) ?? "Untitled",
         outcome: str(input.outcome),
         details: str(input.details),
-        status: str(input.status) ?? (scheduledStart ? "scheduled" : "idea"),
+        status: (() => {
+          const st = str(input.status);
+          return st && st !== "scheduled" ? st : "idea";
+        })(),
         created_at: t,
         updated_at: t,
       });
@@ -545,6 +548,10 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       return JSON.stringify({ todo_id: row.id });
     }
     case "update_todo": {
+      // "scheduled" retired as a status — scheduling lives in slots.
+      if ((input as Record<string, unknown>).status === "scheduled") {
+        delete (input as Record<string, unknown>).status;
+      }
       const id = num(input.todo_id);
       const current = id && (await getEntity<TodoRow>(s.env, "todo", s.user.id, id));
       if (!current) return "error: todo not found";
@@ -575,9 +582,6 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const startAt = dayStart ?? parseWhen(input.scheduled_start);
       if (startAt == null) return "error: scheduled_date or scheduled_start required";
       const slot = await createSlot(s.env, s.user.id, todo.id, startAt, !!dayStart);
-      if (todo.status === "idea") {
-        await updateRow(s.env, "todos", s.user.id, todo.id, { status: "scheduled", updated_at: t });
-      }
       const when = `${new Date(startAt * 1000).toLocaleString("en-US", {
         timeZone: tz,
         ...(dayStart ? { weekday: "short", month: "short", day: "numeric" } : {}),
@@ -879,7 +883,7 @@ How you behave:
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
 - Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND ask via the ask_user tool (with suggested answers when natural options exist); their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
 - Concrete case: if the utterance clearly concerns some project/todo but you can't tell which (check the snapshot, try search), file the log UNATTACHED and ask via ask_user with the candidates as suggestions. When the user answers, re-file it with update_log.
-- When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — schedule the todo: scheduled_date for a day without a time (day-level, "any time" — never invent an hour), scheduled_start only when they give an actual time. Status becomes scheduled. Intentions with no time cue stay unscheduled todos.
+- When the user states an intention WITH a time cue — "I want to look into that today", "I'll call them tomorrow", "this weekend" — schedule the todo: scheduled_date for a day without a time (day-level, "any time" — never invent an hour), scheduled_start only when they give an actual time. Scheduling does NOT change status — a scheduled idea stays an idea with a slot; something in progress stays in progress. Intentions with no time cue stay unscheduled todos.
 - When the user reports having DONE something concrete, the log IS the record (occurred_at resolved from time cues). If it corresponds to a todo, mark that todo done; one-off done things need no todo — the log alone is the right artifact, and it shows on the day it happened.
 - LINKAGE: when the turn creates a todo from what the user said, prefer attaching the utterance's log to that todo (create it first so the id exists), unless a different entity is clearly more central.
 - Todo titles are imperative verb phrases ("Walk the dog", "Call the dentist") — never past tense ("Walked the dog") and never gerunds ("Walking the dog"). Whether it happened or is finished lives in status, not in the title's wording.

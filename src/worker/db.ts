@@ -158,7 +158,10 @@ export async function listTodos(
 ): Promise<TodoRow[]> {
   const where = opts.includeClosed ? "" : `AND status NOT IN ('done','abandoned')`;
   const r = await env.DB.prepare(
-    `SELECT * FROM todos WHERE user_id = ? ${where} ORDER BY updated_at DESC LIMIT 200`,
+    `SELECT todos.*,
+       (SELECT MIN(ts.scheduled_start) FROM todo_schedules ts
+        WHERE ts.todo_id = todos.id AND ts.status = 'planned') AS next_planned
+     FROM todos WHERE user_id = ? ${where} ORDER BY updated_at DESC LIMIT 200`,
   )
     .bind(userId)
     .all<TodoRow>();
@@ -226,7 +229,10 @@ export async function otherPlannedSlots(
 
 export async function listTodosForProject(env: Env, userId: number, projectId: number): Promise<TodoRow[]> {
   const r = await env.DB.prepare(
-    `SELECT * FROM todos WHERE user_id = ? AND project_id = ? ORDER BY updated_at DESC LIMIT 100`,
+    `SELECT todos.*,
+       (SELECT MIN(ts.scheduled_start) FROM todo_schedules ts
+        WHERE ts.todo_id = todos.id AND ts.status = 'planned') AS next_planned
+     FROM todos WHERE user_id = ? AND project_id = ? ORDER BY updated_at DESC LIMIT 100`,
   )
     .bind(userId, projectId)
     .all<TodoRow>();

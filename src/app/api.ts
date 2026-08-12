@@ -20,9 +20,11 @@ export interface Todo {
   title: string;
   outcome: string | null;
   details: string | null;
-  status: "idea" | "scheduled" | "in_progress" | "done" | "abandoned";
+  status: "idea" | "in_progress" | "done" | "abandoned";
   scheduled_start: number | null;
   all_day: number;
+  /** Earliest planned slot (epoch), when the todo is scheduled. Derived. */
+  next_planned?: number | null;
   updated_at: number;
 }
 

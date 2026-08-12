@@ -20,7 +20,7 @@ export interface TranscriptWord {
   end: number;
 }
 
-export type TodoStatus = "idea" | "scheduled" | "in_progress" | "done" | "abandoned";
+export type TodoStatus = "idea" | "in_progress" | "done" | "abandoned";
 export type ActionStatus = "scheduled" | "in_progress" | "done" | "skipped" | "canceled";
 export type ProjectKind = "bounded" | "ongoing";
 export type LogKind = "log" | "reflection";

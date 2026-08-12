@@ -2898,3 +2898,14 @@ button.back {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* Derived "has a planned slot" chip on todo rows. */
+.sched-chip {
+  font-size: 0.68rem;
+  color: #4a6135;
+  background: #eef2e8;
+  border-radius: 0.5rem;
+  padding: 0.08rem 0.45rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
