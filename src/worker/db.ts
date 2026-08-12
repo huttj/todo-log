@@ -249,6 +249,21 @@ export async function actionsForTodo(env: Env, userId: number, todoId: number): 
 }
 
 /** Text search across projects, todos, and logs for the agent's search tool. */
+/** Marking a todo done/abandoned resolves its still-planned slots so they
+ * never linger in Slipped. */
+export async function resolvePlannedSlots(
+  env: Env,
+  userId: number,
+  todoId: number,
+  to: "done" | "skipped",
+): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE todo_schedules SET status = ? WHERE user_id = ? AND todo_id = ? AND status = 'planned'`,
+  )
+    .bind(to, userId, todoId)
+    .run();
+}
+
 export async function searchAll(
   env: Env,
   userId: number,
@@ -257,7 +272,7 @@ export async function searchAll(
   const like = `%${query.replaceAll("%", "").replaceAll("_", "")}%`;
   const [projects, todos, logs] = await Promise.all([
     env.DB.prepare(
-      `SELECT * FROM projects WHERE user_id = ? AND (name LIKE ? OR description LIKE ?) LIMIT 10`,
+      `SELECT * FROM projects WHERE user_id = ? AND (name LIKE ? OR description LIKE ?) ORDER BY updated_at DESC LIMIT 10`,
     )
       .bind(userId, like, like)
       .all<ProjectRow>(),

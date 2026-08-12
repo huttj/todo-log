@@ -40,12 +40,16 @@ export default function LogCard(props: {
     hour: "numeric",
     minute: "2-digit",
   });
+  const date = new Date(log.occurred_at * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 
   return (
     <div className={`log-card ${log.kind}`} onClick={props.onClick}>
       <div className="log-head">
         <Link className="time" to={`/logs/${log.id}`} onClick={(e) => e.stopPropagation()}>
-          {time}
+          <span className="date">{date}</span> {time}
         </Link>
         {(log.cost_usd ?? 0) > 0 && (
           <span className="log-cost" title="Cost of the agent turn behind this log">

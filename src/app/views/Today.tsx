@@ -152,7 +152,13 @@ export default function Today(props: {
         })
         .catch(() => {});
       api<ScheduleEntry[]>(`/schedule?from=${dayStart - 7 * DAY}&to=${dayStart}`)
-        .then((past) => setOverdue(past.filter((s) => s.slot_status === "planned")))
+        .then((past) =>
+          setOverdue(
+            past.filter(
+              (s) => s.slot_status === "planned" && s.status !== "done" && s.status !== "abandoned",
+            ),
+          ),
+        )
         .catch(() => {});
     }
     api<ScheduleEntry[]>(`/schedule?from=${dayStart}&to=${dayStart + DAY}`)

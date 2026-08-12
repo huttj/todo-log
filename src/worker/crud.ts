@@ -25,7 +25,7 @@ import {
 } from "./db";
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
-import { listMemories, saveMemory, listDismissals, setDismissal } from "./db";
+import { listMemories, saveMemory, listDismissals, setDismissal, resolvePlannedSlots } from "./db";
 import { saveSubscription, pushToUser } from "./push";
 import { checkinForUser } from "./sweep";
 import type { Env, EntityType, ProjectRow, TodoRow } from "./types";
@@ -488,6 +488,11 @@ crud.patch("/:table/:id", async (c) => {
   if (type !== "log") cols.updated_at = now();
 
   const row = await updateRow<Record<string, unknown>>(c.env, ENTITY_TABLES[type], user.id, id, cols);
+  if (type === "todo" && cols.status === "done") {
+    await resolvePlannedSlots(c.env, user.id, id, "done");
+  } else if (type === "todo" && cols.status === "abandoned") {
+    await resolvePlannedSlots(c.env, user.id, id, "skipped");
+  }
   await insertEvent(c.env, {
     userId: user.id,
     entityType: type,

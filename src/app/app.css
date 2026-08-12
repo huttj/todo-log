@@ -94,8 +94,11 @@ body {
 @media (pointer: coarse) {
   input,
   select,
-  textarea {
-    font-size: 16px;
+  textarea,
+  .search-bar input,
+  .page-search input,
+  .rs__input {
+    font-size: 16px !important;
   }
 }
 
@@ -3100,4 +3103,37 @@ button.back {
   font-size: 0.8rem;
   color: var(--ink-5);
   margin: 0.15rem 0 0.4rem;
+}
+
+/* App header sticks; page content scrolls beneath it. */
+.app > header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bg);
+  padding-top: calc(0.4rem + env(safe-area-inset-top));
+  padding-bottom: 0.4rem;
+}
+
+/* Search page: clear button inside the box. */
+.page-search {
+  position: relative;
+}
+
+.page-search .clear-q {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0.3rem;
+}
+
+/* Log card timestamps carry the date. */
+.log-head .date {
+  font-size: 0.72rem;
+  color: var(--faint);
 }

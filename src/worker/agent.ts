@@ -29,6 +29,7 @@ import {
   listTodosForProject,
   listSchedule,
   createSlot,
+  resolvePlannedSlots,
   getSlot,
   listLogs,
   searchAll,
@@ -565,6 +566,8 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (Object.keys(cols).length === 0) return "no changes";
       cols.updated_at = t;
       await updateRow(s.env, "todos", s.user.id, current.id, cols);
+      if (cols.status === "done") await resolvePlannedSlots(s.env, s.user.id, current.id, "done");
+      else if (cols.status === "abandoned") await resolvePlannedSlots(s.env, s.user.id, current.id, "skipped");
       const kind = "status" in cols ? "status_changed" : "updated";
       const label =
         "status" in cols

@@ -2,6 +2,8 @@
 // project cards, todo rows, and complete log cards, with matches highlighted.
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { api, type Project, type Todo, type Log } from "../api";
 import LogCard from "../components/LogCard";
 import { highlight } from "../highlight";
@@ -62,6 +64,19 @@ export default function SearchResults(props: {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {query && (
+          <button
+            type="button"
+            className="clear-q"
+            title="Clear"
+            onClick={() => {
+              setQuery("");
+              setParams({});
+            }}
+          >
+            <FontAwesomeIcon icon={faXmark} />
+          </button>
+        )}
       </form>
 
       {q.length >= 2 && results && (
