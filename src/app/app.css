@@ -3209,3 +3209,27 @@ button.back {
 .mock-brief .mock-dim {
   color: var(--ink-5);
 }
+
+/* Interleaved bubble parts: even rhythm between prose and action rows. */
+.bubble .feed {
+  padding: 0;
+  margin: 0.45rem 0;
+}
+
+.bubble .feed + .feed {
+  margin-top: -0.2rem; /* consecutive actions read as one list */
+}
+
+.bubble .md {
+  margin: 0.45rem 0;
+}
+
+.bubble > .feed:first-child,
+.bubble > .md:first-child {
+  margin-top: 0.1rem;
+}
+
+.bubble > .feed:last-of-type:last-child,
+.bubble > .md:last-child {
+  margin-bottom: 0.1rem;
+}
