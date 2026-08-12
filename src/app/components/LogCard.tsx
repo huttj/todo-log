@@ -9,6 +9,7 @@ import { api, type Log, type Quote, type SegmentDetail, type TranscriptWord } fr
 import { requestTalk } from "../talk";
 import TranscriptPlayer from "./TranscriptPlayer";
 import { getSpeed, setGlobalSpeed, nextSpeed } from "../audio";
+import { highlight } from "../highlight";
 import { fmtCost } from "../fmt";
 
 export interface LogAttachment {
@@ -20,6 +21,8 @@ export default function LogCard(props: {
   log: Log;
   attachment?: LogAttachment | null;
   onClick?: () => void;
+  /** Search query — matches in title/summary get <mark>ed. */
+  highlightQuery?: string;
 }) {
   const { log } = props;
   const [showQuotes, setShowQuotes] = useState(false);
@@ -74,7 +77,7 @@ export default function LogCard(props: {
           )}
         </div>
       )}
-      {log.title && <p className="log-title">{log.title}</p>}
+      {log.title && <p className="log-title">{highlight(log.title, props.highlightQuery)}</p>}
       <p
         className="log-summary"
         onClick={(e) => {
@@ -82,7 +85,7 @@ export default function LogCard(props: {
           navigate(`/logs/${log.id}`);
         }}
       >
-        {log.summary}
+        {highlight(log.summary, props.highlightQuery)}
       </p>
       {showFull && <TranscriptPlayer logId={log.id} emptyNote="No audio for this log (typed input)." />}
       {(quotes.length > 0 || log.message_id) && (

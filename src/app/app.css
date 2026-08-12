@@ -2987,6 +2987,12 @@ button.back {
   margin: 0.3rem 0.2rem 0;
 }
 
+.page-search {
+  border: none;
+  background: none;
+  padding: 0;
+}
+
 .page-search input {
   width: 100%;
   font: inherit;
@@ -3070,4 +3076,28 @@ button.back {
 
 .back svg {
   font-size: 0.7em;
+}
+
+/* Search matches: same yellow as playback highlight, readable both themes. */
+.search-page mark {
+  background: #f5d97b;
+  color: rgb(26, 26, 26);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.search-todo {
+  cursor: pointer;
+  border-bottom: 1px solid var(--surface-3);
+}
+
+.search-todo .kind {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.search-detail {
+  font-size: 0.8rem;
+  color: var(--ink-5);
+  margin: 0.15rem 0 0.4rem;
 }

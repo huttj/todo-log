@@ -267,9 +267,9 @@ export async function searchAll(
       .bind(userId, like, like, like)
       .all<TodoRow>(),
     env.DB.prepare(
-      `SELECT * FROM logs WHERE user_id = ? AND summary LIKE ? ORDER BY occurred_at DESC LIMIT 15`,
+      `SELECT * FROM logs WHERE user_id = ? AND (summary LIKE ? OR title LIKE ?) ORDER BY occurred_at DESC LIMIT 15`,
     )
-      .bind(userId, like)
+      .bind(userId, like, like)
       .all<LogRow>(),
   ]);
   return { projects: projects.results, todos: todos.results, logs: logs.results };
