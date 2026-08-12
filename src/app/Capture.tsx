@@ -89,6 +89,7 @@ export default function Capture(props: {
   const [ctx, setCtx] = useState<CaptureContext | null>(props.context);
   const [sessionStarted, setSessionStarted] = useState(false);
   const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false);
   /** Dock height in px while user-resized; null = default (content-sized). */
   const [dockHeight, setDockHeight] = useState<number | null>(null);
   const [messageId, setMessageId] = useState<number | null>(null);
@@ -343,11 +344,49 @@ export default function Capture(props: {
     return m.id;
   }, [ensureSession]);
 
+  /** iOS kills the mic on screen lock/background. Detect it instead of
+   * pretending to record into a dead track. */
+  const handleMicLost = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (recordingRef.current) {
+      stopSegment();
+      recordingRef.current = false;
+      setRecording(false);
+      setError(
+        "The system cut off the microphone (screen lock or app switch). Recording stopped — everything captured so far is saved. Tap the mic to continue.",
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const streamAlive = (s: MediaStream | null): boolean =>
+    !!s && s.getAudioTracks().some((t) => t.readyState === "live" && !t.muted);
+
   const ensureStream = useCallback(async (): Promise<MediaStream> => {
-    if (streamRef.current) return streamRef.current;
+    if (streamAlive(streamRef.current)) return streamRef.current!;
+    // A cached-but-dead stream must be replaced, not reused.
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    for (const track of stream.getAudioTracks()) {
+      track.onended = handleMicLost;
+    }
     streamRef.current = stream;
     return stream;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Coming back to the app: if we think we're recording but the track died
+  // or muted while locked, surface it immediately.
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      if (recordingRef.current && !streamAlive(streamRef.current)) handleMicLost();
+    };
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const mimeType = () =>
@@ -418,15 +457,18 @@ export default function Capture(props: {
   }, []);
 
   const startRecording = useCallback(() => {
+    recordingRef.current = true;
     setRecording(true);
     startSegment().catch((err) => {
       setError(String(err.message ?? err));
+      recordingRef.current = false;
       setRecording(false);
     });
   }, [startSegment]);
 
   const stopRecording = useCallback(() => {
     stopSegment();
+    recordingRef.current = false;
     setRecording(false);
   }, [stopSegment]);
 
@@ -761,6 +803,7 @@ export default function Capture(props: {
     // Close the dock without losing anything: segments are server-side and the
     // draft stays in localStorage.
     stopSegment();
+    recordingRef.current = false;
     setRecording(false);
     if (sessionRef.current) await post(`/sessions/${sessionRef.current.id}/done`).catch(() => {});
     props.onClose();
@@ -786,7 +829,11 @@ export default function Capture(props: {
     moved: boolean;
   } | null>(null);
   const MIN_DOCK = 190;
-  const maxDock = () => window.innerHeight - 8;
+  const maxDock = () => {
+    const header = document.querySelector(".app > header");
+    const top = header ? header.getBoundingClientRect().bottom + 6 : 8;
+    return window.innerHeight - top;
+  };
 
   const handleDown = (e: React.PointerEvent) => {
     const rect = dockRef.current?.getBoundingClientRect();
