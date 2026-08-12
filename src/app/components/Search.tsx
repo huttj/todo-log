@@ -18,6 +18,9 @@ export default function Search(props: { onClose: () => void }) {
   const [results, setResults] = useState<Results | null>(null);
   const [searching, setSearching] = useState(false);
   const [active, setActive] = useState(0);
+  // Enter opens the arrowed-to hit; without arrowing it opens the full
+  // results page instead.
+  const [arrowed, setArrowed] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const navigate = useNavigate();
@@ -47,6 +50,7 @@ export default function Search(props: { onClose: () => void }) {
 
   useEffect(() => {
     setActive(0);
+    setArrowed(false);
   }, [results]);
 
   useEffect(() => {
@@ -74,13 +78,16 @@ export default function Search(props: { onClose: () => void }) {
       props.onClose();
     } else if (e.key === "ArrowDown" && flat.length > 0) {
       e.preventDefault();
+      setArrowed(true);
       setActive((a) => Math.min(a + 1, flat.length - 1));
     } else if (e.key === "ArrowUp" && flat.length > 0) {
       e.preventDefault();
+      setArrowed(true);
       setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === "Enter" && flat[active]) {
+    } else if (e.key === "Enter") {
       e.preventDefault();
-      go(flat[active]);
+      if (arrowed && flat[active]) go(flat[active]);
+      else if (query.trim().length >= 2) go(`/search?q=${encodeURIComponent(query.trim())}`);
     }
   };
 
@@ -116,6 +123,9 @@ export default function Search(props: { onClose: () => void }) {
           </button>
         </div>
 
+        {query.trim().length >= 2 && (
+          <p className="search-hint">↑↓ to pick · Enter opens it · Enter (no pick) shows all results</p>
+        )}
         {searching && <p className="empty">Searching…</p>}
         {empty && !searching && <p className="empty">Nothing found for “{query.trim()}”.</p>}
 

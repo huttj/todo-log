@@ -1,3 +1,65 @@
+/* -- theme tokens: light by default, .dark on <html> flips them -- */
+:root {
+  --bg: #fafaf8;
+  --surface: #fff;
+  --surface-2: #e8e6e0;
+  --surface-3: #f1efe9;
+  --border: #eceae4;
+  --border-2: #d8d4c8;
+  --border-3: #ccc;
+  --ink: #1a1a1a;
+  --ink-2: #333;
+  --ink-3: #444;
+  --ink-4: #555;
+  --ink-5: #666;
+  --muted: #999;
+  --faint: #b5b2a8;
+  --accent: #4a6da7;
+  --accent-border: #b9c7dd;
+  --danger: #b3261e;
+  --chip-bg: #eef2e8;
+  --chip-ink: #4a6135;
+  --inverse-bg: #1a1a1a;
+  --inverse-ink: #fff;
+  --nudge-bg: #eef2f8;
+  --nudge-border: #d7e0ee;
+  --nudge-ink: #4a5a72;
+  --warn-bg: #faf4e2;
+  --warn-border: #eadfc0;
+  --warn-ink: #7a6a3a;
+}
+
+html.dark {
+  color-scheme: dark;
+  --bg: #151514;
+  --surface: #1f1f1e;
+  --surface-2: #2c2c2a;
+  --surface-3: #262624;
+  --border: #32322f;
+  --border-2: #3c3c38;
+  --border-3: #454541;
+  --ink: #e9e7e2;
+  --ink-2: #d9d7d2;
+  --ink-3: #c9c7c2;
+  --ink-4: #b9b7b2;
+  --ink-5: #a5a39e;
+  --muted: #8b8984;
+  --faint: #6f6d68;
+  --accent: #8aa8d8;
+  --accent-border: #46597a;
+  --danger: #e0736c;
+  --chip-bg: #2a3325;
+  --chip-ink: #a8c48e;
+  --inverse-bg: #323234;
+  --inverse-ink: #f1f0ec;
+  --nudge-bg: #232a34;
+  --nudge-border: #35415a;
+  --nudge-ink: #a9bcd8;
+  --warn-bg: #333020;
+  --warn-border: #4a4430;
+  --warn-ink: #cdbd82;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -16,8 +78,8 @@ button {
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  background: #fafaf8;
-  color: #1a1a1a;
+  background: var(--bg);
+  color: var(--ink);
   overflow-wrap: break-word;
 }
 
@@ -70,7 +132,7 @@ nav a svg {
 }
 
 nav a.active {
-  background: #e8e6e0;
+  background: var(--surface-2);
   font-weight: 600;
 }
 
@@ -111,7 +173,7 @@ nav a.active svg {
 }
 
 .nav-search:hover {
-  background: #e8e6e0;
+  background: var(--surface-2);
   opacity: 1;
 }
 
@@ -127,7 +189,7 @@ nav a.active svg {
 }
 
 .search-panel {
-  background: #fafaf8;
+  background: var(--bg);
   border-radius: 0.9rem;
   width: min(560px, 100%);
   max-height: 75dvh;
@@ -140,10 +202,10 @@ nav a.active svg {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.6rem;
   padding: 0.5rem 0.7rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 .search-bar input {
@@ -155,7 +217,7 @@ nav a.active svg {
 }
 
 .search-icon {
-  color: #999;
+  color: var(--muted);
 }
 
 .search-panel .empty {
@@ -166,7 +228,7 @@ nav a.active svg {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #999;
+  color: var(--muted);
   margin: 0.9rem 0 0.35rem;
 }
 
@@ -186,7 +248,7 @@ nav a.active svg {
 }
 
 .search-hit.active {
-  background: #edece6;
+  background: var(--surface-3);
 }
 
 .search-hit .title {
@@ -217,15 +279,15 @@ nav a.active svg {
   border: none;
   background: none;
   font-size: 0.78rem;
-  color: #888;
+  color: var(--muted);
   text-align: center;
   white-space: nowrap;
 }
 
 /* -- sessions (chat history) -- */
 .session-row {
-  background: #fff;
-  border: 1px solid #eee;
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
   border-radius: 0.6rem;
   padding: 0.65rem 0.85rem;
   margin-bottom: 0.55rem;
@@ -233,7 +295,7 @@ nav a.active svg {
 }
 
 .session-row:hover {
-  border-color: #d5d2c8;
+  border-color: var(--border-2);
 }
 
 .session-head {
@@ -241,7 +303,7 @@ nav a.active svg {
   gap: 0.5rem;
   align-items: center;
   font-size: 0.75rem;
-  color: #999;
+  color: var(--muted);
   margin-bottom: 0.25rem;
 }
 
@@ -265,7 +327,7 @@ nav a.active svg {
 }
 
 .trash {
-  color: #b3261e;
+  color: var(--danger);
   opacity: 0.55;
 }
 
@@ -275,7 +337,7 @@ nav a.active svg {
 
 .session-row .snippet {
   font-size: 0.9rem;
-  color: #444;
+  color: var(--ink-3);
   line-height: 1.4;
 }
 
@@ -312,7 +374,7 @@ nav button {
 }
 
 nav button.active {
-  background: #e8e6e0;
+  background: var(--surface-2);
   font-weight: 600;
 }
 
@@ -337,8 +399,8 @@ footer .talk-hint {
   bottom: 4.6rem;
   left: 50%;
   transform: translateX(-50%);
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   font-size: 0.78rem;
   border-radius: 0.7rem;
   padding: 0.3rem 0.75rem;
@@ -353,8 +415,8 @@ footer .capture {
   border-radius: 2rem;
   padding: 0.9rem 2rem;
   font-size: 1rem;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   touch-action: none;
@@ -376,12 +438,12 @@ footer .capture {
 
 .splash p {
   max-width: 26rem;
-  color: #555;
+  color: var(--ink-4);
 }
 
 .google-btn {
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   text-decoration: none;
   padding: 0.7rem 1.4rem;
   border-radius: 0.5rem;
@@ -392,7 +454,7 @@ footer .capture {
 .waitlist textarea {
   width: min(22rem, 90vw);
   padding: 0.6rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.4rem;
   font: inherit;
 }
@@ -401,27 +463,27 @@ footer .capture {
   padding: 0.6rem 1.4rem;
   border: none;
   border-radius: 0.4rem;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   cursor: pointer;
 }
 
 /* -- shared bits -- */
 .empty {
-  color: #999;
+  color: var(--muted);
   font-size: 0.9rem;
   padding: 0.25rem 0;
 }
 
 .hint {
-  color: #aaa;
+  color: var(--faint);
   font-size: 0.8rem;
   text-align: center;
   padding: 0.5rem 0;
 }
 
 .error {
-  color: #b3261e;
+  color: var(--danger);
   font-size: 0.85rem;
 }
 
@@ -436,7 +498,7 @@ footer .capture {
 button.link {
   border: none;
   background: none;
-  color: #4a6da7;
+  color: var(--accent);
   cursor: pointer;
   font-size: 0.85rem;
   padding: 0;
@@ -444,10 +506,10 @@ button.link {
 
 select {
   font-size: 0.8rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-3);
   border-radius: 0.4rem;
   padding: 0.15rem 0.3rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 /* -- tasks -- */
@@ -460,15 +522,15 @@ select {
 .quick-add input {
   flex: 1;
   padding: 0.5rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.4rem;
   font: inherit;
 }
 
 .quick-add button {
   border: none;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   border-radius: 0.4rem;
   padding: 0 0.9rem;
   cursor: pointer;
@@ -482,7 +544,7 @@ select {
 
 .show-closed {
   font-size: 0.8rem;
-  color: #777;
+  color: var(--ink-5);
   display: flex;
   gap: 0.35rem;
   align-items: center;
@@ -506,19 +568,19 @@ select {
 
 .todo-main:hover .title {
   text-decoration: underline;
-  text-decoration-color: #bbb;
+  text-decoration-color: var(--faint);
   text-underline-offset: 0.2em;
 }
 
 .status-done .todo-main .title,
 .status-abandoned .todo-main .title {
   text-decoration: line-through;
-  color: #999;
+  color: var(--muted);
 }
 
 .todo-detail {
   padding: 0.5rem 0 0.5rem 0.75rem;
-  border-left: 2px solid #e8e6e0;
+  border-left: 2px solid var(--surface-2);
   margin: 0.4rem 0;
   font-size: 0.9rem;
   display: flex;
@@ -534,17 +596,17 @@ select {
 }
 
 .mini-log {
-  color: #555;
+  color: var(--ink-4);
   font-size: 0.85rem;
   line-height: 1.5;
-  background: #fff;
-  border: 1px solid #edece6;
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
   border-radius: 0.5rem;
   padding: 0.5rem 0.7rem;
 }
 
 .mini-log .date {
-  color: #999;
+  color: var(--muted);
   margin-right: 0.45rem;
   font-variant-numeric: tabular-nums;
 }
@@ -555,8 +617,8 @@ select {
 
 /* -- logs -- */
 .log-card {
-  background: #fff;
-  border: 1px solid #eee;
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
   border-radius: 0.6rem;
   padding: 0.8rem 0.95rem;
   margin-bottom: 0.7rem;
@@ -581,7 +643,7 @@ select {
   gap: 0.5rem;
   align-items: baseline;
   font-size: 0.75rem;
-  color: #999;
+  color: var(--muted);
   margin-bottom: 0.4rem;
 }
 
@@ -599,13 +661,13 @@ select {
 }
 
 .page-feed li {
-  border: 1px solid #eee;
+  border: 1px solid var(--surface-3);
   font-size: 0.88rem;
   padding: 0.5rem 0.7rem;
 }
 
 .entity-link {
-  color: #4a6da7;
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -623,12 +685,12 @@ a.attachment:hover {
 
 .log-head .reprocess {
   margin-left: auto;
-  color: #aaa;
+  color: var(--faint);
   font-size: 0.85rem;
 }
 
 .log-head .reprocess:hover {
-  color: #4a6da7;
+  color: var(--accent);
 }
 
 .log-toggles {
@@ -652,8 +714,8 @@ a.attachment:hover {
 }
 
 .attachment {
-  background: #eef2e8;
-  color: #4a6135;
+  background: var(--chip-bg);
+  color: var(--chip-ink);
   border-radius: 0.6rem;
   padding: 0.1rem 0.5rem;
 }
@@ -661,10 +723,10 @@ a.attachment:hover {
 blockquote {
   margin: 0.7rem 0 0;
   padding: 0.55rem 0.7rem 0.55rem 0.85rem;
-  border-left: 3px solid #d8d4c8;
-  background: #faf9f5;
+  border-left: 3px solid var(--border-2);
+  background: var(--surface-3);
   border-radius: 0 0.4rem 0.4rem 0;
-  color: #555;
+  color: var(--ink-4);
   font-style: italic;
   font-size: 0.9rem;
   line-height: 1.45;
@@ -698,7 +760,7 @@ blockquote audio {
 
 .day-nav button {
   border: none;
-  background: #e8e6e0;
+  background: var(--surface-2);
   border-radius: 0.4rem;
   width: 2rem;
   height: 2rem;
@@ -711,11 +773,11 @@ blockquote audio {
   align-items: center;
   gap: 0.6rem;
   padding: 0.45rem 0;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--surface-3);
 }
 
 .action-row .time {
-  color: #999;
+  color: var(--muted);
   font-size: 0.8rem;
   min-width: 4.2rem;
 }
@@ -726,7 +788,7 @@ blockquote audio {
 
 .action-row.status-done .title {
   text-decoration: line-through;
-  color: #999;
+  color: var(--muted);
 }
 
 /* -- capture dock (non-blocking; app stays interactive behind it) -- */
@@ -737,8 +799,8 @@ blockquote audio {
   transform: translateX(-50%);
   width: min(640px, 100vw);
   max-height: 70dvh;
-  background: #fafaf8;
-  border: 1px solid #e2e0da;
+  background: var(--bg);
+  border: 1px solid var(--border-2);
   border-bottom: none;
   border-radius: 1rem 1rem 0 0;
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.12);
@@ -780,7 +842,7 @@ blockquote audio {
   width: 2.6rem;
   height: 0.28rem;
   border-radius: 0.14rem;
-  background: #d5d2c8;
+  background: var(--border-2);
 }
 
 .app.dock-open main {
@@ -797,14 +859,14 @@ blockquote audio {
 .context-note {
   align-self: center;
   font-size: 0.78rem;
-  color: #888;
+  color: var(--muted);
   background: #f0eee8;
   border-radius: 0.8rem;
   padding: 0.2rem 0.7rem;
 }
 
 .rec-indicator {
-  color: #b3261e;
+  color: var(--danger);
   font-size: 0.8rem;
   animation: fade-pulse 1.4s infinite;
 }
@@ -812,7 +874,7 @@ blockquote audio {
 .chip-clear {
   border: none;
   background: none;
-  color: #999;
+  color: var(--muted);
   cursor: pointer;
   margin-left: 0.25rem;
   font-size: 0.9rem;
@@ -820,7 +882,7 @@ blockquote audio {
 
 .context-chip {
   font-size: 0.8rem;
-  background: #e8e6e0;
+  background: var(--surface-2);
   border-radius: 0.6rem;
   padding: 0.2rem 0.6rem;
 }
@@ -828,7 +890,7 @@ blockquote audio {
 .done-btn {
   border: none;
   background: none;
-  color: #4a6da7;
+  color: var(--accent);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
@@ -854,8 +916,8 @@ blockquote audio {
 
 .bubble.user {
   align-self: flex-end;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
 }
 
 .bubble.user.draft {
@@ -864,7 +926,7 @@ blockquote audio {
 
 .bubble.assistant {
   align-self: flex-start;
-  background: #ecebe6;
+  background: var(--surface-3);
 }
 
 .feed {
@@ -880,21 +942,21 @@ blockquote audio {
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
-  background: #fff;
+  background: var(--surface);
   border-radius: 0.4rem;
   padding: 0.25rem 0.5rem;
-  color: #333;
+  color: var(--ink-2);
 }
 
 .feed li.undone span {
   text-decoration: line-through;
-  color: #999;
+  color: var(--muted);
 }
 
 .feed li button {
   border: none;
   background: none;
-  color: #b3261e;
+  color: var(--danger);
   cursor: pointer;
   font-size: 0.75rem;
 }
@@ -909,7 +971,7 @@ blockquote audio {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  background: #e8e6e0;
+  background: var(--surface-2);
   border-radius: 1rem;
   padding: 0.15rem 0.55rem;
   font-size: 0.8rem;
@@ -921,16 +983,16 @@ blockquote audio {
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.1rem 0.15rem;
-  color: #333;
+  color: var(--ink-2);
 }
 
 .pill button:disabled {
-  color: #aaa;
+  color: var(--faint);
   cursor: default;
 }
 
 .pill .retry {
-  color: #888;
+  color: var(--muted);
 }
 
 .pill.disabled {
@@ -939,7 +1001,7 @@ blockquote audio {
 
 .pill.rec {
   background: #f6dedc;
-  color: #b3261e;
+  color: var(--danger);
   animation: fade-pulse 1.4s infinite;
 }
 
@@ -959,7 +1021,7 @@ blockquote audio {
   height: 2.7rem;
   border: none;
   border-radius: 50%;
-  color: #fff;
+  color: var(--inverse-ink);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -971,16 +1033,16 @@ blockquote audio {
 }
 
 .mic-btn {
-  background: #1a1a1a;
+  background: var(--inverse-bg);
 }
 
 .mic-btn.recording {
-  background: #b3261e;
+  background: var(--danger);
   animation: pulse 1.2s infinite;
 }
 
 .send-btn {
-  background: #4a6da7;
+  background: var(--accent);
 }
 
 .send-btn:disabled {
@@ -1002,8 +1064,8 @@ blockquote audio {
   border: none;
   border-radius: 2rem;
   padding: 0 1.1rem;
-  background: #4a6da7;
-  color: #fff;
+  background: var(--accent);
+  color: var(--inverse-ink);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1020,7 +1082,7 @@ blockquote audio {
 .draft-area textarea {
   width: 100%;
   padding: 0.6rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.6rem;
   font: inherit;
   resize: vertical;
@@ -1032,8 +1094,8 @@ blockquote audio {
   right: 0.6rem;
   bottom: 0.5rem;
   font-size: 0.72rem;
-  color: #999;
-  background: #fffd;
+  color: var(--muted);
+  background: var(--surface)d;
   padding: 0 0.3rem;
   animation: fade-pulse 1.4s infinite;
 }
@@ -1043,8 +1105,8 @@ blockquote audio {
   border-radius: 50%;
   width: 2.4rem;
   height: 2.4rem;
-  background: #e8e6e0;
-  color: #777;
+  background: var(--surface-2);
+  color: var(--ink-5);
   cursor: pointer;
   align-self: center;
 }
@@ -1059,7 +1121,7 @@ blockquote audio {
   width: 0.4rem;
   height: 0.4rem;
   border-radius: 50%;
-  background: #999;
+  background: var(--muted);
   animation: bounce 1.2s infinite;
 }
 
@@ -1092,7 +1154,7 @@ blockquote audio {
 }
 
 .bubble.user .typing-dots span {
-  background: #bbb;
+  background: var(--faint);
 }
 
 .thinking-toggle {
@@ -1109,8 +1171,8 @@ blockquote audio {
 .bubble .thinking {
   font-size: 0.8rem;
   font-style: italic;
-  color: #888;
-  border-left: 2px solid #ddd;
+  color: var(--muted);
+  border-left: 2px solid var(--border-3);
   padding-left: 0.5rem;
   margin-bottom: 0.35rem;
   max-height: 6rem;
@@ -1133,7 +1195,7 @@ blockquote audio {
 .disclosure {
   display: inline-block;
   transition: transform 0.15s;
-  color: #999;
+  color: var(--muted);
   font-size: 0.8rem;
 }
 
@@ -1151,21 +1213,21 @@ blockquote audio {
   border: none;
   background: none;
   cursor: pointer;
-  color: #b5b2a8;
+  color: var(--faint);
   font-size: 0.85rem;
   padding: 0.15rem 0.3rem;
 }
 
 .h2-toggle:hover {
-  color: #888;
+  color: var(--muted);
 }
 
 .h2-toggle.on {
-  color: #4a6da7;
+  color: var(--accent);
 }
 
 .project-detail {
-  border-left: 2px solid #e8e6e0;
+  border-left: 2px solid var(--surface-2);
   padding: 0.4rem 0 0.4rem 0.75rem;
   margin: 0.3rem 0 0.6rem;
   display: flex;
@@ -1175,7 +1237,7 @@ blockquote audio {
 }
 
 .project-detail .description {
-  color: #555;
+  color: var(--ink-4);
 }
 
 .project-actions {
@@ -1187,7 +1249,7 @@ blockquote audio {
 .segment-transcript {
   font-style: normal;
   font-size: 0.85rem;
-  color: #666;
+  color: var(--ink-5);
   background: #f4f3ef;
   border-radius: 0.4rem;
   padding: 0.4rem 0.6rem;
@@ -1216,8 +1278,8 @@ blockquote audio {
 .speed-btn {
   border: none;
   border-radius: 1rem;
-  background: #e3e0d6;
-  color: #333;
+  background: var(--border-2);
+  color: var(--ink-2);
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.3rem 0.7rem;
@@ -1251,7 +1313,7 @@ blockquote audio {
 }
 
 .clear-day {
-  color: #999;
+  color: var(--muted);
   font-size: 0.85rem;
 }
 
@@ -1267,7 +1329,7 @@ blockquote audio {
 }
 
 .word-transcript span:hover {
-  background: #e3e0d6;
+  background: var(--border-2);
 }
 
 .word-transcript span.current {
@@ -1285,7 +1347,7 @@ blockquote audio {
 .project-card {
   text-align: left;
   border: 1px solid #e5e3dd;
-  background: #fff;
+  background: var(--surface);
   border-radius: 0.7rem;
   padding: 0.7rem 0.9rem;
   cursor: pointer;
@@ -1311,17 +1373,17 @@ blockquote audio {
 
 .project-card .count {
   font-size: 0.75rem;
-  color: #888;
+  color: var(--muted);
 }
 
 .project-card .desc {
   font-size: 0.85rem;
-  color: #777;
+  color: var(--ink-5);
 }
 
 .project-card.status-completed .name,
 .project-card.status-abandoned .name {
-  color: #999;
+  color: var(--muted);
 }
 
 .page-head {
@@ -1364,7 +1426,7 @@ blockquote audio {
 
 .back {
   display: inline-block;
-  background: #e8e6e0;
+  background: var(--surface-2);
   border-radius: 0.5rem;
   padding: 0.3rem 0.7rem;
   font-size: 0.85rem;
@@ -1377,12 +1439,12 @@ blockquote audio {
 }
 
 .back:hover {
-  background: #ddd9d0;
+  background: var(--border-3)9d0;
 }
 
 .project-page .description,
 .todo-page .description {
-  color: #666;
+  color: var(--ink-5);
   font-size: 0.92rem;
   line-height: 1.55;
   margin: 0 0 0.8rem;
@@ -1402,7 +1464,7 @@ blockquote audio {
 
 .project-header {
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid #eceae4;
+  border-bottom: 1px solid var(--border);
 }
 
 /* -- landing (signed-out) -- */
@@ -1444,7 +1506,7 @@ blockquote audio {
 .hero > p {
   max-width: 34rem;
   margin: 0 auto 1.5rem;
-  color: #555;
+  color: var(--ink-4);
   font-size: 1.05rem;
   line-height: 1.5;
 }
@@ -1460,7 +1522,7 @@ blockquote audio {
 .mock {
   border: 1px solid #e4e2dc;
   border-radius: 1rem;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 12px 32px rgba(26, 26, 26, 0.07);
   padding: 1rem;
   text-align: left;
@@ -1478,11 +1540,11 @@ blockquote audio {
 
 .mock-chip {
   align-self: flex-start;
-  background: #ecebe6;
+  background: var(--surface-3);
   border-radius: 1rem;
   padding: 0.2rem 0.7rem;
   font-size: 0.75rem;
-  color: #555;
+  color: var(--ink-4);
 }
 
 .mock-bubble {
@@ -1494,13 +1556,13 @@ blockquote audio {
 
 .mock-bubble.user {
   align-self: flex-end;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
 }
 
 .mock-bubble.assistant {
   align-self: flex-start;
-  background: #ecebe6;
+  background: var(--surface-3);
 }
 
 .mock-feed {
@@ -1517,7 +1579,7 @@ blockquote audio {
   justify-content: space-between;
   align-items: baseline;
   gap: 0.5rem;
-  background: #fff;
+  background: var(--surface);
   border-radius: 0.4rem;
   padding: 0.25rem 0.5rem;
   font-size: 0.78rem;
@@ -1525,7 +1587,7 @@ blockquote audio {
 
 .mock-feed em {
   font-style: normal;
-  color: #b3261e;
+  color: var(--danger);
   font-size: 0.72rem;
 }
 
@@ -1534,15 +1596,15 @@ blockquote audio {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-3);
   border-radius: 0.6rem;
   padding: 0.5rem 0.3rem 0.5rem 0.75rem;
-  color: #999;
+  color: var(--muted);
 }
 
 .mock-mic {
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   border-radius: 50%;
   width: 1.9rem;
   height: 1.9rem;
@@ -1555,7 +1617,7 @@ blockquote audio {
 
 /* -- problem statement -- */
 .problem {
-  border-top: 1px solid #eceae4;
+  border-top: 1px solid var(--border);
   padding: 2.5rem 0;
   text-align: center;
 }
@@ -1568,7 +1630,7 @@ blockquote audio {
 .problem p {
   max-width: 36rem;
   margin: 0 auto;
-  color: #555;
+  color: var(--ink-4);
   line-height: 1.6;
 }
 
@@ -1578,7 +1640,7 @@ blockquote audio {
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 1.5rem;
   padding: 2.5rem 0;
-  border-top: 1px solid #eceae4;
+  border-top: 1px solid var(--border);
 }
 
 .step {
@@ -1592,8 +1654,8 @@ blockquote audio {
   width: 1.8rem;
   height: 1.8rem;
   border-radius: 50%;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1607,7 +1669,7 @@ blockquote audio {
 }
 
 .step p {
-  color: #555;
+  color: var(--ink-4);
   line-height: 1.5;
   font-size: 0.92rem;
 }
@@ -1618,7 +1680,7 @@ blockquote audio {
   flex-direction: column;
   gap: 2.5rem;
   padding: 2.5rem 0;
-  border-top: 1px solid #eceae4;
+  border-top: 1px solid var(--border);
 }
 
 .showcase-row {
@@ -1645,7 +1707,7 @@ blockquote audio {
 }
 
 .showcase-copy p {
-  color: #555;
+  color: var(--ink-4);
   line-height: 1.5;
 }
 
@@ -1656,7 +1718,7 @@ blockquote audio {
 }
 
 .mock-card {
-  border: 1px solid #eceae4;
+  border: 1px solid var(--border);
   border-radius: 0.7rem;
   padding: 0.6rem 0.75rem;
 }
@@ -1666,7 +1728,7 @@ blockquote audio {
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.3rem;
-  color: #888;
+  color: var(--muted);
   font-size: 0.78rem;
 }
 
@@ -1689,15 +1751,15 @@ blockquote audio {
   align-items: center;
   gap: 0.5rem;
   padding: 0.35rem 0;
-  border-top: 1px solid #f1efe9;
+  border-top: 1px solid var(--surface-3);
 }
 
 .mock-status {
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-3);
   border-radius: 0.5rem;
   padding: 0.15rem 0.5rem;
   font-size: 0.72rem;
-  color: #555;
+  color: var(--ink-4);
   flex: none;
 }
 
@@ -1706,7 +1768,7 @@ blockquote audio {
   justify-content: space-between;
   align-items: baseline;
   gap: 0.5rem;
-  color: #888;
+  color: var(--muted);
   font-size: 0.78rem;
   margin-bottom: 0.4rem;
 }
@@ -1720,12 +1782,12 @@ blockquote audio {
   display: flex;
   gap: 0.6rem;
   align-items: flex-start;
-  background: #faf9f5;
-  border-left: 2px solid #ddd;
+  background: var(--surface-3);
+  border-left: 2px solid var(--border-3);
   border-radius: 0 0.5rem 0.5rem 0;
   padding: 0.5rem 0.7rem;
   font-style: italic;
-  color: #555;
+  color: var(--ink-4);
   line-height: 1.45;
 }
 
@@ -1734,8 +1796,8 @@ blockquote audio {
   width: 1.6rem;
   height: 1.6rem;
   border-radius: 50%;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1745,7 +1807,7 @@ blockquote audio {
 
 /* -- beta signup -- */
 .beta {
-  border-top: 1px solid #eceae4;
+  border-top: 1px solid var(--border);
   padding: 2.5rem 0 1rem;
   text-align: center;
 }
@@ -1756,7 +1818,7 @@ blockquote audio {
 }
 
 .beta > p {
-  color: #555;
+  color: var(--ink-4);
   max-width: 28rem;
   margin: 0 auto 1.25rem;
   line-height: 1.5;
@@ -1773,7 +1835,7 @@ blockquote audio {
 .beta textarea {
   width: min(24rem, 100%);
   padding: 0.6rem 0.7rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.4rem;
   font: inherit;
 }
@@ -1788,15 +1850,15 @@ blockquote audio {
   align-items: center;
   gap: 0.45rem;
   font-size: 0.9rem;
-  color: #555;
+  color: var(--ink-4);
 }
 
 .beta button {
   padding: 0.65rem 1.6rem;
   border: none;
   border-radius: 0.5rem;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   font: inherit;
   cursor: pointer;
 }
@@ -1810,10 +1872,10 @@ blockquote audio {
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
-  border-top: 1px solid #eceae4;
+  border-top: 1px solid var(--border);
   margin-top: 2rem;
   padding-top: 1rem;
-  color: #888;
+  color: var(--muted);
   font-size: 0.85rem;
 }
 
@@ -1839,8 +1901,8 @@ blockquote audio {
   border: none;
   border-radius: 2rem;
   padding: 0.5rem 1rem;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--inverse-bg);
+  color: var(--inverse-ink);
   font-size: 0.88rem;
   cursor: pointer;
   display: inline-flex;
@@ -1862,8 +1924,8 @@ blockquote audio {
   position: absolute;
   top: 0.05rem;
   right: 0.05rem;
-  background: #b3261e;
-  color: #fff;
+  background: var(--danger);
+  color: var(--inverse-ink);
   font-size: 0.6rem;
   line-height: 1;
   border-radius: 0.6rem;
@@ -1877,8 +1939,8 @@ blockquote audio {
   top: 2.4rem;
   right: 0;
   width: min(20rem, calc(100vw - 2rem));
-  background: #fff;
-  border: 1px solid #e2e0da;
+  background: var(--surface);
+  border: 1px solid var(--border-2);
   border-radius: 0.8rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
   padding: 0.6rem;
@@ -1889,7 +1951,7 @@ blockquote audio {
 }
 
 .notif {
-  border-bottom: 1px solid #f1efe9;
+  border-bottom: 1px solid var(--surface-3);
   padding-bottom: 0.5rem;
 }
 
@@ -1908,7 +1970,7 @@ blockquote audio {
 
 .notif p {
   font-size: 0.85rem;
-  color: #444;
+  color: var(--ink-3);
   line-height: 1.45;
   margin: 0.25rem 0;
 }
@@ -1922,7 +1984,7 @@ blockquote audio {
 
 .notif-foot .when {
   font-size: 0.72rem;
-  color: #999;
+  color: var(--muted);
 }
 
 /* -- replay message playback -- */
@@ -1960,8 +2022,8 @@ header {
 
 /* -- daily briefing -- */
 .briefing {
-  background: #fff;
-  border: 1px solid #eceae4;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 0.8rem;
   padding: 0.9rem 1rem;
   margin-bottom: 0.75rem;
@@ -1977,7 +2039,7 @@ header {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #999;
+  color: var(--muted);
   margin: 0.9rem 0 0.3rem;
 }
 
@@ -2002,7 +2064,7 @@ header {
   left: 0.1rem;
   top: calc(0.3em + 2px);
   font-size: 0.6em;
-  color: #b5b2a8;
+  color: var(--faint);
 }
 
 .brief-list a {
@@ -2059,14 +2121,14 @@ header {
 }
 
 .brief-ref {
-  color: #4a6da7;
+  color: var(--accent);
   font-weight: 600;
   text-decoration: none;
-  border-bottom: 1px solid #b9c7dd;
+  border-bottom: 1px solid var(--accent-border);
 }
 
 .brief-ref:hover {
-  border-bottom-color: #1a1a1a;
+  border-bottom-color: var(--ink);
 }
 
 .see-more {
@@ -2076,7 +2138,7 @@ header {
 
 /* Agent-deprioritized ("below the fold"): readable dark gray. */
 .brief-list .more-item {
-  color: #555;
+  color: var(--ink-4);
 }
 
 .brief-refresh {
@@ -2122,7 +2184,7 @@ header {
 
 .q-chip {
   border: 1px solid #cfccc2;
-  background: #fff;
+  background: var(--surface);
   border-radius: 1rem;
   padding: 0.3rem 0.75rem;
   font-size: 0.85rem;
@@ -2130,7 +2192,7 @@ header {
 }
 
 .q-chip:hover:not(:disabled) {
-  border-color: #1a1a1a;
+  border-color: var(--ink);
 }
 
 .q-chip:disabled,
@@ -2143,12 +2205,12 @@ header {
 .player-bar .seek {
   flex: 1;
   min-width: 4rem;
-  accent-color: #1a1a1a;
+  accent-color: var(--ink);
 }
 
 .player-bar .clock {
   font-size: 0.72rem;
-  color: #888;
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -2192,7 +2254,7 @@ header {
 
 .usage-line {
   font-size: 0.78rem;
-  color: #999;
+  color: var(--muted);
   margin: 0.25rem 0 0.75rem;
 }
 
@@ -2200,7 +2262,7 @@ header {
   border: none;
   background: none;
   cursor: pointer;
-  color: #4a6da7;
+  color: var(--accent);
   font-size: 0.75rem;
   padding: 0 0.2rem;
   opacity: 0.7;
@@ -2212,7 +2274,7 @@ header {
 
 .brief-cost {
   font-size: 0.72rem;
-  color: #b5b2a8;
+  color: var(--faint);
 }
 
 /* Section-level talk button sits at the heading's right edge; seeded bubbles
@@ -2228,7 +2290,7 @@ header {
 
 .log-cost {
   font-size: 0.7rem;
-  color: #b5b2a8;
+  color: var(--faint);
 }
 
 .brief-section h2 .brief-cost {
@@ -2247,7 +2309,7 @@ header {
   display: block;
   text-align: right;
   font-size: 0.68rem;
-  color: #b5b2a8;
+  color: var(--faint);
   margin-top: 0.25rem;
 }
 
@@ -2308,7 +2370,7 @@ header {
 
 .session-head .expand {
   flex-shrink: 0;
-  color: #999;
+  color: var(--muted);
   opacity: 0.7;
   padding-left: 0.6rem;
 }
@@ -2320,7 +2382,7 @@ header {
 .day-cost {
   text-align: center;
   font-size: 0.72rem;
-  color: #b5b2a8;
+  color: var(--faint);
   margin: -0.2rem 0 0.5rem;
 }
 
@@ -2328,13 +2390,13 @@ header {
 .agent-settings {
   margin-top: 2rem;
   padding-top: 1rem;
-  border-top: 1px solid #eceae4;
+  border-top: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1.2rem;
   font-size: 0.85rem;
-  color: #555;
+  color: var(--ink-4);
 }
 
 .agent-settings h2 {
@@ -2356,7 +2418,7 @@ header {
   font: inherit;
   padding: 0.2rem 0.4rem;
   border-radius: 0.35rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
 }
 
 /* -- settings page -- */
@@ -2370,7 +2432,7 @@ header {
   align-items: center;
   gap: 0.5rem 0.7rem;
   font-size: 0.9rem;
-  color: #444;
+  color: var(--ink-3);
   margin-bottom: 0.5rem;
 }
 
@@ -2384,19 +2446,19 @@ header {
   font-size: 0.85rem;
   padding: 0.25rem 0.4rem;
   border-radius: 0.35rem;
-  border: 1px solid #ccc;
-  background: #fff;
+  border: 1px solid var(--border-3);
+  background: var(--surface);
 }
 
 .hint-left {
-  color: #999;
+  color: var(--muted);
   font-size: 0.78rem;
   margin-top: 0.2rem;
 }
 
 .spend-totals {
   font-size: 0.9rem;
-  color: #444;
+  color: var(--ink-3);
   margin-bottom: 0.5rem;
 }
 
@@ -2408,22 +2470,22 @@ header {
 
 .spend-table th {
   text-align: left;
-  color: #999;
+  color: var(--muted);
   font-weight: 500;
   padding: 0.2rem 0.5rem 0.2rem 0;
-  border-bottom: 1px solid #eceae4;
+  border-bottom: 1px solid var(--border);
 }
 
 .spend-table td {
   padding: 0.25rem 0.5rem 0.25rem 0;
-  border-bottom: 1px solid #f4f2ec;
+  border-bottom: 1px solid var(--surface-3);
 }
 
 /* -- dismissable Today entries -- */
 .dismiss-btn {
   border: none;
   background: none;
-  color: #c9c6bc;
+  color: var(--faint);
   cursor: pointer;
   font-size: 0.72rem;
   padding: 0.1rem 0.25rem;
@@ -2431,7 +2493,7 @@ header {
 }
 
 .dismiss-btn:hover {
-  color: #666;
+  color: var(--ink-5);
 }
 
 .brief-list li .dismiss-btn {
@@ -2473,13 +2535,13 @@ header {
   float: right;
   font-size: 0.72rem;
   font-weight: 400;
-  color: #b5b2a8;
+  color: var(--faint);
 }
 
 /* Agent spend line on todo / project pages. */
 .entity-cost {
   font-size: 0.75rem;
-  color: #b5b2a8;
+  color: var(--faint);
   margin: -0.3rem 0 0.6rem;
 }
 
@@ -2489,7 +2551,7 @@ header {
 }
 
 .toggle-row input {
-  accent-color: #4a6da7;
+  accent-color: var(--accent);
 }
 
 /* -- agent memory editor (settings) -- */
@@ -2510,10 +2572,10 @@ header {
   width: 100%;
   font: inherit;
   font-size: 0.85rem;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-3);
   border-radius: 0.4rem;
   padding: 0.4rem 0.5rem;
-  background: #fff;
+  background: var(--surface);
   resize: vertical;
 }
 
@@ -2541,7 +2603,7 @@ header {
 }
 
 .feed-ic {
-  color: #b5b2a8;
+  color: var(--faint);
   font-size: 0.68rem;
   width: 0.85rem;
   margin-right: 0.3rem;
@@ -2561,42 +2623,42 @@ header {
   font: inherit;
   font-size: 0.82rem;
   padding: 0.3rem 0.4rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.35rem;
-  background: #fff;
+  background: var(--surface);
 }
 
 .range-sep {
-  color: #999;
+  color: var(--muted);
 }
 
 .spend-alltime {
-  color: #999;
+  color: var(--muted);
   font-weight: 400;
 }
 
 .spend-table td.use-cell {
   vertical-align: top;
-  color: #444;
+  color: var(--ink-3);
   font-weight: 600;
 }
 
 .spend-table tfoot td {
-  border-top: 2px solid #d8d4c8;
+  border-top: 2px solid var(--border-2);
   font-weight: 600;
   padding-top: 0.3rem;
 }
 
 .rs__control {
   min-height: 32px !important;
-  border-color: #ccc !important;
+  border-color: var(--border-3) !important;
   border-radius: 0.35rem !important;
   font-size: 0.85rem;
   box-shadow: none !important;
 }
 
 .rs__control--is-focused {
-  border-color: #4a6da7 !important;
+  border-color: var(--accent) !important;
 }
 
 .rs__value-container {
@@ -2617,19 +2679,19 @@ header {
 }
 
 .rs__multi-value {
-  background: #eef2e8 !important;
+  background: var(--chip-bg) !important;
   border-radius: 0.4rem !important;
 }
 
 .rs__option--is-selected {
-  background: #4a6da7 !important;
+  background: var(--accent) !important;
 }
 
 /* -- inline links are blue, everywhere (feed action text stays black) -- */
 .md a,
 .brief-list a,
 .entity-link {
-  color: #4a6da7;
+  color: var(--accent);
 }
 
 /* -- feed rows: icon, left-aligned label, undo on the right -- */
@@ -2662,12 +2724,12 @@ header {
   background: none;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #999;
+  color: var(--muted);
   padding: 0.1rem 0.2rem;
 }
 
 .bubble.user .msg-play.corner {
-  color: #bbb;
+  color: var(--faint);
 }
 
 .inline-transcript .word-transcript {
@@ -2681,7 +2743,7 @@ header {
 
 .inline-transcript .word-transcript span.current {
   background: #f5d97b;
-  color: #1a1a1a;
+  color: rgb(26, 26, 26);
   border-radius: 2px;
 }
 
@@ -2711,7 +2773,7 @@ header {
 }
 
 .dismiss-btn.done-btn:hover {
-  color: #4a6135;
+  color: var(--chip-ink);
 }
 
 /* -- project priority -- */
@@ -2726,7 +2788,7 @@ header {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #999;
+  color: var(--muted);
   flex-shrink: 0;
 }
 
@@ -2735,15 +2797,15 @@ header {
   font: inherit;
   font-size: 0.85rem;
   border: none;
-  border-bottom: 1px dashed #d8d4c8;
+  border-bottom: 1px dashed var(--border-2);
   background: none;
   padding: 0.15rem 0;
-  color: #444;
+  color: var(--ink-3);
 }
 
 .priority-row input:focus {
   outline: none;
-  border-bottom-color: #4a6da7;
+  border-bottom-color: var(--accent);
 }
 
 button.back-btn {
@@ -2803,7 +2865,7 @@ button.back-btn {
   top: 0.5rem;
   right: 0.6rem;
   font-size: 0.68rem;
-  color: #b5b2a8;
+  color: var(--faint);
 }
 
 /* Back can be a button (history pop) — match the link look. */
@@ -2815,7 +2877,7 @@ button.back {
 
 .priority-line {
   font-size: 0.85rem;
-  color: #555;
+  color: var(--ink-4);
   margin: 0.2rem 0 0.6rem;
 }
 
@@ -2826,9 +2888,9 @@ button.back {
   align-items: center;
   gap: 0.3rem 0.7rem;
   font-size: 0.78rem;
-  color: #7a6a3a;
-  background: #faf4e2;
-  border: 1px solid #eadfc0;
+  color: var(--warn-ink);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
   border-radius: 0.5rem;
   padding: 0.4rem 0.6rem;
   margin: 0.3rem 0;
@@ -2842,14 +2904,14 @@ button.back {
   font: inherit;
   font-size: 0.85rem;
   padding: 0.35rem 0.7rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-3);
   border-radius: 0.4rem;
-  background: #fff;
+  background: var(--surface);
   cursor: pointer;
 }
 
 .push-btn:hover {
-  border-color: #4a6da7;
+  border-color: var(--accent);
 }
 
 /* -- push / install nudge -- */
@@ -2858,9 +2920,9 @@ button.back {
   align-items: flex-start;
   gap: 0.5rem;
   font-size: 0.82rem;
-  color: #4a5a72;
-  background: #eef2f8;
-  border: 1px solid #d7e0ee;
+  color: var(--nudge-ink);
+  background: var(--nudge-bg);
+  border: 1px solid var(--nudge-border);
   border-radius: 0.6rem;
   padding: 0.5rem 0.65rem;
   margin: 0.2rem 0 0.7rem;
@@ -2868,7 +2930,7 @@ button.back {
 }
 
 .push-nudge .nudge-ic {
-  color: #4a6da7;
+  color: var(--accent);
   margin-top: 0.15rem;
   flex-shrink: 0;
 }
@@ -2887,7 +2949,7 @@ button.back {
   border: none;
   background: none;
   cursor: pointer;
-  color: #9aa7ba;
+  color: var(--faint);
   padding: 0.1rem 0.2rem;
   flex-shrink: 0;
 }
@@ -2902,10 +2964,52 @@ button.back {
 /* Derived "has a planned slot" chip on todo rows. */
 .sched-chip {
   font-size: 0.68rem;
-  color: #4a6135;
-  background: #eef2e8;
+  color: var(--chip-ink);
+  background: var(--chip-bg);
   border-radius: 0.5rem;
   padding: 0.08rem 0.45rem;
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* -- search results page + overlay hint -- */
+.search-hint {
+  font-size: 0.72rem;
+  color: var(--faint);
+  margin: 0.3rem 0.2rem 0;
+}
+
+.page-search input {
+  width: 100%;
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border-3);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: inherit;
+}
+
+.result-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin-bottom: 0.35rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.result-row:hover .title {
+  text-decoration: underline;
+}
+
+.result-row .kind {
+  font-size: 0.72rem;
+  color: var(--muted);
   flex-shrink: 0;
 }

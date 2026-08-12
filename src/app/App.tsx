@@ -13,6 +13,7 @@ import Search from "./components/Search";
 import Bell from "./components/Bell";
 import Today from "./views/Today";
 import Settings from "./views/Settings";
+import SearchResults from "./views/SearchResults";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -31,6 +32,18 @@ export default function App() {
   const [auth, setAuth] = useState<AuthState>("loading");
   const location = useLocation();
   useEffect(() => trackPath(location.pathname), [location.pathname]);
+
+  // Cmd/Ctrl+K opens omni search from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [me, setMe] = useState<Me | null>(null);
   // What the user is looking at / last touched — becomes capture context.
   const [focus, setFocus] = useState<CaptureContext | null>(null);
@@ -182,6 +195,7 @@ export default function App() {
           <Route path="/sessions" element={<Sessions {...viewProps} />} />
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
           <Route path="/settings" element={<Settings {...viewProps} />} />
+          <Route path="/search" element={<SearchResults {...viewProps} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

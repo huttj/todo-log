@@ -6,6 +6,7 @@ import { api, post } from "../api";
 import { fmtCost } from "../fmt";
 import type { CaptureContext } from "../Capture";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push";
+import { getThemePref, setThemePref, type ThemePref } from "../theme";
 
 type Model = "sonnet" | "opus" | "haiku";
 type Thinking = "off" | "low" | "medium" | "high";
@@ -461,6 +462,8 @@ export default function Settings(props: {
         <CheckinNowButton />,
       )}
 
+      <AppearanceSection />
+
       <TextSizeSection />
 
       <PushSection />
@@ -530,6 +533,33 @@ export default function Settings(props: {
 
 function sumCost(rows: { cost: number }[]): number {
   return rows.reduce((acc, r) => acc + r.cost, 0);
+}
+
+function AppearanceSection() {
+  const [pref, setPref] = useState<ThemePref>(getThemePref);
+  const apply = (v: string | null) => {
+    const next = (v ?? "system") as ThemePref;
+    setPref(next);
+    setThemePref(next);
+  };
+  return (
+    <section>
+      <h2>Appearance</h2>
+      <div className="setting-row">
+        <Sel
+          options={[
+            { value: "system", label: "match system" },
+            { value: "light", label: "light" },
+            { value: "dark", label: "dark" },
+          ]}
+          value={pref}
+          onChange={apply}
+          width={150}
+        />
+        <span className="hint-left">per device — takes effect immediately</span>
+      </div>
+    </section>
+  );
 }
 
 const TEXT_SIZES = [
