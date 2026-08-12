@@ -5,11 +5,13 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBell, faXmark, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import { api, post, del, type AppNotification } from "../api";
 import { requestTalk } from "../talk";
+import { useNavigate } from "react-router-dom";
 import HoldTalk from "./HoldTalk";
 
 export default function Bell(props: { refreshKey: number }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const load = () => {
@@ -79,19 +81,33 @@ export default function Bell(props: { refreshKey: number }) {
                     minute: "2-digit",
                   })}
                 </span>
-                <HoldTalk
-                  className="thread-talk"
-                  title="Talk about this · hold or drag up to record"
-                  onOpen={(autoStart) => {
-                    setOpen(false);
-                    requestTalk(null, {
-                      replyTo: { id: n.id, title: n.title, body: n.body },
-                      autoStart,
-                    });
-                  }}
-                >
-                  <FontAwesomeIcon icon={faMicrophone} /> talk
-                </HoldTalk>
+                {n.slot.startsWith("support") ? (
+                  <button
+                    className="thread-talk"
+                    title="Open the support chat"
+                    onClick={() => {
+                      setOpen(false);
+                      const uid = n.slot.includes(":") ? n.slot.split(":")[1] : null;
+                      navigate(uid ? `/support?u=${uid}` : "/support");
+                    }}
+                  >
+                    open chat
+                  </button>
+                ) : (
+                  <HoldTalk
+                    className="thread-talk"
+                    title="Talk about this · hold or drag up to record"
+                    onOpen={(autoStart) => {
+                      setOpen(false);
+                      requestTalk(null, {
+                        replyTo: { id: n.id, title: n.title, body: n.body },
+                        autoStart,
+                      });
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faMicrophone} /> talk
+                  </HoldTalk>
+                )}
               </div>
             </div>
           ))}

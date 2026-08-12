@@ -567,6 +567,7 @@ interface AdminUser {
   created_at: number;
   prospect_note?: string | null;
   wants_beta_call?: number | null;
+  is_admin?: boolean;
 }
 
 interface AdminProspect {
@@ -618,14 +619,20 @@ function UsersPanel() {
             </div>
             <span className="user-since">since {when(u.created_at)}</span>
             {!!u.wants_beta_call && <span className="sched-chip">wants a call</span>}
-            <label className="user-toggle">
-              <input
-                type="checkbox"
-                checked={!!u.enabled}
-                onChange={(e) => void toggle(u, e.target.checked)}
-              />
-              {u.enabled ? "active" : "off"}
-            </label>
+            {u.is_admin ? (
+              <span className="sched-chip" title="Admins can't be disabled (set by ALLOWLIST_EMAILS)">
+                admin
+              </span>
+            ) : (
+              <label className="user-toggle">
+                <input
+                  type="checkbox"
+                  checked={!!u.enabled}
+                  onChange={(e) => void toggle(u, e.target.checked)}
+                />
+                {u.enabled ? "active" : "off"}
+              </label>
+            )}
             {u.prospect_note && <p className="prospect-note">{u.prospect_note}</p>}
           </div>
         ))}

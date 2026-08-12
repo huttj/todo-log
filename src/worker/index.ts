@@ -7,6 +7,7 @@ import { crud } from "./crud";
 import { capture } from "./capture";
 import { runSweep } from "./sweep";
 import { notifyOwnerOfSignup, isAdmin } from "./signup";
+import { support } from "./support";
 
 const app = new Hono<AppContext>();
 
@@ -47,6 +48,7 @@ app.post("/api/prospects", async (c) => {
 // -- App data + capture (both gated on allowlist) ---------------------------
 app.route("/api", crud);
 app.route("/api", capture);
+app.route("/api", support);
 
 export default {
   fetch: app.fetch,

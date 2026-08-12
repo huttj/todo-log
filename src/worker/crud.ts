@@ -425,6 +425,9 @@ crud.get("/admin/users", async (c) => {
      FROM users u LEFT JOIN prospects p ON lower(p.email) = lower(u.email)
      ORDER BY u.id`,
   ).all();
+  for (const u of users.results as { email: string; is_admin?: boolean }[]) {
+    u.is_admin = isAdmin(c.env, u.email);
+  }
   // Leads that never signed in (legacy email-only signups).
   const prospects = await c.env.DB.prepare(
     `SELECT id, email, name, note, wants_beta_call, created_at FROM prospects

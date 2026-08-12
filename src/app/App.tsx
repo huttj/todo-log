@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faLayerGroup,
   faMicrophone,
+  faCircleQuestion,
   faBookOpen,
   faComments,
   faMagnifyingGlass,
@@ -14,6 +15,7 @@ import Bell from "./components/Bell";
 import Today from "./views/Today";
 import Settings from "./views/Settings";
 import SearchResults from "./views/SearchResults";
+import Support from "./views/Support";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
@@ -182,6 +184,9 @@ export default function App() {
             <FontAwesomeIcon icon={faMagnifyingGlass} />
           </button>
           <Bell refreshKey={refreshKey} />
+          <NavLink to="/support" className="nav-search" title="Support">
+            <FontAwesomeIcon icon={faCircleQuestion} />
+          </NavLink>
           <NavLink to="/settings" className="nav-search" title="Settings">
             <FontAwesomeIcon icon={faGear} />
           </NavLink>
@@ -200,6 +205,7 @@ export default function App() {
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
           <Route path="/settings" element={<Settings {...viewProps} me={me} />} />
           <Route path="/search" element={<SearchResults {...viewProps} />} />
+          <Route path="/support" element={<Support {...viewProps} me={me} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
