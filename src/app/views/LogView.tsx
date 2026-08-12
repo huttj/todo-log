@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, del, type Log, type Todo, type Project, type EventRecord } from "../api";
 import LogCard from "../components/LogCard";
 import EventFeed from "../components/EventFeed";
@@ -53,7 +53,7 @@ export default function LogView(props: {
       <div className="page-head">
         <div className="page-nav">
           <Link className="back" to="/logs">
-            ‹ Logs
+            <FontAwesomeIcon icon={faChevronLeft} /> Logs
           </Link>
           <div className="page-meta">
             <span className="kind">

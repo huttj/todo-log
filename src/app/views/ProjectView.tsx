@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import TodoRow from "../components/TodoRow";
@@ -48,7 +50,7 @@ export default function ProjectView(props: {
       <div className="page-head">
         <div className="page-nav">
           <Link className="back" to="/">
-            ‹ Projects
+            <FontAwesomeIcon icon={faChevronLeft} /> Projects
           </Link>
           <div className="page-meta">
             <span className="kind">{project.kind}</span>

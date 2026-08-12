@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import LogCard from "../components/LogCard";
@@ -61,11 +63,11 @@ export default function TodoView(props: {
             }
             return label ? (
               <button className="back" onClick={() => navigate(-1)}>
-                ‹ {label}
+                <FontAwesomeIcon icon={faChevronLeft} /> {label}
               </button>
             ) : (
               <Link className="back" to={project ? `/projects/${project.id}` : "/"}>
-                ‹ {project ? project.name : "Today"}
+                <FontAwesomeIcon icon={faChevronLeft} /> {project ? project.name : "Today"}
               </Link>
             );
           })()}

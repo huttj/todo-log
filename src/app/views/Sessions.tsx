@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan, faPlay, faCommentDots } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faPlay, faCommentDots, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   del,
@@ -285,7 +285,7 @@ export function SessionView(props: {
       <div className="page-head">
         <div className="page-nav">
           <Link className="back" to="/sessions">
-            ‹ Chats
+            <FontAwesomeIcon icon={faChevronLeft} /> Chats
           </Link>
           <div className="page-meta">
             <button
