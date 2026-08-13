@@ -21,13 +21,15 @@ function LegalShell(props: { title: string; children: React.ReactNode }) {
       <h1>{props.title}</h1>
       <p className="legal-date">Effective {EFFECTIVE}</p>
       {props.children}
-      <footer className="legal-foot">
+      {/* div, not <footer> — the app shell fixes bare footers to the viewport
+          (the Talk button overlay). */}
+      <div className="legal-foot">
         <span>Todo Log is operated by Hutt LLC.</span>
         <span>
           Questions? Use the in-app support chat, or email{" "}
           <a href="mailto:beta@todolo.gg">beta@todolo.gg</a>.
         </span>
-      </footer>
+      </div>
     </div>
   );
 }
