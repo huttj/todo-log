@@ -319,11 +319,13 @@ function Waitlist(props: { email: string }) {
         value={note}
         onChange={(e) => setNote(e.target.value)}
       />
-      <label>
+      <label className="waitlist-call">
         <input type="checkbox" checked={wantsCall} onChange={(e) => setWantsCall(e.target.checked)} />
         I'm up for a beta user call
       </label>
-      <button onClick={submit}>Notify me</button>
+      <button onClick={submit} disabled={!wantsCall} title={wantsCall ? "Submit" : "Check the box above first"}>
+        Notify me
+      </button>
     </div>
   );
 }

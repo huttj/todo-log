@@ -3564,3 +3564,15 @@ button.back {
 .log-summary .md > *:last-child {
   margin-bottom: 0;
 }
+
+.waitlist-call {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+}
+
+.splash.waitlist button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
