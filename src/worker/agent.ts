@@ -353,6 +353,18 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "fetch_transcripts",
+    description:
+      "The verbatim recorded transcripts behind specific logs — everything the user actually said, unsummarized. ONLY when the user explicitly asks to dig into their raw words ('what did I actually say', 'look at the transcript') — never routinely; summaries cover normal work. Up to 5 logs per call.",
+    input_schema: {
+      type: "object",
+      properties: {
+        log_ids: { type: "array", items: { type: "integer" } },
+      },
+      required: ["log_ids"],
+    },
+  },
+  {
     name: "save_memory",
     description:
       "Persist a note to your long-term memory (shown to you at the start of every conversation). Keyed: writing an existing key overwrites it; empty content deletes it. Use for durable context — ongoing situations, people, preferences, how the user works — NOT for things already recorded as todos/logs.",
@@ -774,6 +786,38 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         })),
       );
     }
+    case "fetch_transcripts": {
+      const ids = Array.isArray(input.log_ids)
+        ? (input.log_ids as unknown[]).filter((x): x is number => typeof x === "number").slice(0, 5)
+        : [];
+      if (ids.length === 0) return "error: log_ids required";
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const out: { log_id: number; date: string; title: string | null; transcript: string }[] = [];
+      for (const id of ids) {
+        const log = await getEntity<LogRow>(s.env, "log", s.user.id, id);
+        if (!log) {
+          out.push({ log_id: id, date: "", title: null, transcript: "(log not found)" });
+          continue;
+        }
+        const date = new Date(log.occurred_at * 1000).toLocaleDateString("en-CA", { timeZone: tz });
+        if (!log.message_id) {
+          out.push({ log_id: id, date, title: log.title, transcript: "(typed — no recording)" });
+          continue;
+        }
+        const segments = await messageSegments(s.env, log.message_id);
+        const transcript = segments
+          .map((seg) => seg.transcript ?? "")
+          .join(" ")
+          .trim();
+        out.push({
+          log_id: id,
+          date,
+          title: log.title,
+          transcript: transcript || "(no transcript available)",
+        });
+      }
+      return JSON.stringify(out);
+    }
     case "update_briefing": {
       const headline = str(input.headline);
       if (!headline) return "error: headline required";
@@ -948,7 +992,7 @@ How you behave:
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - PRIORITIES: each project can carry a priority in the user's OWN words (shown in the project list). Only the agent writes it (update_project.priority) — there's no manual editing. When a project has none and the conversation touches it, or when what the user says suggests its priority shifted, ask ONE short ask_user question about where it sits and store their answer near-verbatim. Never invent a priority they didn't express.
-- THE JOURNAL IS QUERYABLE: query_logs lists logs by date range / entity / text. Regular chats don't carry recent logs in context — so before any claim about what the user did or didn't record, query. "You have no logs" without a query_logs call is a lie waiting to happen.
+- THE JOURNAL IS QUERYABLE: query_logs lists logs by date range / entity / text. When the user EXPLICITLY asks to dig into their raw words, fetch_transcripts returns the verbatim recordings behind specific logs — richer than summaries, with things the summaries dropped. Never fetch transcripts unprompted. Regular chats don't carry recent logs in context — so before any claim about what the user did or didn't record, query. "You have no logs" without a query_logs call is a lie waiting to happen.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
 - NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
 - BRIEFING: the Today view shows a precomputed overview. It is NOT in your context by default — fetch it (fetch, entity_type "briefing") when the conversation concerns the day's plan.`;
