@@ -117,11 +117,20 @@ export async function deleteVectors(env: Env, ids: string[]): Promise<void> {
 /** Keyword + semantic, merged: keyword hits lead (exact words beat vibes),
  * semantic-only extras append, deduped, hydrated fresh from D1 under the
  * requester's user_id. */
+export type SearchSort = "blend" | "recent" | "match";
+
+/** Blend: match strength decays with age (30-day half-life, floored at 0.5)
+ * so a perfect old hit still beats a mediocre fresh one, and ties break
+ * toward now. Keyword hits score 1.0 — exact words beat vibes. */
+function blendScore(match: number, ageDays: number): number {
+  return match * (0.5 + 0.5 * Math.pow(2, -ageDays / 30));
+}
+
 export async function hybridSearch(
   env: Env,
   userId: number,
   query: string,
-  opts: { types?: string[]; projectId?: number } = {},
+  opts: { types?: string[]; projectId?: number; sort?: SearchSort } = {},
 ): Promise<{ projects: ProjectRow[]; todos: TodoRow[]; logs: LogRow[] }> {
   const [keyword, semantic] = await Promise.all([
     searchAll(env, userId, query, opts),
@@ -133,6 +142,8 @@ export async function hybridSearch(
     ...keyword.todos.map((t) => `todo:${t.id}`),
     ...keyword.logs.map((l) => `log:${l.id}`),
   ]);
+  const matchOf = new Map<string, number>();
+  for (const k of have) matchOf.set(k, 1);
   const extras = semantic.filter((h) => !have.has(`${h.type}:${h.id}`)).slice(0, 10);
   for (const hit of extras) {
     const table = { project: "projects", todo: "todos", log: "logs" }[hit.type];
@@ -140,9 +151,26 @@ export async function hybridSearch(
       .bind(hit.id, userId)
       .first<ProjectRow & TodoRow & LogRow>();
     if (!row) continue; // stale vector (deleted row) — ignore
+    matchOf.set(`${hit.type}:${hit.id}`, hit.score);
     if (hit.type === "project") keyword.projects.push(row);
     else if (hit.type === "todo") keyword.todos.push(row);
     else keyword.logs.push(row);
   }
-  return keyword;
+
+  const t = now();
+  const sort = opts.sort ?? "blend";
+  const order = <T extends { id: number }>(rows: T[], type: string, when: (r: T) => number): T[] => {
+    const key = (r: T) => {
+      const match = matchOf.get(`${type}:${r.id}`) ?? 0.5;
+      if (sort === "recent") return when(r);
+      if (sort === "match") return match;
+      return blendScore(match, Math.max(0, (t - when(r)) / 86400));
+    };
+    return [...rows].sort((a, b) => key(b) - key(a));
+  };
+  return {
+    projects: order(keyword.projects, "project", (r) => (r as ProjectRow).updated_at),
+    todos: order(keyword.todos, "todo", (r) => (r as TodoRow).updated_at),
+    logs: order(keyword.logs, "log", (r) => (r as LogRow).occurred_at),
+  };
 }

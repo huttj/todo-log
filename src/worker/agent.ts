@@ -340,6 +340,11 @@ const TOOLS: Anthropic.Tool[] = [
           description: "Limit to these entity types (default: all)",
         },
         project_id: ID,
+        sort: {
+          type: ["string", "null"],
+          enum: ["blend", "recent", "match", null],
+          description: "blend (default) = match × recency; recent = newest first; match = similarity only",
+        },
       },
       required: ["query"],
     },
@@ -825,8 +830,13 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const types = Array.isArray(input.types)
         ? (input.types as unknown[]).filter((x): x is string => typeof x === "string")
         : undefined;
+      const sortIn = str(input.sort);
       return JSON.stringify(
-        await hybridSearch(s.env, s.user.id, q, { types, projectId: num(input.project_id) ?? undefined }),
+        await hybridSearch(s.env, s.user.id, q, {
+          types,
+          projectId: num(input.project_id) ?? undefined,
+          sort: sortIn === "recent" || sortIn === "match" ? sortIn : "blend",
+        }),
       );
     }
     case "fetch_entities": {

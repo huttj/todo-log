@@ -514,7 +514,9 @@ crud.post("/settings/agent", async (c) => {
 crud.get("/search", async (c) => {
   const q = c.req.query("q") ?? "";
   if (q.trim().length < 2) return c.json({ projects: [], todos: [], logs: [] });
-  return c.json(await hybridSearch(c.env, c.get("user").id, q.trim()));
+  const sortQ = c.req.query("sort");
+  const sort = sortQ === "recent" || sortQ === "match" ? sortQ : "blend";
+  return c.json(await hybridSearch(c.env, c.get("user").id, q.trim(), { sort }));
 });
 
 // -- Generic PATCH / undo ---------------------------------------------------

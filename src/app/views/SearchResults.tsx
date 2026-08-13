@@ -21,6 +21,9 @@ export default function SearchResults(props: {
 }) {
   const [params, setParams] = useSearchParams();
   const q = (params.get("q") ?? "").trim();
+  const sort = params.get("sort") ?? "blend";
+  const setSort = (s: string) =>
+    setParams(s === "blend" ? { q } : { q, sort: s });
   const [query, setQuery] = useState(q);
   const [results, setResults] = useState<Results | null>(null);
   const [allTodos, setAllTodos] = useState<Todo[]>([]);
@@ -40,8 +43,8 @@ export default function SearchResults(props: {
       setResults(null);
       return;
     }
-    api<Results>(`/search?q=${encodeURIComponent(q)}`).then(setResults).catch(() => {});
-  }, [q, props.refreshKey]);
+    api<Results>(`/search?q=${encodeURIComponent(q)}&sort=${sort}`).then(setResults).catch(() => {});
+  }, [q, sort, props.refreshKey]);
 
   const total = results
     ? results.projects.length + results.todos.length + results.logs.length
@@ -80,9 +83,22 @@ export default function SearchResults(props: {
       </form>
 
       {q.length >= 2 && results && (
-        <p className="hint-left">
-          {total} result{total === 1 ? "" : "s"} for “{q}”
-        </p>
+        <div className="search-meta">
+          <p className="hint-left">
+            {total} result{total === 1 ? "" : "s"} for “{q}”
+          </p>
+          <div className="settings-tabs sort-tabs">
+            {[
+              { key: "blend", label: "Best" },
+              { key: "recent", label: "Recent" },
+              { key: "match", label: "Similar" },
+            ].map((s) => (
+              <button key={s.key} className={sort === s.key ? "on" : ""} onClick={() => setSort(s.key)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
       {q.length < 2 && <p className="empty">Type at least two characters and press Enter.</p>}
       {results && total === 0 && <p className="empty">Nothing found for “{q}”.</p>}
