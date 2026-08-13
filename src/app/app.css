@@ -2722,7 +2722,10 @@ header {
 
 .feed li .feed-ic {
   flex: none;
-  margin-top: 0.1rem;
+  /* Center in the row instead of a fixed offset — a rem nudge that looked
+     right at one font size sat wrong at every other. */
+  align-self: center;
+  margin-top: 0;
 }
 
 /* -- chat bubble inline transcript / corner play -- */
