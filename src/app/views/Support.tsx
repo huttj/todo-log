@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import { api, type Me, type SegmentDetail, type TranscriptWord } from "../api";
 import TranscriptPlayer from "../components/TranscriptPlayer";
 import { SUPPORT_SENT_EVENT } from "../SupportDock";
@@ -173,7 +173,10 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
             key={m.id}
             className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}`}
           >
-            <span className="support-when">{when(m.created_at)}</span>
+            <span className="support-when">
+              {m.r2_key && <FontAwesomeIcon className="voice-glyph" icon={faMicrophone} title="Voice note — tap the text to play" />}
+              {when(m.created_at)}
+            </span>
             {!!m.as_admin && (
               <span className="support-who">
                 {m.sender_name ? `${m.sender_name} · Todo Log support` : "Todo Log support"}

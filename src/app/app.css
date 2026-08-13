@@ -3642,3 +3642,9 @@ button.back {
 }
 
 /* No corner button in support bubbles — the text itself plays. */
+
+.voice-glyph {
+  font-size: 0.6rem;
+  margin-right: 0.35rem;
+  opacity: 0.9;
+}
