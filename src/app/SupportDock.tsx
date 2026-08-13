@@ -24,6 +24,9 @@ export default function SupportDock(props: {
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
+  /** Send was hit mid-recording: finish transcription, then send it all. */
+  const sendOnStopRef = useRef(false);
+  const draftValueRef = useRef("");
 
   useEffect(() => {
     if (props.autoStart) void startVoice();
@@ -36,18 +39,17 @@ export default function SupportDock(props: {
 
   const sent = () => window.dispatchEvent(new CustomEvent(SUPPORT_SENT_EVENT));
 
-  async function sendText() {
-    const text = draft.trim();
-    if (!text || busy) return;
+  async function deliver(text: string, r2Key: string | null, words: unknown) {
     setBusy("send");
     setError(null);
     try {
       await post(`${base}/messages`, {
         text,
-        r2_key: pendingAudio ?? undefined,
-        words: pendingAudio ? (pendingWordsRef.current ?? undefined) : undefined,
+        r2_key: r2Key ?? undefined,
+        words: r2Key ? (words ?? undefined) : undefined,
       });
       setDraft("");
+      draftValueRef.current = "";
       setPendingAudio(null);
       pendingWordsRef.current = null;
       sent();
@@ -56,6 +58,18 @@ export default function SupportDock(props: {
     } finally {
       setBusy(null);
     }
+  }
+
+  function sendText() {
+    // Mid-recording Send = stop, transcribe, send — same as the main chat.
+    if (recording && recorderRef.current?.state === "recording") {
+      sendOnStopRef.current = true;
+      recorderRef.current.stop();
+      return;
+    }
+    const text = draft.trim();
+    if (!text || busy) return;
+    void deliver(text, pendingAudio, pendingWordsRef.current);
   }
 
   async function startVoice() {
@@ -91,11 +105,20 @@ export default function SupportDock(props: {
             error?: string;
           };
           if (!res.ok) throw new Error(data.error ?? "transcription failed");
-          setDraft((d) => (d.trim() ? `${d.trimEnd()} ${data.text ?? ""}` : (data.text ?? "")));
+          const prior = draftValueRef.current.trim();
+          const combined = prior ? `${prior} ${data.text ?? ""}`.trim() : (data.text ?? "").trim();
+          if (sendOnStopRef.current) {
+            sendOnStopRef.current = false;
+            if (combined) await deliver(combined, data.r2_key ?? null, data.words ?? null);
+            return;
+          }
+          setDraft(combined);
+          draftValueRef.current = combined;
           setPendingAudio(data.r2_key ?? null);
           pendingWordsRef.current = data.words ?? null;
           draftRef.current?.focus();
         } catch (e) {
+          sendOnStopRef.current = false;
           setError(String((e as Error).message ?? e));
         } finally {
           setBusy(null);
@@ -121,14 +144,8 @@ export default function SupportDock(props: {
           Close
         </button>
       </header>
-      {busy === "voice" && <p className="empty">Transcribing…</p>}
-      {pendingAudio && (
-        <p className="pending-audio">
-          voice note attached{" "}
-          <button className="link" onClick={() => setPendingAudio(null)} title="Send as text only">
-            ×
-          </button>
-        </p>
+      {busy === "voice" && (
+        <p className="empty">{sendOnStopRef.current ? "Transcribing and sending…" : "Transcribing…"}</p>
       )}
       {error && <p className="error">{error}</p>}
       <div className="composer">
@@ -139,7 +156,10 @@ export default function SupportDock(props: {
             value={draft}
             rows={2}
             disabled={recording}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              draftValueRef.current = e.target.value;
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
@@ -157,9 +177,9 @@ export default function SupportDock(props: {
         </button>
         <button
           className="icon-btn send-btn"
-          disabled={!draft.trim() || busy != null}
-          title="Send"
-          onClick={() => void sendText()}
+          disabled={(!draft.trim() && !recording) || busy != null}
+          title={recording ? "Stop and send" : "Send"}
+          onClick={() => sendText()}
         >
           <FontAwesomeIcon icon={faPaperPlane} />
         </button>
