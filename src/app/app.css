@@ -3555,3 +3555,11 @@ button.back {
 .legal-links a {
   color: var(--muted);
 }
+
+.log-summary .md p {
+  margin: 0 0 0.35rem;
+}
+
+.log-summary .md > *:last-child {
+  margin-bottom: 0;
+}

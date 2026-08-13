@@ -14,6 +14,7 @@ import {
   listSchedule,
   listTodos,
   listMemories,
+  listLogs,
   setNotification,
   getBriefing,
 } from "./db";
@@ -195,10 +196,14 @@ export async function checkinForUser(
   user: UserRow,
   t: number,
 ): Promise<"sent" | "skipped" | "nothing-open" | "error"> {
-  const [schedule, todos, memories] = await Promise.all([
+  const [schedule, todos, memories, recentLogs] = await Promise.all([
     listSchedule(env, user.id, { from: t - 2 * DAY, to: t + DAY }),
     listTodos(env, user.id),
     listMemories(env, user.id),
+    // Everything the user said since the last check-in — the context that
+    // stops "any progress?" nags at someone who just logged "exhausted,
+    // going to bed".
+    listLogs(env, user.id, { from: user.last_checkin_at ?? t - DAY, limit: 10 }),
   ]);
   const open = schedule.filter((s) => s.slot_status === "planned");
   const inFlight = todos.filter(
@@ -226,7 +231,10 @@ export async function checkinForUser(
       "You are warm, brief, and specific — a good coworker glancing at the board, never a nag. " +
       "Given what's open, either write a short check-in (title ≤ 8 words; body 1-3 sentences naming " +
       "SPECIFIC items and asking 1-2 concrete questions — a progress update, or what's making something " +
-      "hard) or decide none is warranted right now. Mirror the user's own words and commitment level " +
+      "hard) or decide none is warranted right now. READ THE RECENT LOGS FIRST: they are the user's own " +
+      "words since your last check-in. If they've said they're tired, wrapping up, resting, or done for " +
+      "the day, do NOT push tasks — skip, or at most a brief warm sign-off. Never re-ask about something " +
+      "a recent log already answered. Mirror the user's own words and commitment level " +
       "(never escalate \"look into\" to \"do\"); when a state is assumed rather than known, ask rather than " +
       "assert; banned register: \"finally\", \"you keep postponing\", \"still hanging\", \"no action yet\". " +
       "If the day's picture has clearly shifted since the briefing would have been computed, you may also " +
@@ -239,6 +247,14 @@ export async function checkinForUser(
           `Local time: ${new Date(t * 1000).toLocaleString("en-US", { timeZone: tz })}`,
           `Scheduled todos (last 2 days → tomorrow):\n${open.map(line).join("\n") || "(none)"}`,
           `Todos in flight:\n${inFlight.slice(0, 15).map(todoLine).join("\n") || "(none)"}`,
+          recentLogs.length
+            ? `Logs since your last check-in (newest first — weigh their stated state heavily):\n${recentLogs
+                .map(
+                  (l) =>
+                    `- [${new Date(l.occurred_at * 1000).toLocaleString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}] ${l.title ?? ""}: ${l.summary.slice(0, 300)}`,
+                )
+                .join("\n")}`
+            : "",
           memories.length
             ? `Your memory notes:\n${memories.map((m) => `[${m.key}] ${m.content}`).join("\n")}`
             : "",

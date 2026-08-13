@@ -8,6 +8,7 @@ import { faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import { api, type Log, type Quote, type SegmentDetail, type TranscriptWord } from "../api";
 import { requestTalk } from "../talk";
 import TranscriptPlayer from "./TranscriptPlayer";
+import Markdown from "./Markdown";
 import { getSpeed, setGlobalSpeed, nextSpeed } from "../audio";
 import { highlight } from "../highlight";
 import { fmtCost } from "../fmt";
@@ -82,15 +83,27 @@ export default function LogCard(props: {
         </div>
       )}
       {log.title && <p className="log-title">{highlight(log.title, props.highlightQuery)}</p>}
-      <p
-        className="log-summary"
-        onClick={(e) => {
-          e.stopPropagation();
-          navigate(`/logs/${log.id}`);
-        }}
-      >
-        {highlight(log.summary, props.highlightQuery)}
-      </p>
+      {props.highlightQuery ? (
+        <p
+          className="log-summary"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/logs/${log.id}`);
+          }}
+        >
+          {highlight(log.summary, props.highlightQuery)}
+        </p>
+      ) : (
+        <div
+          className="log-summary"
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/logs/${log.id}`);
+          }}
+        >
+          <Markdown text={log.summary} />
+        </div>
+      )}
       {showFull && <TranscriptPlayer logId={log.id} emptyNote="No audio for this log (typed input)." />}
       {(quotes.length > 0 || log.message_id) && (
         <div className="log-toggles">
