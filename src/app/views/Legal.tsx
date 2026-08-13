@@ -76,9 +76,19 @@ export function Terms() {
       </p>
 
       <h2>6. Acceptable use</h2>
-      <p>You agree not to:</p>
+      <p>
+        Todo Log is a personal task and journaling companion, and you agree to use it as one. In
+        particular, you agree not to:
+      </p>
       <ul>
         <li>use the Service for anything unlawful;</li>
+        <li>
+          use the Service as a general-purpose AI gateway — its agent exists to file, organize,
+          and reflect on <em>your</em> work and life, not to answer arbitrary questions, do
+          homework, generate unrelated content, or otherwise substitute for a general chatbot
+          (each conversation costs us real compute, and accounts that treat the agent as a free
+          LLM endpoint may be limited or suspended);
+        </li>
         <li>attempt to access another person's account or data;</li>
         <li>probe, overload, or disrupt the Service's infrastructure;</li>
         <li>abuse the support channel or other humans behind the Service;</li>
