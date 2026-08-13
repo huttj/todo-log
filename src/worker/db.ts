@@ -71,7 +71,7 @@ export async function saveGoogleTokens(
 export async function insertProspect(
   env: Env,
   input: { email: string; name: string | null; note: string | null; wantsBetaCall: boolean },
-): Promise<void> {
+): Promise<{ created: boolean }> {
   const existing = await env.DB.prepare(`SELECT id FROM prospects WHERE lower(email) = lower(?)`)
     .bind(input.email)
     .first<{ id: number }>();
@@ -82,13 +82,14 @@ export async function insertProspect(
     )
       .bind(input.name, input.note, input.wantsBetaCall ? 1 : 0, existing.id)
       .run();
-    return;
+    return { created: false };
   }
   await env.DB.prepare(
     `INSERT INTO prospects (email, name, note, wants_beta_call, created_at) VALUES (?, ?, ?, ?, ?)`,
   )
     .bind(input.email, input.name, input.note, input.wantsBetaCall ? 1 : 0, now())
     .run();
+  return { created: true };
 }
 
 // ---------------------------------------------------------------------------

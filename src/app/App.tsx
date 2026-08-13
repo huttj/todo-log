@@ -299,9 +299,12 @@ function Waitlist(props: { email: string }) {
       <div className="splash">
         <h1>Todo Log</h1>
         <p>
-          Thanks for signing up! Keep an eye on {props.email} — we'll let you know the moment
-          you're in.
+          Thanks for signing up! Book your beta call now — it's the fastest way in — and keep an
+          eye on {props.email}.
         </p>
+        <a className="google-btn" href="https://calendar.app.google/Qx1fw2wu89dJkZSw5" target="_blank" rel="noreferrer">
+          Book your beta call
+        </a>
       </div>
     );
   }

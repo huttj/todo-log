@@ -39,5 +39,6 @@
   }
   // Secrets (wrangler secret put / .dev.vars):
   //   ANTHROPIC_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET,
-  //   VAPID_PRIVATE_KEY (P-256 JWK JSON for web push)
+  //   VAPID_PRIVATE_KEY (P-256 JWK JSON for web push),
+  //   RESEND_API_KEY (outbound welcome emails)
 }

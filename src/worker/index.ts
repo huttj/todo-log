@@ -6,7 +6,7 @@ import { insertProspect } from "./db";
 import { crud } from "./crud";
 import { capture } from "./capture";
 import { runSweep } from "./sweep";
-import { notifyOwnerOfSignup, isAdmin } from "./signup";
+import { notifyOwnerOfSignup, sendWelcomeEmail, isAdmin } from "./signup";
 import { support } from "./support";
 
 const app = new Hono<AppContext>();
@@ -40,8 +40,10 @@ app.post("/api/prospects", async (c) => {
     note: body.note?.trim() || null,
     wantsBetaCall: !!body.wantsBetaCall,
   };
-  await insertProspect(c.env, prospect);
+  const { created } = await insertProspect(c.env, prospect);
   c.executionCtx.waitUntil(notifyOwnerOfSignup(c.env, prospect));
+  // First-time signups get the welcome + booking email (resubmits don't).
+  if (created) c.executionCtx.waitUntil(sendWelcomeEmail(c.env, prospect));
   return c.json({ ok: true });
 });
 

@@ -13,6 +13,56 @@ interface Prospect {
   wantsBetaCall: boolean;
 }
 
+const BOOKING_URL = "https://calendar.app.google/Qx1fw2wu89dJkZSw5";
+
+function welcomeText(p: Prospect): string {
+  return [
+    `Hi ${p.name?.split(" ")[0] ?? "there"},`,
+    "",
+    "Thanks for signing up for the Todo Log beta! I'd love to have a quick chat to understand what you want to get out of Todo Log and to get you started!",
+    "",
+    "Please book a time for us to chat here:",
+    BOOKING_URL,
+    "",
+    "Best,",
+    "Joshua",
+  ].join("\n");
+}
+
+function welcomeHtml(p: Prospect): string {
+  const first = p.name?.split(" ")[0] ?? "there";
+  return `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.6;color:#1a1a1a;max-width:34em">
+<p>Hi ${first},</p>
+<p>Thanks for signing up for the Todo Log beta! I'd love to have a quick chat to understand what you want to get out of Todo Log and to get you started!</p>
+<p>Please book a time for us to chat here:<br>
+<a href="${BOOKING_URL}">${BOOKING_URL}</a></p>
+<p>Best,<br>Joshua</p>
+<p style="margin-top:24px"><img src="https://todolo.gg/email-logo.png" width="120" alt="Todo Log"></p>
+</div>`;
+}
+
+/** Automated welcome (Resend). No-op without RESEND_API_KEY. */
+export async function sendWelcomeEmail(env: Env, p: Prospect): Promise<void> {
+  if (!env.RESEND_API_KEY) return;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Joshua at Todo Log <support@todolo.gg>",
+      to: [p.email],
+      subject: "Todo Log Beta",
+      text: welcomeText(p),
+      html: welcomeHtml(p),
+    }),
+  });
+  if (!res.ok) {
+    console.error(`welcome email failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+  }
+}
+
 /** Admin = an allowlisted email (the operator). */
 export function isAdmin(env: Env, email: string): boolean {
   return env.ALLOWLIST_EMAILS.split(",")
@@ -49,9 +99,19 @@ export async function notifyOwnerOfSignup(env: Env, p: Prospect): Promise<void> 
     msg.setSender({ addr: "support@todolo.gg", name: "Todo Log" });
     msg.setRecipient(owner.email);
     msg.setSubject(title);
+    const mailto = `mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Todo Log Beta")}&body=${encodeURIComponent(welcomeText(p))}`;
     msg.addMessage({
       contentType: "text/plain",
-      data: [`New beta signup on todolo.gg`, ``, `Email: ${p.email}`, ...details].join("\n"),
+      data: [
+        `New beta signup on todolo.gg`,
+        ``,
+        `Email: ${p.email}`,
+        ...details,
+        ``,
+        env.RESEND_API_KEY
+          ? `A welcome email with the booking link was sent automatically.`
+          : `Send the welcome email (prefilled): ${mailto}`,
+      ].join("\n"),
     });
     await env.NOTIFY.send(new EmailMessage("support@todolo.gg", owner.email, msg.asRaw()));
   } catch (err) {

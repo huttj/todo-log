@@ -14,6 +14,8 @@ export interface Env {
   VAPID_PRIVATE_KEY?: string;
   /** Email Routing send binding (unset = no signup emails). */
   NOTIFY?: { send(message: unknown): Promise<void> };
+  /** Resend API key for outbound welcome emails (unset = skip sending). */
+  RESEND_API_KEY?: string;
 }
 
 export interface TranscriptWord {
