@@ -3364,7 +3364,7 @@ button.back {
   font-size: 0.7rem;
   color: var(--accent);
   font-weight: 600;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.4rem;
 }
 
 /* Timestamp floats top-right, out of the corner-play's way. */
@@ -3372,7 +3372,7 @@ button.back {
   float: right;
   font-size: 0.65rem;
   opacity: 0.55;
-  margin: 0.1rem 0 0.1rem 0.6rem;
+  margin: 0.1rem 0 0.35rem 0.6rem;
 }
 
 .support-audio {
@@ -3641,12 +3641,4 @@ button.back {
   overflow: hidden;
 }
 
-/* Voice bubbles: reserve corner-play space only while it's showing. */
-.support-bubble.has-audio {
-  padding-bottom: 1.3rem;
-}
-
-.support-bubble.has-audio:has(.inline-transcript) {
-  padding-bottom: 0.55rem;
-  padding-right: 0.75rem;
-}
+/* No corner button in support bubbles — the text itself plays. */

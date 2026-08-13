@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faPlay } from "@fortawesome/free-solid-svg-icons";
+import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, type Me, type SegmentDetail, type TranscriptWord } from "../api";
 import TranscriptPlayer from "../components/TranscriptPlayer";
 import { SUPPORT_SENT_EVENT } from "../SupportDock";
@@ -171,7 +171,7 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
         {messages.map((m) => (
           <div
             key={m.id}
-            className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}${m.r2_key ? " has-audio" : ""}`}
+            className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}`}
           >
             <span className="support-when">{when(m.created_at)}</span>
             {!!m.as_admin && (
@@ -202,15 +202,6 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
               </p>
             ) : (
               <p>{m.text}</p>
-            )}
-            {m.r2_key && !openAudio.has(m.id) && (
-              <button
-                className="msg-play corner"
-                title="Play the recording"
-                onClick={() => openPlayer(m.id, 0)}
-              >
-                <FontAwesomeIcon icon={faPlay} />
-              </button>
             )}
           </div>
         ))}
