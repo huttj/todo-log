@@ -2622,8 +2622,9 @@ header {
 .feed-ic {
   color: var(--faint);
   font-size: 0.68rem;
-  width: 0.85rem;
-  margin-right: 0.3rem;
+  width: 0.8rem;
+  /* The row's flex gap is the spacing — no extra margin stacking on it. */
+  margin-right: 0;
   flex-shrink: 0;
 }
 
@@ -2721,7 +2722,7 @@ header {
 
 .feed li .feed-ic {
   flex: none;
-  margin-top: 0.2rem;
+  margin-top: 0.1rem;
 }
 
 /* -- chat bubble inline transcript / corner play -- */
