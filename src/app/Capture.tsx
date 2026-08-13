@@ -22,8 +22,9 @@ import { feedIcon } from "./feedIcons";
 const MAX_SEGMENT_MS = 25_000;
 const DRAFT_KEY = "todolog.draft";
 // Every message re-sends the whole history, so long chats get expensive —
-// soft-cap at 5 turns with an explicit +5 override.
-const TURN_LIMIT = 5;
+// soft-cap at 10 turns, extendable to a hard max of 20.
+const TURN_LIMIT = 10;
+const TURN_MAX = 20;
 
 export interface CaptureContext {
   type: "project" | "todo" | "action" | "log" | "session" | "today";
@@ -1141,10 +1142,16 @@ export default function Capture(props: {
         <div className="turn-limit">
           <span>
             {userTurns} turns — each message re-sends the whole chat, so fresh chats are cheaper.
+            {turnAllowance >= TURN_MAX && " This one's at its max."}
           </span>
-          <button className="link" onClick={() => setTurnAllowance((a) => a + 5)}>
-            continue (+5)
-          </button>
+          {turnAllowance < TURN_MAX && (
+            <button
+              className="link"
+              onClick={() => setTurnAllowance((a) => Math.min(a + 5, TURN_MAX))}
+            >
+              continue (+5)
+            </button>
+          )}
           <button
             className="link"
             onClick={() => {
