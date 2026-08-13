@@ -27,6 +27,7 @@
     }
   ],
   "ai": { "binding": "AI" },
+  "vectorize": [{ "binding": "VECTORS", "index_name": "todolog-search" }],
   "send_email": [{ "name": "EMAIL", "remote": true }],
   "triggers": {
     // Sweep: heal untranscribed segments, distill pending corrections.

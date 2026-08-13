@@ -3,6 +3,7 @@
 // (events/logs before messages, messages before sessions, sessions before
 // notifications, schedules/actions before todos, todos before projects).
 import type { Env, UserRow } from "./types";
+import { deleteVectors } from "./embeddings";
 
 const DELETE_ORDER = [
   `DELETE FROM google_tokens WHERE user_id = ?1`,
@@ -40,6 +41,15 @@ async function purgeR2Prefix(env: Env, prefix: string): Promise<void> {
 /** Destroys everything. Caller is responsible for having checked
  * delete_after (or admin intent). */
 export async function purgeUser(env: Env, user: UserRow): Promise<void> {
+  // Vector ids must be gathered while the rows still exist.
+  const vectorIds: string[] = [];
+  for (const [type, table] of [["project", "projects"], ["todo", "todos"], ["log", "logs"]] as const) {
+    const r = await env.DB.prepare(`SELECT id FROM ${table} WHERE user_id = ?`)
+      .bind(user.id)
+      .all<{ id: number }>();
+    vectorIds.push(...r.results.map((x) => `${type}:${x.id}`));
+  }
+  await deleteVectors(env, vectorIds);
   for (const prefix of [`audio/${user.id}/`, `support/tmp/${user.id}/`, `support/${user.id}/`]) {
     await purgeR2Prefix(env, prefix);
   }

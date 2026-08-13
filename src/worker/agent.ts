@@ -17,6 +17,7 @@ import type {
 } from "./types";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
 import { BRIEFING_STYLE, rehiddenEntries, stripInvalidRefs, type Briefing } from "./briefing";
+import { hybridSearch } from "./embeddings";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 import {
   now,
@@ -32,7 +33,6 @@ import {
   resolvePlannedSlots,
   getSlot,
   listLogs,
-  searchAll,
   insertEvent,
   fileCorrection,
   getLearnings,
@@ -329,7 +329,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "search",
     description:
-      "Text-search the user's projects, todos, and logs. Filter with `types` and/or scope todos+logs to one project via `project_id`.",
+      "Search the user's projects, todos, and logs — matches words AND meaning (semantic), so paraphrases find things. Filter with `types` and/or scope todos+logs to one project via `project_id`.",
     input_schema: {
       type: "object",
       properties: {
@@ -826,7 +826,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         ? (input.types as unknown[]).filter((x): x is string => typeof x === "string")
         : undefined;
       return JSON.stringify(
-        await searchAll(s.env, s.user.id, q, { types, projectId: num(input.project_id) ?? undefined }),
+        await hybridSearch(s.env, s.user.id, q, { types, projectId: num(input.project_id) ?? undefined }),
       );
     }
     case "fetch_entities": {

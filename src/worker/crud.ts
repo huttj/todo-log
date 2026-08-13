@@ -15,7 +15,6 @@ import {
   otherPlannedSlots,
   undoBriefing,
   listLogs,
-  searchAll,
   insertEvent,
   getEvent,
   listNotifications,
@@ -27,6 +26,7 @@ import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
 import { listMemories, saveMemory, listDismissals, setDismissal, resolvePlannedSlots } from "./db";
 import { saveSubscription, pushToUser } from "./push";
+import { hybridSearch } from "./embeddings";
 import { checkinForUser } from "./sweep";
 import { isAdmin } from "./signup";
 import type { Env, EntityType, ProjectRow, TodoRow } from "./types";
@@ -512,9 +512,9 @@ crud.post("/settings/agent", async (c) => {
 
 // Omni search across projects, todos, and logs.
 crud.get("/search", async (c) => {
-  const q = c.req.query("q")?.trim();
-  if (!q) return c.json({ projects: [], todos: [], logs: [] });
-  return c.json(await searchAll(c.env, c.get("user").id, q));
+  const q = c.req.query("q") ?? "";
+  if (q.trim().length < 2) return c.json({ projects: [], todos: [], logs: [] });
+  return c.json(await hybridSearch(c.env, c.get("user").id, q.trim()));
 });
 
 // -- Generic PATCH / undo ---------------------------------------------------

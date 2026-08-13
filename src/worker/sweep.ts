@@ -24,11 +24,13 @@ import { emptyUsage, addUsage, recordUsage } from "./usage";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 import { pushToUser } from "./push";
 import { purgeDueDeletions } from "./purge";
+import { syncEmbeddings } from "./embeddings";
 
 const DAY = 86400;
 
 export async function runSweep(env: Env): Promise<void> {
   await purgeDueDeletions(env, now());
+  await syncEmbeddings(env).catch((err) => console.error("sweep: embedding sync failed:", err));
   await healSegments(env);
   await distillCorrections(env);
   await runCheckins(env);

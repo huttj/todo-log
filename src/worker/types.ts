@@ -12,6 +12,15 @@ export interface Env {
   /** Web push (unset = push disabled). */
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
+  /** Vectorize index for semantic search (768-dim bge embeddings). */
+  VECTORS?: {
+    upsert(vectors: { id: string; values: number[]; metadata?: Record<string, unknown> }[]): Promise<unknown>;
+    query(
+      values: number[],
+      opts: { topK: number; filter?: Record<string, unknown>; returnMetadata?: boolean | string },
+    ): Promise<{ matches: { id: string; score: number; metadata?: Record<string, unknown> }[] }>;
+    deleteByIds(ids: string[]): Promise<unknown>;
+  };
   /** Cloudflare Email Service binding — transactional sending to anyone. */
   EMAIL?: {
     send(message: {
