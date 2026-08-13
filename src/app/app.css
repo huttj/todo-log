@@ -948,6 +948,7 @@ blockquote audio {
 
 .feed li {
   font-size: 0.8rem;
+  line-height: 1.4;
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
@@ -2722,10 +2723,11 @@ header {
 
 .feed li .feed-ic {
   flex: none;
-  /* Center in the row instead of a fixed offset — a rem nudge that looked
-     right at one font size sat wrong at every other. */
-  align-self: center;
-  margin-top: 0;
+  /* Center within the FIRST line box, top-aligned for wrapped labels:
+     (line box 0.8rem x 1.4 minus icon 0.68rem) / 2 = 0.22rem. All rem, so
+     it scales with the text-size setting. */
+  align-self: flex-start;
+  margin-top: 0.22rem;
 }
 
 /* -- chat bubble inline transcript / corner play -- */
