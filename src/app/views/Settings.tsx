@@ -544,6 +544,10 @@ export default function Settings(props: {
       </section>
 
       {saved && <p className="hint-left">saved</p>}
+
+      <p className="legal-links">
+        <a href="/terms">Terms of Use</a> · <a href="/privacy">Privacy Policy</a>
+      </p>
     </div>
   );
 }

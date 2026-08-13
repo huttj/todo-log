@@ -161,6 +161,8 @@ export default function Landing() {
           pointer-events-none overlay for the Talk button. */}
       <div className="landing-foot">
         <span>Todo Log — in private beta</span>
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
         <a href="/api/auth/google">Sign in</a>
       </div>
     </div>

@@ -16,6 +16,7 @@ import Today from "./views/Today";
 import Settings from "./views/Settings";
 import SearchResults from "./views/SearchResults";
 import Support from "./views/Support";
+import { Terms, Privacy } from "./views/Legal";
 import SupportDock from "./SupportDock";
 import { api, post, ApiError, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
@@ -160,6 +161,10 @@ export default function App() {
         setAuth(e instanceof ApiError && e.status === 401 ? "signed-out" : "signed-out");
       });
   }, []);
+
+  // Legal pages are public — reachable in every auth state.
+  if (location.pathname === "/terms") return <Terms />;
+  if (location.pathname === "/privacy") return <Privacy />;
 
   if (auth === "loading") return <Splash text="Loading…" />;
   if (auth === "signed-out") return <Landing />;
