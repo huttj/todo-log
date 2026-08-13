@@ -2730,8 +2730,12 @@ header {
   position: relative;
 }
 
-.bubble.user.has-audio {
-  padding-right: 2rem;
+/* Voice bubbles carry a floated mic glyph instead of reserved padding. */
+.voice-glyph-float {
+  float: right;
+  font-size: 0.6rem;
+  opacity: 0.55;
+  margin: 0.15rem 0 0.2rem 0.5rem;
 }
 
 .msg-play.corner {

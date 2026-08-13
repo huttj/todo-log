@@ -1045,6 +1045,11 @@ export default function Capture(props: {
                   entry.live &&
                   (entry.parts?.length ?? 0) === 0 &&
                   !entry.thinking && <TypingDots />}
+                {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
+                  <span className="voice-glyph-float">
+                    <FontAwesomeIcon icon={faMicrophone} title="Voice note — tap the text to play" />
+                  </span>
+                )}
                 {entry.role === "user" && entry.text && !playerOpen ? (
                   entry.hasAudio && entry.msgId && !entry.transcribing ? (
                     <p className="clickable-text" title="Tap a word to play from there">
@@ -1096,31 +1101,17 @@ export default function Capture(props: {
                     {fmtCost(entry.cost!)}
                   </span>
                 )}
-                {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && (
-                  <>
-                    {playerOpen ? (
-                      <TranscriptPlayer
-                        messageId={entry.msgId}
-                        autoPlay
-                        minimal
-                        startWordIndex={entry.playerStart}
-                        fallbackText={entry.text}
-                        onClose={() =>
-                          updateEntry(entry.id, (e) => ({ ...e, showPlayer: false, playerStart: undefined }))
-                        }
-                      />
-                    ) : (
-                      <button
-                        className="msg-play corner"
-                        title="Play the recording"
-                        onClick={() =>
-                          updateEntry(entry.id, (e) => ({ ...e, showPlayer: true, playerStart: 0 }))
-                        }
-                      >
-                        <FontAwesomeIcon icon={faPlay} />
-                      </button>
-                    )}
-                  </>
+                {entry.role === "user" && entry.hasAudio && entry.msgId && !entry.transcribing && playerOpen && (
+                  <TranscriptPlayer
+                    messageId={entry.msgId}
+                    autoPlay
+                    minimal
+                    startWordIndex={entry.playerStart}
+                    fallbackText={entry.text}
+                    onClose={() =>
+                      updateEntry(entry.id, (e) => ({ ...e, showPlayer: false, playerStart: undefined }))
+                    }
+                  />
                 )}
               </div>
             );

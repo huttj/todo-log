@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTrashCan, faPlay, faCommentDots, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
+import { faTrashCan, faCommentDots, faChevronLeft, faMicrophone } from "@fortawesome/free-solid-svg-icons";
 import {
   api,
   del,
@@ -345,6 +345,11 @@ export function SessionView(props: {
                   {openThoughts.has(m.id) && <p className="thinking expanded">{m.thinking}</p>}
                 </>
               )}
+              {m.role === "user" && hasAudio && (
+                <span className="voice-glyph-float">
+                  <FontAwesomeIcon icon={faMicrophone} title="Voice note — tap the text to play" />
+                </span>
+              )}
               {m.role === "assistant" ? (
                 (() => {
                   let parts: MessagePart[] | null = null;
@@ -395,28 +400,16 @@ export function SessionView(props: {
               {m.role === "assistant" && m.questions_json && (
                 <QuestionChips questionsJson={m.questions_json} />
               )}
-              {m.role === "user" && hasAudio && (
-                <>
-                  {playerOpen ? (
-                    <TranscriptPlayer
-                      messageId={m.id}
-                      autoPlay
-                      minimal
-                      startWordIndex={openPlayers.get(m.id)}
-                      fallbackText={m.text ?? undefined}
-                      onClose={() => closePlayer(m.id)}
-                      emptyNote="No audio for this message (typed)."
-                    />
-                  ) : (
-                    <button
-                      className="msg-play corner"
-                      title="Play the recording"
-                      onClick={() => openPlayer(m.id)}
-                    >
-                      <FontAwesomeIcon icon={faPlay} />
-                    </button>
-                  )}
-                </>
+              {m.role === "user" && hasAudio && playerOpen && (
+                <TranscriptPlayer
+                  messageId={m.id}
+                  autoPlay
+                  minimal
+                  startWordIndex={openPlayers.get(m.id)}
+                  fallbackText={m.text ?? undefined}
+                  onClose={() => closePlayer(m.id)}
+                  emptyNote="No audio for this message (typed)."
+                />
               )}
               {feed && feed.length > 0 && !m.parts_json && (
                 <EventFeed
