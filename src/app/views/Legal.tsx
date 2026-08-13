@@ -141,10 +141,10 @@ export function Privacy() {
     <LegalShell title="Privacy Policy">
       <p className="legal-lede">
         Todo Log exists to hold your most candid thinking. That only works if the privacy
-        posture is unambiguous, so here it is in one breath: <strong>your content is never used
-        to train AI models; no human looks at it without your consent or narrow, named cause;
-        and you can export or delete all of it, any time.</strong> The rest of this document is
-        detail.
+        posture is unambiguous, so here it is in one breath: <strong>we never use your content
+        to train AI models, and our AI providers' commercial terms bar them from doing so; no
+        human looks at it without your consent or narrow, named cause; and you can export or
+        delete all of it, any time.</strong> The rest of this document is detail.
       </p>
 
       <h2>1. What we collect</h2>
@@ -181,14 +181,36 @@ export function Privacy() {
       <p>
         Your content is processed by AI models to provide the Service: transcription runs on
         Cloudflare Workers AI, and the agent runs on Anthropic's Claude models via API. These
-        providers act as processors for us; per Anthropic's API terms, API inputs and outputs are
-        not used to train Anthropic's models.
+        providers act as processors for us, and here is what their commercial terms say, as of
+        this policy's effective date:
       </p>
+      <ul>
+        <li>
+          <strong>Anthropic</strong> does not use API inputs or outputs to train its models, and
+          deletes them from its backend within 30 days — they may be retained during that window
+          for abuse and safety screening, or longer only where their usage policy or the law
+          requires. See{" "}
+          <a href="https://platform.claude.com/docs/en/manage-claude/api-and-data-retention" target="_blank" rel="noreferrer">
+            Anthropic's data-retention documentation
+          </a>
+          .
+        </li>
+        <li>
+          <strong>Cloudflare</strong> does not use Workers AI inference data (your audio, its
+          transcripts) to train models. See{" "}
+          <a href="https://developers.cloudflare.com/workers-ai/platform/data-usage/" target="_blank" rel="noreferrer">
+            Cloudflare's Workers AI data-usage documentation
+          </a>
+          .
+        </li>
+      </ul>
       <p>
-        <strong>We do not use your content to train AI models — ours or anyone else's.</strong>{" "}
-        If we ever want to build something that would learn from user content beyond your own
-        account, it will be strictly opt-in: off by default, asked plainly, and never a condition
-        of using the Service.
+        <strong>We ourselves never use your content to train AI models — ours or anyone
+        else's.</strong> That part is absolute and within our control. If we ever want to build
+        something that would learn from user content beyond your own account, it will be strictly
+        opt-in: off by default, asked plainly, and never a condition of using the Service. If a
+        provider materially changed the terms above, we would tell you and reassess before
+        continuing to send them your content.
       </p>
 
       <h2>4. Human access to your data</h2>
