@@ -284,30 +284,42 @@ export async function searchAll(
   query: string,
   opts: { types?: string[]; projectId?: number } = {},
 ): Promise<{ projects: ProjectRow[]; todos: TodoRow[]; logs: LogRow[] }> {
-  const like = `%${query.replaceAll("%", "").replaceAll("_", "")}%`;
+  // Word-AND matching: "van title" matches records containing both words
+  // anywhere (in any field), not only the contiguous phrase.
+  const words = query
+    .replaceAll("%", "")
+    .replaceAll("_", "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6);
+  if (words.length === 0) return { projects: [], todos: [], logs: [] };
+  const clause = (fields: string[]) =>
+    words.map(() => `(${fields.map((f) => `${f} LIKE ?`).join(" OR ")})`).join(" AND ");
+  const binds = (fieldCount: number) =>
+    words.flatMap((w) => Array.from({ length: fieldCount }, () => `%${w}%`));
   const want = (t: string) => !opts.types || opts.types.length === 0 || opts.types.includes(t);
   const none = { results: [] as never[] };
   const projScope = opts.projectId != null ? ` AND project_id = ${Number(opts.projectId)}` : "";
   const [projects, todos, logs] = await Promise.all([
     want("project") && opts.projectId == null
       ? env.DB.prepare(
-          `SELECT * FROM projects WHERE user_id = ? AND (name LIKE ? OR description LIKE ?) ORDER BY updated_at DESC LIMIT 10`,
+          `SELECT * FROM projects WHERE user_id = ? AND ${clause(["name", "description"])} ORDER BY updated_at DESC LIMIT 10`,
         )
-          .bind(userId, like, like)
+          .bind(userId, ...binds(2))
           .all<ProjectRow>()
       : Promise.resolve(none),
     want("todo")
       ? env.DB.prepare(
-          `SELECT * FROM todos WHERE user_id = ? AND (title LIKE ? OR outcome LIKE ? OR details LIKE ?)${projScope} ORDER BY updated_at DESC LIMIT 15`,
+          `SELECT * FROM todos WHERE user_id = ? AND ${clause(["title", "outcome", "details"])}${projScope} ORDER BY updated_at DESC LIMIT 15`,
         )
-          .bind(userId, like, like, like)
+          .bind(userId, ...binds(3))
           .all<TodoRow>()
       : Promise.resolve(none),
     want("log")
       ? env.DB.prepare(
-          `SELECT * FROM logs WHERE user_id = ? AND (summary LIKE ? OR title LIKE ?)${projScope} ORDER BY occurred_at DESC LIMIT 15`,
+          `SELECT * FROM logs WHERE user_id = ? AND ${clause(["summary", "title"])}${projScope} ORDER BY occurred_at DESC LIMIT 15`,
         )
-          .bind(userId, like, like)
+          .bind(userId, ...binds(2))
           .all<LogRow>()
       : Promise.resolve(none),
   ]);
