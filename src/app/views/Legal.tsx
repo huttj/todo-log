@@ -27,7 +27,7 @@ function LegalShell(props: { title: string; children: React.ReactNode }) {
         <span>Todo Log is operated by Hutt LLC.</span>
         <span>
           Questions? Use the in-app support chat, or email{" "}
-          <a href="mailto:beta@todolo.gg">beta@todolo.gg</a>.
+          <a href="mailto:support@todolo.gg">support@todolo.gg</a>.
         </span>
       </div>
     </div>
@@ -271,16 +271,17 @@ export function Privacy() {
       </ul>
       <p>
         To exercise any of these, use the in-app support chat or email{" "}
-        <a href="mailto:beta@todolo.gg">beta@todolo.gg</a>. We respond within 30 days, usually
+        <a href="mailto:support@todolo.gg">support@todolo.gg</a>. We respond within 30 days, usually
         much faster.
       </p>
 
       <h2>8. Security</h2>
       <p>
-        Data is encrypted in transit, stored on Cloudflare's infrastructure, and audio is
-        accessible only through authenticated requests scoped to your account. No internet
-        service can promise perfection; if a breach ever affects your data, we will tell you
-        promptly and plainly.
+        Data is encrypted in transit (TLS) and encrypted at rest: both the database holding your
+        content and the storage holding your recordings encrypt everything automatically with
+        AES-256. Audio is accessible only through authenticated requests scoped to your account.
+        No internet service can promise perfection; if a breach ever affects your data, we will
+        tell you promptly and plainly.
       </p>
 
       <h2>9. Notifications</h2>

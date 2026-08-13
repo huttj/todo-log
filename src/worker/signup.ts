@@ -46,14 +46,14 @@ export async function notifyOwnerOfSignup(env: Env, p: Prospect): Promise<void> 
   try {
     const { EmailMessage } = await import("cloudflare:email");
     const msg = createMimeMessage();
-    msg.setSender({ addr: "beta@todolo.gg", name: "Todo Log" });
+    msg.setSender({ addr: "support@todolo.gg", name: "Todo Log" });
     msg.setRecipient(owner.email);
     msg.setSubject(title);
     msg.addMessage({
       contentType: "text/plain",
       data: [`New beta signup on todolo.gg`, ``, `Email: ${p.email}`, ...details].join("\n"),
     });
-    await env.NOTIFY.send(new EmailMessage("beta@todolo.gg", owner.email, msg.asRaw()));
+    await env.NOTIFY.send(new EmailMessage("support@todolo.gg", owner.email, msg.asRaw()));
   } catch (err) {
     console.error("signup: email failed:", err);
   }

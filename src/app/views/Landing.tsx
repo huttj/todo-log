@@ -24,7 +24,7 @@ export default function Landing() {
           the plan, catches the feelings, briefs your morning, and learns how you work.
         </p>
         <div className="hero-cta">
-          <a className="google-btn" href="#beta">
+          <a className="google-btn" href="/api/auth/google">
             Sign up for the beta
           </a>
         </div>
