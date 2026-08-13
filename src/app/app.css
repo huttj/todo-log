@@ -2321,7 +2321,13 @@ header {
   text-align: right;
   font-size: 0.68rem;
   color: var(--faint);
-  margin-top: 0.25rem;
+  margin-top: 0;
+}
+
+/* The preceding part's bottom margin already provides the air. */
+.md + .turn-cost,
+.feed + .turn-cost {
+  margin-top: -0.3rem;
 }
 
 /* Log card: pills on their own row under the time/cost/reprocess header. */
