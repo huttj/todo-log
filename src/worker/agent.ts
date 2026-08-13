@@ -329,11 +329,45 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "search",
     description:
-      "Text-search the user's projects, todos, and logs. Use to find the right entity when it isn't in the context snapshot (e.g. older or closed items).",
+      "Text-search the user's projects, todos, and logs. Filter with `types` and/or scope todos+logs to one project via `project_id`.",
     input_schema: {
       type: "object",
-      properties: { query: { type: "string" } },
+      properties: {
+        query: { type: "string" },
+        types: {
+          type: ["array", "null"],
+          items: { type: "string", enum: ["project", "todo", "log"] },
+          description: "Limit to these entity types (default: all)",
+        },
+        project_id: ID,
+      },
       required: ["query"],
+    },
+  },
+  {
+    name: "fetch_entities",
+    description:
+      "Bulk-fetch full records for several entities in one call (descriptions, priorities, details). logs_per_entity additionally includes each project/todo's last N logs, deduped across the batch. THE cheap way to check linkage candidates or gather context for a few items at once.",
+    input_schema: {
+      type: "object",
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", enum: ["project", "todo", "log"] },
+              id: { type: "integer" },
+            },
+            required: ["type", "id"],
+          },
+        },
+        logs_per_entity: {
+          type: ["integer", "null"],
+          description: "Include each project/todo's last N logs (max 5)",
+        },
+      },
+      required: ["items"],
     },
   },
   {
@@ -788,7 +822,54 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
     case "search": {
       const q = str(input.query);
       if (!q) return "error: query required";
-      return JSON.stringify(await searchAll(s.env, s.user.id, q));
+      const types = Array.isArray(input.types)
+        ? (input.types as unknown[]).filter((x): x is string => typeof x === "string")
+        : undefined;
+      return JSON.stringify(
+        await searchAll(s.env, s.user.id, q, { types, projectId: num(input.project_id) ?? undefined }),
+      );
+    }
+    case "fetch_entities": {
+      const itemsIn = Array.isArray(input.items) ? (input.items as unknown[]).slice(0, 10) : [];
+      if (itemsIn.length === 0) return "error: items required";
+      const per = Math.min(Math.max(num(input.logs_per_entity) ?? 0, 0), 5);
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const entities: Record<string, unknown>[] = [];
+      const logMap = new Map<number, LogRow>();
+      for (const raw of itemsIn) {
+        const it = raw as { type?: unknown; id?: unknown };
+        const type = str(it.type);
+        const id = num(it.id);
+        if (!type || !id || !["project", "todo", "log"].includes(type)) continue;
+        const ent = await getEntity<Record<string, unknown>>(s.env, type as EntityType, s.user.id, id);
+        if (!ent) {
+          entities.push({ type, id, error: "not found" });
+          continue;
+        }
+        const rec: Record<string, unknown> = { type, ...ent };
+        if (per > 0 && (type === "project" || type === "todo")) {
+          const logs = await listLogs(s.env, s.user.id, {
+            projectId: type === "project" ? id : undefined,
+            todoId: type === "todo" ? id : undefined,
+            limit: per,
+          });
+          rec.recent_log_ids = logs.map((l) => l.id);
+          for (const l of logs) logMap.set(l.id, l);
+        }
+        if (type === "log") logMap.set(id, ent as unknown as LogRow);
+        entities.push(rec);
+      }
+      // Logs referenced by several entities appear once, here.
+      const logs = [...logMap.values()].map((l) => ({
+        id: l.id,
+        date: new Date(l.occurred_at * 1000).toLocaleDateString("en-CA", { timeZone: tz }),
+        kind: l.kind,
+        title: l.title,
+        summary: l.summary.length > 240 ? `${l.summary.slice(0, 240)}…` : l.summary,
+        todo_id: l.todo_id,
+        project_id: l.project_id,
+      }));
+      return JSON.stringify({ entities, logs });
     }
     case "query_logs": {
       const tz = s.user.timezone ?? s.env.TIMEZONE;
@@ -1028,7 +1109,7 @@ How you behave:
 - LINKS IN REPLIES: when your reply mentions a todo/project/log, wrap the words of YOUR sentence markdown-style — "filed it under [the kitchen project](project:3)" — and the app renders them as links. Never bare tokens like [todo:22], never pasted entity titles as citations.
 - NEVER claim an action you didn't take. The reply may only reference changes actually made through tool calls this turn — if you logged something but created no todo, don't say you created a todo.
 - Quotes: preserve 0-3 verbatim sentences worth keeping exactly (feelings, decisions, doubts). Summary is a compact paraphrase written subjectless or first-person, as if the user wrote it in their own journal — NEVER third person. GOOD: "Filled out the card; haven't seen her, so mailing it instead." BAD: "He filled out the card but hasn't given it to her." Never "he/she/they/the user".
-- Use existing IDs from the context. Create a project only when clearly new. BIAS HARD TOWARD LINKING: read the project list — names AND descriptions — and attach logs/todos to an existing project whenever one plausibly covers the topic. A thin-but-real connection beats no link; unlinked items get lost. Only leave something unlinked when NO project plausibly relates. If you're torn (two candidate projects, or link-vs-not), attach your best guess AND ask via ask_user with the candidates — silently doing nothing is the worst outcome. REPAIR AS YOU GO: whenever you touch a todo that has no project (attaching a log to it, changing its status) and an existing project plausibly covers it, also set its project_id via update_todo — attaching a log to an orphaned todo strands the log one hop from the project.
+- Use existing IDs from the context. Create a project only when clearly new. BIAS HARD TOWARD LINKING: attach logs/todos to an existing project whenever one plausibly covers the topic. The context lists NAMES ONLY — when a project MIGHT cover the topic but the name alone doesn't settle it, fetch_entities the candidate projects (their descriptions decide) before concluding nothing fits. A thin-but-real connection beats no link; unlinked items get lost. Only leave something unlinked when NO project plausibly relates. If you're torn (two candidate projects, or link-vs-not), attach your best guess AND ask via ask_user with the candidates — silently doing nothing is the worst outcome. REPAIR AS YOU GO: whenever you touch a todo that has no project (attaching a log to it, changing its status) and an existing project plausibly covers it, also set its project_id via update_todo — attaching a log to an orphaned todo strands the log one hop from the project.
 - A todo does NOT need a project — but the linking bias above applies: if an existing project's name or description plausibly covers the task, set project_id. Only when nothing fits, create the todo with no project_id — never skip the todo for lack of a project, and never invent a project just to hold it. A log alone is not enough for a stated task.
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
 - Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND ask via the ask_user tool (with suggested answers when natural options exist); their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
@@ -1042,6 +1123,7 @@ How you behave:
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - PRIORITIES: each project can carry a priority in the user's OWN words (shown in the project list). Only the agent writes it (update_project.priority) — there's no manual editing. When a project has none and the conversation touches it, or when what the user says suggests its priority shifted, ask ONE short ask_user question about where it sits and store their answer near-verbatim. Never invent a priority they didn't express.
+- CONTEXT IS TITLES-ONLY: the project/todo lists carry names and status, not details. Details live one cheap call away — fetch_entities (bulk, with logs_per_entity to include each item's latest logs, deduped) and filtered search. Fetch candidates rather than guessing.
 - THE JOURNAL IS QUERYABLE: query_logs lists logs by date range / entity / text. When the user EXPLICITLY asks to dig into their raw words, fetch_transcripts returns the verbatim recordings behind specific logs — richer than summaries, with things the summaries dropped. Never fetch transcripts unprompted. Regular chats don't carry recent logs in context — so before any claim about what the user did or didn't record, query. "You have no logs" without a query_logs call is a lie waiting to happen.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
 - NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
@@ -1076,11 +1158,11 @@ function contextBlock(data: {
   contextEntity: string;
   changeFeedSoFar: string;
 }): string {
+  // Titles-only: descriptions live behind fetch_entities — the agent pulls
+  // candidates when linkage is uncertain instead of every turn paying for
+  // every description.
   const projects = data.projects
-    .map(
-      (p) =>
-        `#${p.id} ${p.name} [${p.kind}, ${p.status}]${p.priority ? ` [priority: ${p.priority}]` : ""}${p.description ? ` — ${p.description.slice(0, 160)}` : ""}`,
-    )
+    .map((p) => `#${p.id} ${p.name} [${p.status}]${p.priority ? ` [priority: ${p.priority}]` : ""}`)
     .join("\n");
   const todos = data.todos
     .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}`)

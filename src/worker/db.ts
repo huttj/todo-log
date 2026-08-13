@@ -282,24 +282,34 @@ export async function searchAll(
   env: Env,
   userId: number,
   query: string,
+  opts: { types?: string[]; projectId?: number } = {},
 ): Promise<{ projects: ProjectRow[]; todos: TodoRow[]; logs: LogRow[] }> {
   const like = `%${query.replaceAll("%", "").replaceAll("_", "")}%`;
+  const want = (t: string) => !opts.types || opts.types.length === 0 || opts.types.includes(t);
+  const none = { results: [] as never[] };
+  const projScope = opts.projectId != null ? ` AND project_id = ${Number(opts.projectId)}` : "";
   const [projects, todos, logs] = await Promise.all([
-    env.DB.prepare(
-      `SELECT * FROM projects WHERE user_id = ? AND (name LIKE ? OR description LIKE ?) ORDER BY updated_at DESC LIMIT 10`,
-    )
-      .bind(userId, like, like)
-      .all<ProjectRow>(),
-    env.DB.prepare(
-      `SELECT * FROM todos WHERE user_id = ? AND (title LIKE ? OR outcome LIKE ? OR details LIKE ?) ORDER BY updated_at DESC LIMIT 15`,
-    )
-      .bind(userId, like, like, like)
-      .all<TodoRow>(),
-    env.DB.prepare(
-      `SELECT * FROM logs WHERE user_id = ? AND (summary LIKE ? OR title LIKE ?) ORDER BY occurred_at DESC LIMIT 15`,
-    )
-      .bind(userId, like, like)
-      .all<LogRow>(),
+    want("project") && opts.projectId == null
+      ? env.DB.prepare(
+          `SELECT * FROM projects WHERE user_id = ? AND (name LIKE ? OR description LIKE ?) ORDER BY updated_at DESC LIMIT 10`,
+        )
+          .bind(userId, like, like)
+          .all<ProjectRow>()
+      : Promise.resolve(none),
+    want("todo")
+      ? env.DB.prepare(
+          `SELECT * FROM todos WHERE user_id = ? AND (title LIKE ? OR outcome LIKE ? OR details LIKE ?)${projScope} ORDER BY updated_at DESC LIMIT 15`,
+        )
+          .bind(userId, like, like, like)
+          .all<TodoRow>()
+      : Promise.resolve(none),
+    want("log")
+      ? env.DB.prepare(
+          `SELECT * FROM logs WHERE user_id = ? AND (summary LIKE ? OR title LIKE ?)${projScope} ORDER BY occurred_at DESC LIMIT 15`,
+        )
+          .bind(userId, like, like)
+          .all<LogRow>()
+      : Promise.resolve(none),
   ]);
   return { projects: projects.results, todos: todos.results, logs: logs.results };
 }
