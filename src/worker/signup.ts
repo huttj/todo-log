@@ -1,7 +1,6 @@
 // Beta-signup fanout: the owner hears about every prospect three ways —
 // bell notification, web push, and (when the NOTIFY email binding is
 // configured) an email via Cloudflare Email Routing.
-import { createMimeMessage } from "mimetext";
 import type { Env, UserRow } from "./types";
 import { setNotification } from "./db";
 import { pushToUser } from "./push";
@@ -41,25 +40,19 @@ function welcomeHtml(p: Prospect): string {
 </div>`;
 }
 
-/** Automated welcome (Resend). No-op without RESEND_API_KEY. */
+/** Automated welcome via Cloudflare Email Service. No-op without the binding. */
 export async function sendWelcomeEmail(env: Env, p: Prospect): Promise<void> {
-  if (!env.RESEND_API_KEY) return;
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "Joshua at Todo Log <support@todolo.gg>",
-      to: [p.email],
+  if (!env.EMAIL) return;
+  try {
+    await env.EMAIL.send({
+      to: p.email,
+      from: "support@todolo.gg",
       subject: "Todo Log Beta",
       text: welcomeText(p),
       html: welcomeHtml(p),
-    }),
-  });
-  if (!res.ok) {
-    console.error(`welcome email failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    });
+  } catch (err) {
+    console.error("welcome email failed:", err);
   }
 }
 
@@ -92,28 +85,21 @@ export async function notifyOwnerOfSignup(env: Env, p: Prospect): Promise<void> 
     console.error("signup: push failed:", err),
   );
 
-  if (!env.NOTIFY) return;
+  if (!env.EMAIL) return;
   try {
-    const { EmailMessage } = await import("cloudflare:email");
-    const msg = createMimeMessage();
-    msg.setSender({ addr: "support@todolo.gg", name: "Todo Log" });
-    msg.setRecipient(owner.email);
-    msg.setSubject(title);
-    const mailto = `mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("Todo Log Beta")}&body=${encodeURIComponent(welcomeText(p))}`;
-    msg.addMessage({
-      contentType: "text/plain",
-      data: [
+    await env.EMAIL.send({
+      to: owner.email,
+      from: "support@todolo.gg",
+      subject: title,
+      text: [
         `New beta signup on todolo.gg`,
         ``,
         `Email: ${p.email}`,
         ...details,
         ``,
-        env.RESEND_API_KEY
-          ? `A welcome email with the booking link was sent automatically.`
-          : `Send the welcome email (prefilled): ${mailto}`,
+        `A welcome email with the booking link was sent automatically.`,
       ].join("\n"),
     });
-    await env.NOTIFY.send(new EmailMessage("support@todolo.gg", owner.email, msg.asRaw()));
   } catch (err) {
     console.error("signup: email failed:", err);
   }

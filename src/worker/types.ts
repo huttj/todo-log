@@ -12,10 +12,16 @@ export interface Env {
   /** Web push (unset = push disabled). */
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;
-  /** Email Routing send binding (unset = no signup emails). */
-  NOTIFY?: { send(message: unknown): Promise<void> };
-  /** Resend API key for outbound welcome emails (unset = skip sending). */
-  RESEND_API_KEY?: string;
+  /** Cloudflare Email Service binding — transactional sending to anyone. */
+  EMAIL?: {
+    send(message: {
+      to: string;
+      from: string;
+      subject: string;
+      html?: string;
+      text?: string;
+    }): Promise<{ messageId?: string }>;
+  };
 }
 
 export interface TranscriptWord {
