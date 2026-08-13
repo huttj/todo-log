@@ -349,6 +349,7 @@ const TOOLS: Anthropic.Tool[] = [
         project_id: ID,
         contains: { type: ["string", "null"], description: "Case-insensitive text filter on title/summary" },
         limit: { type: ["integer", "null"], description: "Max logs (default 30, cap 60)" },
+        offset: { type: ["integer", "null"], description: "Skip N newest-first matches (paging)" },
       },
     },
   },
@@ -366,6 +367,7 @@ const TOOLS: Anthropic.Tool[] = [
         project_id: ID,
         contains: { type: ["string", "null"] },
         limit: { type: ["integer", "null"], description: "Max logs (default 10, cap 10)" },
+        offset: { type: ["integer", "null"], description: "Skip N newest-first matches (paging)" },
       },
     },
   },
@@ -475,7 +477,7 @@ async function logsForFilters(
   input: Record<string, unknown>,
   cap: number,
   defaultLimit: number,
-): Promise<LogRow[]> {
+): Promise<{ total: number; offset: number; logs: LogRow[] }> {
   const tz = s.user.timezone ?? s.env.TIMEZONE;
   const fromDate = str(input.from_date);
   const toDate = str(input.to_date);
@@ -498,7 +500,8 @@ async function logsForFilters(
         (l.title ?? "").toLowerCase().includes(contains),
     );
   }
-  return logs.slice(0, limit);
+  const offset = Math.max(0, num(input.offset) ?? 0);
+  return { total: logs.length, offset, logs: logs.slice(offset, offset + limit) };
 }
 
 function str(v: unknown): string | null {
@@ -789,10 +792,15 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
     }
     case "query_logs": {
       const tz = s.user.timezone ?? s.env.TIMEZONE;
-      const logs = await logsForFilters(s, input, 60, 30);
-      if (logs.length === 0) return "no logs match those filters";
-      return JSON.stringify(
-        logs.map((l) => ({
+      const { total, offset, logs } = await logsForFilters(s, input, 60, 30);
+      if (total === 0) return "no logs match those filters";
+      if (logs.length === 0) return `no logs at offset ${offset} (${total} total)`;
+      return JSON.stringify({
+        total_matched: total,
+        returned: logs.length,
+        offset,
+        note: total > offset + logs.length ? "more available — pass offset to page (newest first)" : undefined,
+        logs: logs.map((l) => ({
           id: l.id,
           date: new Date(l.occurred_at * 1000).toLocaleDateString("en-CA", { timeZone: tz }),
           kind: l.kind,
@@ -801,7 +809,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           todo_id: l.todo_id,
           project_id: l.project_id,
         })),
-      );
+      });
     }
     case "fetch_transcripts": {
       const tz = s.user.timezone ?? s.env.TIMEZONE;
@@ -809,15 +817,21 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         ? (input.log_ids as unknown[]).filter((x): x is number => typeof x === "number").slice(0, 10)
         : [];
       let targets: (LogRow | { missing: number })[];
+      let total = ids.length;
+      let offset = 0;
       if (ids.length > 0) {
         targets = await Promise.all(
           ids.map(async (id) => (await getEntity<LogRow>(s.env, "log", s.user.id, id)) ?? { missing: id }),
         );
       } else {
         // Same filters as query_logs: "all of today", "same day last week"…
-        const logs = await logsForFilters(s, input, 10, 10);
-        if (logs.length === 0) return "no logs match those filters";
-        targets = logs;
+        const filtered = await logsForFilters(s, input, 10, 10);
+        if (filtered.total === 0) return "no logs match those filters";
+        if (filtered.logs.length === 0)
+          return `no logs at offset ${filtered.offset} (${filtered.total} total)`;
+        targets = filtered.logs;
+        total = filtered.total;
+        offset = filtered.offset;
       }
       const out: { log_id: number; date: string; title: string | null; transcript: string }[] = [];
       for (const target of targets) {
@@ -843,7 +857,16 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           transcript: transcript || "(no transcript available)",
         });
       }
-      return JSON.stringify(out);
+      return JSON.stringify({
+        total_matched: total,
+        returned: out.length,
+        offset,
+        note:
+          total > offset + out.length
+            ? "more available — call again with offset to get the next batch (newest first)"
+            : undefined,
+        transcripts: out,
+      });
     }
     case "update_briefing": {
       const headline = str(input.headline);
