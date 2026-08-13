@@ -105,7 +105,9 @@ export default function Capture(props: {
           ? `**${props.replyTo.title}**\n\n${props.replyTo.body}`
           : `**${props.replyTo.title}**`
         : null);
-    return opener ? [{ id: ++entrySeq, role: "assistant", text: opener }] : [];
+    return opener
+      ? [{ id: ++entrySeq, role: "assistant", text: opener, parts: [{ t: "text", text: opener } as MessagePart] }]
+      : [];
   });
   const [draft, setDraft] = useState(() => localStorage.getItem(DRAFT_KEY) ?? "");
   const [error, setError] = useState<string | null>(null);

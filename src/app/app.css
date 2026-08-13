@@ -3664,6 +3664,7 @@ button.back {
   justify-content: space-between;
   gap: 0.6rem;
   flex-wrap: wrap;
+  margin: 0.7rem 0 0.5rem;
 }
 
 .sort-tabs {
