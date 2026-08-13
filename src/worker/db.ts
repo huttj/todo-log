@@ -36,7 +36,8 @@ export async function upsertUser(
   const row = await env.DB.prepare(
     `INSERT INTO users (google_sub, email, name, enabled, created_at)
      VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(email) DO UPDATE SET google_sub = excluded.google_sub, name = excluded.name
+     ON CONFLICT(email) DO UPDATE SET google_sub = excluded.google_sub, name = excluded.name,
+       delete_after = NULL
      RETURNING *`,
   )
     .bind(input.googleSub, input.email, input.name, allowlisted ? 1 : 0, now())

@@ -371,6 +371,22 @@ crud.post("/dismissals", async (c) => {
   return c.json({ ok: true });
 });
 
+// -- Account deletion (scheduled; signing back in cancels) ------------------
+
+const DELETION_GRACE = 30 * 86400;
+
+crud.post("/account/delete", async (c) => {
+  const user = c.get("user");
+  if (isAdmin(c.env, user.email)) {
+    return c.json({ error: "admin accounts can't be deleted from the app" }, 400);
+  }
+  const deleteAfter = now() + DELETION_GRACE;
+  await c.env.DB.prepare(`UPDATE users SET delete_after = ? WHERE id = ?`)
+    .bind(deleteAfter, user.id)
+    .run();
+  return c.json({ ok: true, delete_after: deleteAfter });
+});
+
 // -- Web push subscriptions -------------------------------------------------
 
 crud.get("/push/key", (c) => c.json({ key: c.env.VAPID_PUBLIC_KEY ?? null }));
@@ -420,7 +436,7 @@ const requireAdmin = async (
 crud.get("/admin/users", async (c) => {
   if (!(await requireAdmin(c))) return c.json({ error: "not found" }, 404);
   const users = await c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name, u.enabled, u.created_at,
+    `SELECT u.id, u.email, u.name, u.enabled, u.created_at, u.delete_after,
             p.note AS prospect_note, p.wants_beta_call
      FROM users u LEFT JOIN prospects p ON lower(p.email) = lower(u.email)
      ORDER BY u.id`,
@@ -439,19 +455,30 @@ crud.get("/admin/users", async (c) => {
 crud.patch("/admin/users/:id", async (c) => {
   if (!(await requireAdmin(c))) return c.json({ error: "not found" }, 404);
   const id = Number(c.req.param("id"));
-  const body = await c.req.json<{ enabled?: boolean }>();
-  if (typeof body.enabled !== "boolean") return c.json({ error: "enabled required" }, 400);
+  const body = await c.req.json<{ enabled?: boolean; schedule_deletion?: boolean }>();
   const target = await c.env.DB.prepare(`SELECT * FROM users WHERE id = ?`)
     .bind(id)
     .first<{ id: number; email: string }>();
   if (!target) return c.json({ error: "not found" }, 404);
-  if (isAdmin(c.env, target.email) && !body.enabled) {
-    return c.json({ error: "can't disable an admin account" }, 400);
+  const targetIsAdmin = isAdmin(c.env, target.email);
+  if (typeof body.enabled === "boolean") {
+    if (targetIsAdmin && !body.enabled) {
+      return c.json({ error: "can't disable an admin account" }, 400);
+    }
+    await c.env.DB.prepare(`UPDATE users SET enabled = ? WHERE id = ?`)
+      .bind(body.enabled ? 1 : 0, id)
+      .run();
   }
-  await c.env.DB.prepare(`UPDATE users SET enabled = ? WHERE id = ?`)
-    .bind(body.enabled ? 1 : 0, id)
-    .run();
-  return c.json({ ok: true });
+  if (typeof body.schedule_deletion === "boolean") {
+    if (targetIsAdmin) return c.json({ error: "admin accounts can't be deleted" }, 400);
+    await c.env.DB.prepare(`UPDATE users SET delete_after = ? WHERE id = ?`)
+      .bind(body.schedule_deletion ? now() + DELETION_GRACE : null, id)
+      .run();
+  }
+  const updated = await c.env.DB.prepare(`SELECT delete_after, enabled FROM users WHERE id = ?`)
+    .bind(id)
+    .first();
+  return c.json({ ok: true, ...updated });
 });
 
 // -- Agent memory (the save_memory notes, user-editable) --------------------

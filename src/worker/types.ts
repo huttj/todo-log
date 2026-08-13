@@ -46,6 +46,8 @@ export interface UserRow {
   last_checkin_at: number | null;
   /** JSON: {"model": "sonnet"|"haiku", "thinking": boolean} */
   agent_config: string | null;
+  /** Epoch after which the cron purge destroys this account (null = none). */
+  delete_after: number | null;
   created_at: number;
 }
 

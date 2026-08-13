@@ -3580,3 +3580,45 @@ button.back {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* -- account deletion -- */
+.danger-zone {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.8rem;
+}
+
+.danger-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--danger);
+  background: none;
+  border: 1px solid var(--danger);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.danger-btn:hover {
+  background: var(--danger-bg);
+}
+
+.del-chip {
+  font-size: 0.72rem;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: baseline;
+}
+
+.del-chip .link {
+  font-size: 0.72rem;
+}
+
+.del-link {
+  color: var(--danger);
+  font-size: 0.78rem;
+}

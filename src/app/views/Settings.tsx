@@ -545,6 +545,8 @@ export default function Settings(props: {
 
       {saved && <p className="hint-left">saved</p>}
 
+      {!props.me?.is_admin && <DangerZone />}
+
       <p className="legal-links">
         <a href="/terms">Terms of Use</a> · <a href="/privacy">Privacy Policy</a>
       </p>
@@ -553,6 +555,36 @@ export default function Settings(props: {
 }
 
 type AdminTab = "settings" | "users" | "support";
+
+function DangerZone() {
+  const [err, setErr] = useState<string | null>(null);
+  async function scheduleDeletion() {
+    const sure = window.confirm(
+      "Delete your account?\n\nYou'll be signed out now, and your account and ALL data — recordings, journal, todos, chats — will be permanently destroyed in 30 days.\n\nSigning back in before then cancels the deletion.",
+    );
+    if (!sure) return;
+    try {
+      await post("/account/delete");
+      await post("/auth/signout").catch(() => {});
+      window.location.href = "/";
+    } catch (e) {
+      setErr(String((e as Error).message ?? e));
+    }
+  }
+  return (
+    <section className="danger-zone">
+      <h2>Delete account</h2>
+      <p className="hint-left">
+        Signs you out immediately; everything is permanently destroyed 30 days later. Signing back
+        in before then cancels it.
+      </p>
+      <button className="danger-btn" onClick={() => void scheduleDeletion()}>
+        Delete my account…
+      </button>
+      {err && <p className="error">{err}</p>}
+    </section>
+  );
+}
 
 function SettingsTabs(props: { tab: AdminTab; onTab: (t: AdminTab) => void }) {
   const tabs: { key: AdminTab; label: string }[] = [
@@ -577,6 +609,7 @@ interface AdminUser {
   name: string | null;
   enabled: number;
   created_at: number;
+  delete_after?: number | null;
   prospect_note?: string | null;
   wants_beta_call?: number | null;
   is_admin?: boolean;
@@ -616,6 +649,21 @@ function UsersPanel() {
     }
   }
 
+  async function setDeletion(u: AdminUser, schedule: boolean) {
+    if (
+      schedule &&
+      !window.confirm(`Schedule deletion for ${u.email}? All their data purges in 30 days. Signing in cancels it.`)
+    ) {
+      return;
+    }
+    try {
+      await patch(`/admin/users/${u.id}`, { schedule_deletion: schedule });
+      load();
+    } catch (e) {
+      setErr(String((e as Error).message ?? e));
+    }
+  }
+
   const when = (ts: number) =>
     new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
@@ -645,6 +693,27 @@ function UsersPanel() {
                 {u.enabled ? "active" : "off"}
               </label>
             )}
+            {!u.is_admin &&
+              (u.delete_after ? (
+                <span className="del-chip">
+                  deletes{" "}
+                  {new Date(u.delete_after * 1000).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                  <button className="link" onClick={() => void setDeletion(u, false)}>
+                    cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="link del-link"
+                  title="Schedule this account's deletion (30-day grace)"
+                  onClick={() => void setDeletion(u, true)}
+                >
+                  delete…
+                </button>
+              ))}
             {u.prospect_note && <p className="prospect-note">{u.prospect_note}</p>}
           </div>
         ))}

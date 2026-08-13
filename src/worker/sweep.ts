@@ -23,10 +23,12 @@ import { generateBriefing } from "./briefing";
 import { emptyUsage, addUsage, recordUsage } from "./usage";
 import { resolveUseCase, modelParams, parseConfig } from "./config";
 import { pushToUser } from "./push";
+import { purgeDueDeletions } from "./purge";
 
 const DAY = 86400;
 
 export async function runSweep(env: Env): Promise<void> {
+  await purgeDueDeletions(env, now());
   await healSegments(env);
   await distillCorrections(env);
   await runCheckins(env);
