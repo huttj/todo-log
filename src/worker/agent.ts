@@ -337,6 +337,22 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "query_logs",
+    description:
+      "List journal logs with filters: a date range (user-local days), a todo/project, and/or a text match. THE way to answer \"what did I do this week\" / \"what have I said about X\" — never claim logs don't exist without querying.",
+    input_schema: {
+      type: "object",
+      properties: {
+        from_date: { type: ["string", "null"], description: "YYYY-MM-DD inclusive (user-local)" },
+        to_date: { type: ["string", "null"], description: "YYYY-MM-DD inclusive (user-local)" },
+        todo_id: ID,
+        project_id: ID,
+        contains: { type: ["string", "null"], description: "Case-insensitive text filter on title/summary" },
+        limit: { type: ["integer", "null"], description: "Max logs (default 30, cap 60)" },
+      },
+    },
+  },
+  {
     name: "save_memory",
     description:
       "Persist a note to your long-term memory (shown to you at the start of every conversation). Keyed: writing an existing key overwrites it; empty content deletes it. Use for durable context — ongoing situations, people, preferences, how the user works — NOT for things already recorded as todos/logs.",
@@ -721,6 +737,43 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!q) return "error: query required";
       return JSON.stringify(await searchAll(s.env, s.user.id, q));
     }
+    case "query_logs": {
+      const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const fromDate = str(input.from_date);
+      const toDate = str(input.to_date);
+      const from = fromDate ? (dayStartInZone(tz, fromDate) ?? undefined) : undefined;
+      const toStart = toDate ? dayStartInZone(tz, toDate) : null;
+      const to = toStart != null ? toStart + 86400 : undefined;
+      const limit = Math.min(num(input.limit) ?? 30, 60);
+      let logs = await listLogs(s.env, s.user.id, {
+        todoId: num(input.todo_id) ?? undefined,
+        projectId: num(input.project_id) ?? undefined,
+        from,
+        to,
+        limit: 200,
+      });
+      const contains = str(input.contains)?.toLowerCase();
+      if (contains) {
+        logs = logs.filter(
+          (l) =>
+            l.summary.toLowerCase().includes(contains) ||
+            (l.title ?? "").toLowerCase().includes(contains),
+        );
+      }
+      logs = logs.slice(0, limit);
+      if (logs.length === 0) return "no logs match those filters";
+      return JSON.stringify(
+        logs.map((l) => ({
+          id: l.id,
+          date: new Date(l.occurred_at * 1000).toLocaleDateString("en-CA", { timeZone: tz }),
+          kind: l.kind,
+          title: l.title,
+          summary: l.summary.length > 240 ? `${l.summary.slice(0, 240)}…` : l.summary,
+          todo_id: l.todo_id,
+          project_id: l.project_id,
+        })),
+      );
+    }
     case "update_briefing": {
       const headline = str(input.headline);
       if (!headline) return "error: headline required";
@@ -895,6 +948,7 @@ How you behave:
 - occurred_at / scheduled times: resolve time cues against the current time given below. Only backdate on an explicit cue ("this morning", "yesterday"); otherwise omit occurred_at (defaults to now).
 - delivery_tags: observable speech patterns only ("hedging", "flowing", "fragmented"), never diagnostic. Usually omit.
 - PRIORITIES: each project can carry a priority in the user's OWN words (shown in the project list). Only the agent writes it (update_project.priority) — there's no manual editing. When a project has none and the conversation touches it, or when what the user says suggests its priority shifted, ask ONE short ask_user question about where it sits and store their answer near-verbatim. Never invent a priority they didn't express.
+- THE JOURNAL IS QUERYABLE: query_logs lists logs by date range / entity / text. Regular chats don't carry recent logs in context — so before any claim about what the user did or didn't record, query. "You have no logs" without a query_logs call is a lie waiting to happen.
 - MEMORY: your keyed notes appear in the context below. When you learn something durable — an ongoing situation, a person who keeps coming up, how the user likes to work — save_memory it (update the existing key when the situation evolves; delete keys that resolved). Don't duplicate what todos/logs already record.
 - NOTIFICATIONS: set_notification leaves the user a short note in the app (one living notification per slot — it replaces, never stacks). If the user answers something a notification asked, clear_notification its slot.
 - BRIEFING: the Today view shows a precomputed overview. It is NOT in your context by default — fetch it (fetch, entity_type "briefing") when the conversation concerns the day's plan.`;
@@ -1158,7 +1212,14 @@ export async function runTurn(
       tools,
       messages,
     } as Parameters<typeof client.messages.stream>[0]);
+    let sawTextBlock = false;
     for await (const event of stream) {
+      if (event.type === "content_block_start" && event.content_block.type === "text") {
+        // A second text block in one response otherwise streams flush against
+        // the first (the persisted join adds the break; the live view must too).
+        if (sawTextBlock) onEvent?.({ type: "delta", text: "\n\n" });
+        sawTextBlock = true;
+      }
       if (event.type === "content_block_delta") {
         if (event.delta.type === "text_delta") {
           onEvent?.({ type: "delta", text: event.delta.text });
@@ -1182,7 +1243,7 @@ export async function runTurn(
     const text = response.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
-      .join("\n")
+      .join("\n\n")
       .trim();
     if (text) {
       reply = reply ? `${reply}\n\n${text}` : text;
