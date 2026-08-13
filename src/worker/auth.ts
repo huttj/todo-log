@@ -135,9 +135,19 @@ async function loadSessionUser(c: Context<AppContext>): Promise<UserRow | null> 
 
 /** Load the signed-in user or 401. Does not require `enabled` — waitlisted
  * users still need /api/me to see their state. */
+/** A pending deletion means signed out, everywhere: sessions are stateless
+ * cookies, so this check is what "signs you out" — and only a fresh Google
+ * sign-in (which clears delete_after) gets back in. */
+function deletionPending(c: Context<AppContext>, user: { delete_after: number | null }): boolean {
+  if (user.delete_after == null) return false;
+  c.header("set-cookie", "session=; Path=/; Max-Age=0; HttpOnly");
+  return true;
+}
+
 export async function requireUser(c: Context<AppContext>, next: Next) {
   const user = await loadSessionUser(c);
   if (!user) return c.json({ error: "unauthorized" }, 401);
+  if (deletionPending(c, user)) return c.json({ error: "unauthorized" }, 401);
   c.set("user", user);
   await next();
 }
@@ -146,6 +156,7 @@ export async function requireUser(c: Context<AppContext>, next: Next) {
 export async function requireEnabled(c: Context<AppContext>, next: Next) {
   const user = await loadSessionUser(c);
   if (!user) return c.json({ error: "unauthorized" }, 401);
+  if (deletionPending(c, user)) return c.json({ error: "unauthorized" }, 401);
   if (!user.enabled) return c.json({ error: "not enabled" }, 403);
   c.set("user", user);
   await next();

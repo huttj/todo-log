@@ -3589,6 +3589,7 @@ button.back {
 }
 
 .danger-btn {
+  margin-top: 0.55rem;
   font: inherit;
   font-size: 0.85rem;
   color: var(--danger);
@@ -3621,4 +3622,16 @@ button.back {
 .del-link {
   color: var(--danger);
   font-size: 0.78rem;
+}
+
+/* Deletion controls sit on their own line in admin rows. */
+.del-row {
+  flex-basis: 100%;
+  margin-top: 0.15rem;
+  text-align: left;
+  width: fit-content;
+}
+
+.memory-item textarea {
+  overflow: hidden;
 }

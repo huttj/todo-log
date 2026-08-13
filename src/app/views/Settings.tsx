@@ -121,6 +121,13 @@ function MultiSel(props: {
   );
 }
 
+/** Textareas grow to their content. */
+function autoGrow(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight + 2}px`;
+}
+
 const localISO = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const daysAgoISO = (n: number) => {
@@ -505,9 +512,11 @@ export default function Settings(props: {
             <textarea
               value={m.content}
               rows={2}
-              onChange={(e) =>
-                setMemories((ms) => ms.map((x) => (x.key === m.key ? { ...x, content: e.target.value } : x)))
-              }
+              ref={autoGrow}
+              onChange={(e) => {
+                autoGrow(e.target);
+                setMemories((ms) => ms.map((x) => (x.key === m.key ? { ...x, content: e.target.value } : x)));
+              }}
               onBlur={(e) => void saveMemory(m.key, e.target.value)}
             />
           </div>
@@ -521,8 +530,12 @@ export default function Settings(props: {
           <textarea
             placeholder="What should the agent remember?"
             rows={2}
+            ref={autoGrow}
             value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
+            onChange={(e) => {
+              autoGrow(e.target);
+              setNewContent(e.target.value);
+            }}
           />
           <button
             className="link"
@@ -678,7 +691,6 @@ function UsersPanel() {
               {u.name && <span className="user-mail">{u.email}</span>}
             </div>
             <span className="user-since">since {when(u.created_at)}</span>
-            {!!u.wants_beta_call && <span className="sched-chip">wants a call</span>}
             {u.is_admin ? (
               <span className="sched-chip" title="Admins can't be disabled (set by ALLOWLIST_EMAILS)">
                 admin
@@ -695,7 +707,7 @@ function UsersPanel() {
             )}
             {!u.is_admin &&
               (u.delete_after ? (
-                <span className="del-chip">
+                <span className="del-chip del-row">
                   deletes{" "}
                   {new Date(u.delete_after * 1000).toLocaleDateString(undefined, {
                     month: "short",
@@ -707,7 +719,7 @@ function UsersPanel() {
                 </span>
               ) : (
                 <button
-                  className="link del-link"
+                  className="link del-link del-row"
                   title="Schedule this account's deletion (30-day grace)"
                   onClick={() => void setDeletion(u, true)}
                 >
