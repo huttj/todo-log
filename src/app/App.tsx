@@ -18,7 +18,7 @@ import SearchResults from "./views/SearchResults";
 import Support from "./views/Support";
 import { Terms, Privacy } from "./views/Legal";
 import SupportDock from "./SupportDock";
-import { api, post, ApiError, type Me } from "./api";
+import { api, post, ApiError, UNAUTHORIZED_EVENT, type Me } from "./api";
 import ProjectsHome from "./views/ProjectsHome";
 import ProjectView from "./views/ProjectView";
 import TodoView from "./views/TodoView";
@@ -39,6 +39,24 @@ export default function App() {
   useEffect(() => {
     if (location.pathname !== "/support") setSupportOpen(false);
   }, [location.pathname]);
+
+  // A 401 after we were signed in means the session died (e.g. scheduled
+  // deletion) — hard-reload to the landing page, dumping all app state.
+  // The boot-time /me 401 for signed-out visitors never matches (auth is
+  // still "loading" then), so no reload loop.
+  const authRef = useRef<AuthState>("loading");
+  useEffect(() => {
+    authRef.current = auth;
+  }, [auth]);
+  useEffect(() => {
+    const kick = () => {
+      if (authRef.current === "ready" || authRef.current === "waitlist") {
+        window.location.href = "/";
+      }
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, kick);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, kick);
+  }, []);
 
   // Cmd/Ctrl+K opens omni search from anywhere.
   useEffect(() => {

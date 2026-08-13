@@ -191,6 +191,10 @@ export class ApiError extends Error {
   }
 }
 
+/** Fired when any API call comes back 401 — the shell kicks to the landing
+ * page if it thought it was signed in. */
+export const UNAUTHORIZED_EVENT = "todolog:unauthorized";
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, init);
   if (!res.ok) {
@@ -201,6 +205,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // non-JSON error body
     }
+    if (res.status === 401) window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
     throw new ApiError(res.status, message);
   }
   return res.json() as Promise<T>;
