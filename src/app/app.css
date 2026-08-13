@@ -2842,8 +2842,13 @@ button.back-btn {
 .inline-bar {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  margin-top: 0.5rem;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+  padding: 0;
+}
+
+.inline-bar .play-btn {
+  padding-left: 0;
 }
 
 .inline-bar .seek {
@@ -3362,12 +3367,12 @@ button.back {
   margin-bottom: 0.15rem;
 }
 
+/* Timestamp floats top-right, out of the corner-play's way. */
 .support-when {
-  display: block;
+  float: right;
   font-size: 0.65rem;
   opacity: 0.55;
-  margin-top: 0.25rem;
-  text-align: right;
+  margin: 0.1rem 0 0.1rem 0.6rem;
 }
 
 .support-audio {
@@ -3634,4 +3639,14 @@ button.back {
 
 .memory-item textarea {
   overflow: hidden;
+}
+
+/* Voice bubbles: reserve corner-play space only while it's showing. */
+.support-bubble.has-audio {
+  padding-bottom: 1.3rem;
+}
+
+.support-bubble.has-audio:has(.inline-transcript) {
+  padding-bottom: 0.55rem;
+  padding-right: 0.75rem;
 }

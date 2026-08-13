@@ -173,6 +173,7 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
             key={m.id}
             className={`bubble ${m.as_admin ? "assistant" : "user"} support-bubble${m.as_admin ? " from-support" : ""}${m.r2_key ? " has-audio" : ""}`}
           >
+            <span className="support-when">{when(m.created_at)}</span>
             {!!m.as_admin && (
               <span className="support-who">
                 {m.sender_name ? `${m.sender_name} · Todo Log support` : "Todo Log support"}
@@ -211,7 +212,6 @@ function SupportThread(props: { me: Me | null; threadUserId?: number }) {
                 <FontAwesomeIcon icon={faPlay} />
               </button>
             )}
-            <span className="support-when">{when(m.created_at)}</span>
           </div>
         ))}
         <div ref={endRef} />
