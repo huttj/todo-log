@@ -355,13 +355,18 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "fetch_transcripts",
     description:
-      "The verbatim recorded transcripts behind specific logs — everything the user actually said, unsummarized. ONLY when the user explicitly asks to dig into their raw words ('what did I actually say', 'look at the transcript') — never routinely; summaries cover normal work. Up to 5 logs per call.",
+      "The verbatim recorded transcripts behind logs — everything the user actually said, unsummarized. ONLY when the user explicitly asks to dig into their raw words ('read my logs from today and tell me what I'm feeling', 'what did I actually say') — never routinely; summaries cover normal work. Select by log_ids OR by the same filters as query_logs (date range / entity / contains). Up to 10 logs per call.",
     input_schema: {
       type: "object",
       properties: {
-        log_ids: { type: "array", items: { type: "integer" } },
+        log_ids: { type: ["array", "null"], items: { type: "integer" } },
+        from_date: { type: ["string", "null"], description: "YYYY-MM-DD inclusive (user-local)" },
+        to_date: { type: ["string", "null"], description: "YYYY-MM-DD inclusive (user-local)" },
+        todo_id: ID,
+        project_id: ID,
+        contains: { type: ["string", "null"] },
+        limit: { type: ["integer", "null"], description: "Max logs (default 10, cap 10)" },
       },
-      required: ["log_ids"],
     },
   },
   {
@@ -461,6 +466,39 @@ interface TurnState {
   createdLogIds: number[];
   questions: AskedQuestion[];
   onEvent?: (e: TurnEvent) => void;
+}
+
+/** Shared log filtering for query_logs / fetch_transcripts: user-local date
+ * range, entity, contains-text. */
+async function logsForFilters(
+  s: TurnState,
+  input: Record<string, unknown>,
+  cap: number,
+  defaultLimit: number,
+): Promise<LogRow[]> {
+  const tz = s.user.timezone ?? s.env.TIMEZONE;
+  const fromDate = str(input.from_date);
+  const toDate = str(input.to_date);
+  const from = fromDate ? (dayStartInZone(tz, fromDate) ?? undefined) : undefined;
+  const toStart = toDate ? dayStartInZone(tz, toDate) : null;
+  const to = toStart != null ? toStart + 86400 : undefined;
+  const limit = Math.min(num(input.limit) ?? defaultLimit, cap);
+  let logs = await listLogs(s.env, s.user.id, {
+    todoId: num(input.todo_id) ?? undefined,
+    projectId: num(input.project_id) ?? undefined,
+    from,
+    to,
+    limit: 200,
+  });
+  const contains = str(input.contains)?.toLowerCase();
+  if (contains) {
+    logs = logs.filter(
+      (l) =>
+        l.summary.toLowerCase().includes(contains) ||
+        (l.title ?? "").toLowerCase().includes(contains),
+    );
+  }
+  return logs.slice(0, limit);
 }
 
 function str(v: unknown): string | null {
@@ -751,28 +789,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
     }
     case "query_logs": {
       const tz = s.user.timezone ?? s.env.TIMEZONE;
-      const fromDate = str(input.from_date);
-      const toDate = str(input.to_date);
-      const from = fromDate ? (dayStartInZone(tz, fromDate) ?? undefined) : undefined;
-      const toStart = toDate ? dayStartInZone(tz, toDate) : null;
-      const to = toStart != null ? toStart + 86400 : undefined;
-      const limit = Math.min(num(input.limit) ?? 30, 60);
-      let logs = await listLogs(s.env, s.user.id, {
-        todoId: num(input.todo_id) ?? undefined,
-        projectId: num(input.project_id) ?? undefined,
-        from,
-        to,
-        limit: 200,
-      });
-      const contains = str(input.contains)?.toLowerCase();
-      if (contains) {
-        logs = logs.filter(
-          (l) =>
-            l.summary.toLowerCase().includes(contains) ||
-            (l.title ?? "").toLowerCase().includes(contains),
-        );
-      }
-      logs = logs.slice(0, limit);
+      const logs = await logsForFilters(s, input, 60, 30);
       if (logs.length === 0) return "no logs match those filters";
       return JSON.stringify(
         logs.map((l) => ({
@@ -787,21 +804,31 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       );
     }
     case "fetch_transcripts": {
-      const ids = Array.isArray(input.log_ids)
-        ? (input.log_ids as unknown[]).filter((x): x is number => typeof x === "number").slice(0, 5)
-        : [];
-      if (ids.length === 0) return "error: log_ids required";
       const tz = s.user.timezone ?? s.env.TIMEZONE;
+      const ids = Array.isArray(input.log_ids)
+        ? (input.log_ids as unknown[]).filter((x): x is number => typeof x === "number").slice(0, 10)
+        : [];
+      let targets: (LogRow | { missing: number })[];
+      if (ids.length > 0) {
+        targets = await Promise.all(
+          ids.map(async (id) => (await getEntity<LogRow>(s.env, "log", s.user.id, id)) ?? { missing: id }),
+        );
+      } else {
+        // Same filters as query_logs: "all of today", "same day last week"…
+        const logs = await logsForFilters(s, input, 10, 10);
+        if (logs.length === 0) return "no logs match those filters";
+        targets = logs;
+      }
       const out: { log_id: number; date: string; title: string | null; transcript: string }[] = [];
-      for (const id of ids) {
-        const log = await getEntity<LogRow>(s.env, "log", s.user.id, id);
-        if (!log) {
-          out.push({ log_id: id, date: "", title: null, transcript: "(log not found)" });
+      for (const target of targets) {
+        if ("missing" in target) {
+          out.push({ log_id: target.missing, date: "", title: null, transcript: "(log not found)" });
           continue;
         }
+        const log = target;
         const date = new Date(log.occurred_at * 1000).toLocaleDateString("en-CA", { timeZone: tz });
         if (!log.message_id) {
-          out.push({ log_id: id, date, title: log.title, transcript: "(typed — no recording)" });
+          out.push({ log_id: log.id, date, title: log.title, transcript: "(typed — no recording)" });
           continue;
         }
         const segments = await messageSegments(s.env, log.message_id);
@@ -810,7 +837,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           .join(" ")
           .trim();
         out.push({
-          log_id: id,
+          log_id: log.id,
           date,
           title: log.title,
           transcript: transcript || "(no transcript available)",
