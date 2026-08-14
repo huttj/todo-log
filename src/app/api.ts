@@ -149,6 +149,62 @@ export interface UsageSummary {
   }[];
 }
 
+// -- Model management (Settings → Models) -----------------------------------
+
+export type ThinkingLevel = "off" | "low" | "medium" | "high";
+
+export interface UseCaseSetting {
+  model: string | null;
+  thinking: ThinkingLevel | null;
+}
+
+export interface AgentSchedule {
+  interval_hours: number;
+  start_hour: number;
+  end_hour: number;
+}
+
+export interface AgentConfig {
+  default: { model: string; thinking: ThinkingLevel };
+  overrides: {
+    chat: UseCaseSetting;
+    briefing: UseCaseSetting;
+    checkin: UseCaseSetting;
+    distill: UseCaseSetting;
+  };
+  briefing_refresh: AgentSchedule;
+  checkin_schedule: AgentSchedule;
+  chat_briefing_updates: boolean;
+  builtin_ai: boolean;
+}
+
+export interface ProviderStatus {
+  id: string;
+  label: string;
+  key_hint: string;
+  has_key: boolean;
+  tail: string | null;
+  created_at: number | null;
+  /** All-time spend billed to this key (byok usage only). */
+  spend: number;
+}
+
+export interface CatalogModel {
+  slug: string;
+  label: string;
+  provider: string;
+  /** 1–4, normalized across the whole catalog ($–$$$$). */
+  tier: number;
+  thinking: boolean;
+  available: boolean;
+}
+
+export interface ModelsInfo {
+  builtin_ai: boolean;
+  providers: ProviderStatus[];
+  models: CatalogModel[];
+}
+
 export interface Message {
   id: number;
   session_id: number;

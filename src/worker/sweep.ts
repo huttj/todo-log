@@ -1,6 +1,5 @@
 // Cron sweep (Cyborgy pattern): heal untranscribed audio segments, then
 // distill pending corrections into each user's learnings doc.
-import Anthropic from "@anthropic-ai/sdk";
 import type { Env, UserRow, TodoRow, ScheduleRow } from "./types";
 import {
   now,
@@ -21,7 +20,8 @@ import {
 import { transcribe } from "./transcribe";
 import { generateBriefing } from "./briefing";
 import { emptyUsage, addUsage, recordUsage } from "./usage";
-import { resolveUseCase, modelParams, parseConfig } from "./config";
+import { modelParams, parseConfig } from "./config";
+import { llmFor } from "./llm";
 import { pushToUser } from "./push";
 import { purgeDueDeletions } from "./purge";
 import { syncEmbeddings } from "./embeddings";
@@ -93,7 +93,6 @@ async function distillCorrections(env: Env): Promise<void> {
     byUser.set(p.user_id, list);
   }
 
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   let users: UserRow[] = [];
   try {
     users = await enabledUsers(env);
@@ -105,7 +104,7 @@ async function distillCorrections(env: Env): Promise<void> {
     try {
       const user = userById.get(userId);
       if (!user) continue;
-      const resolved = resolveUseCase(user, "distill");
+      const { client, resolved, provider, byok } = await llmFor(env, user, "distill");
       const current = await getLearnings(env, userId);
       const response = await client.messages.create({
         model: resolved.modelId,
@@ -128,7 +127,7 @@ async function distillCorrections(env: Env): Promise<void> {
       });
       const usage = emptyUsage();
       addUsage(usage, response.usage);
-      await recordUsage(env, { userId, kind: "distill", model: resolved.modelId, usage });
+      await recordUsage(env, { userId, kind: "distill", model: resolved.modelId, provider, byok, usage });
       const text = response.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { text: string }).text)
@@ -224,8 +223,7 @@ export async function checkinForUser(
   };
   const todoLine = (td: TodoRow) => `- todo “${td.title}” [${td.status}]`;
 
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-  const resolved = resolveUseCase(user, "checkin");
+  const { client, resolved, provider, byok } = await llmFor(env, user, "checkin");
   const response = await client.messages.create({
     model: resolved.modelId,
     max_tokens: 2000,
@@ -270,7 +268,7 @@ export async function checkinForUser(
   });
   const usage = emptyUsage();
   addUsage(usage, response.usage);
-  await recordUsage(env, { userId: user.id, kind: "checkin", model: resolved.modelId, usage });
+  await recordUsage(env, { userId: user.id, kind: "checkin", model: resolved.modelId, provider, byok, usage });
 
   const text = response.content
     .filter((b) => b.type === "text")
@@ -289,13 +287,13 @@ export async function checkinForUser(
     await pushToUser(env, user.id, { title: parsed.title, body: parsed.body ?? null }).catch((err) =>
       console.error(`push: check-in push failed for user ${user.id}:`, err),
     );
-    return "sent";
     // Respect a manual-only overview setting: check-ins don't regenerate it either.
     if (parsed.refresh_briefing && parseConfig(user.agent_config).briefing_refresh.interval_hours > 0) {
       await generateBriefing(env, user).catch((err) =>
         console.error(`sweep: check-in-triggered briefing refresh failed for user ${user.id}:`, err),
       );
     }
+    return "sent";
   } catch {
     console.error(`sweep: unparseable check-in for user ${user.id}: ${text.slice(0, 200)}`);
     return "error";

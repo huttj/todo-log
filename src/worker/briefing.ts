@@ -2,10 +2,10 @@
 // momentum, loose threads, and what's coming. The Today view renders it; the
 // agent sees it every turn and rewrites it via update_briefing when warranted;
 // cron refreshes it when stale; ↻ recomputes on demand.
-import Anthropic from "@anthropic-ai/sdk";
 import type { Env, UserRow, ScheduleRow } from "./types";
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
-import { resolveUseCase, modelParams } from "./config";
+import { modelParams } from "./config";
+import { llmFor } from "./llm";
 import {
   now,
   listProjects,
@@ -195,7 +195,7 @@ export async function generateBriefing(
     .filter(Boolean)
     .join("\n\n");
 
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const { client, resolved, provider, byok } = await llmFor(env, user, "briefing");
   // Structured output guarantees parseable JSON (adaptive thinking previously
   // ate into max_tokens and could truncate the raw-JSON reply mid-object).
   const strArray = { type: "array", items: { type: "string" } };
@@ -233,17 +233,15 @@ export async function generateBriefing(
     additionalProperties: false,
   };
   const started = Date.now();
-  const resolved = resolveUseCase(user, "briefing");
-  const params = modelParams(resolved) as {
-    thinking?: Anthropic.ThinkingConfigParam;
-    output_config?: Record<string, unknown>;
-  };
+  const params = modelParams(resolved);
   const stream = client.messages.stream({
     model: resolved.modelId,
     max_tokens: 6000,
-    ...(params.thinking ? { thinking: params.thinking } : {}),
+    ...params,
+    // On non-json_schema providers the adapter drops the format and the
+    // prompt's "ONLY JSON" + the brace-extraction fallback below carry it.
     output_config: {
-      ...(params.output_config ?? {}),
+      ...((params.output_config as Record<string, unknown>) ?? {}),
       format: { type: "json_schema", schema: BRIEFING_SCHEMA },
     },
     system:
@@ -271,7 +269,7 @@ export async function generateBriefing(
   );
   const usage = emptyUsage();
   addUsage(usage, response.usage);
-  await recordUsage(env, { userId: user.id, kind: "briefing", model: resolved.modelId, usage });
+  await recordUsage(env, { userId: user.id, kind: "briefing", model: resolved.modelId, provider, byok, usage });
 
   const text = response.content
     .filter((b) => b.type === "text")

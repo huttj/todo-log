@@ -1,41 +1,14 @@
 // Settings: spend roll-ups with filters, top-level agent defaults, per-use
 // model / thinking overrides, regeneration schedules, and agent memory.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Select from "react-select";
-import { api, post, patch, type Me } from "../api";
-import { fmtCost } from "../fmt";
+import { api, post, patch, type AgentConfig, type AgentSchedule as Schedule, type Me } from "../api";
+import { fmtCost, fmtTokens } from "../fmt";
 import type { CaptureContext } from "../Capture";
 import { pushSupported, pushEnabled, enablePush, disablePush } from "../push";
 import { getThemePref, setThemePref, type ThemePref } from "../theme";
 import { SupportThreadList } from "./Support";
-
-type Model = "sonnet" | "opus" | "haiku";
-type Thinking = "off" | "low" | "medium" | "high";
-
-interface UseCaseSetting {
-  model: Model | null;
-  thinking: Thinking | null;
-}
-
-interface Schedule {
-  interval_hours: number;
-  start_hour: number;
-  end_hour: number;
-}
-
-interface AgentConfig {
-  default: { model: Model; thinking: Thinking };
-  overrides: {
-    chat: UseCaseSetting;
-    briefing: UseCaseSetting;
-    checkin: UseCaseSetting;
-    distill: UseCaseSetting;
-  };
-  briefing_refresh: Schedule;
-  checkin_schedule: Schedule;
-  chat_briefing_updates: boolean;
-}
 
 interface UsageRow {
   day: string;
@@ -54,26 +27,6 @@ const KIND_LABELS: Record<string, string> = {
   checkin: "check-in",
   distill: "learning distill",
 };
-
-const USE_CASES: { key: "chat" | "briefing" | "checkin" | "distill"; label: string }[] = [
-  { key: "chat", label: "Chat" },
-  { key: "briefing", label: "Overview" },
-  { key: "checkin", label: "Notifications" },
-  { key: "distill", label: "Learning distill" },
-];
-
-const MODEL_OPTS = [
-  { value: "sonnet", label: "Sonnet 5" },
-  { value: "opus", label: "Opus 5" },
-  { value: "haiku", label: "Haiku 4.5" },
-];
-
-const THINKING_OPTS = [
-  { value: "off", label: "off" },
-  { value: "low", label: "light" },
-  { value: "medium", label: "normal" },
-  { value: "high", label: "deep" },
-];
 
 interface Opt {
   value: string;
@@ -258,29 +211,6 @@ export default function Settings(props: {
 
   if (!cfg) return <p className="empty">Loading…</p>;
 
-  const INHERIT = { value: "inherit", label: "default" };
-  const modelSelect = (value: Model | null, onChange: (m: Model | null) => void, allowInherit: boolean) => (
-    <Sel
-      options={allowInherit ? [INHERIT, ...MODEL_OPTS] : MODEL_OPTS}
-      value={value ?? (allowInherit ? "inherit" : null)}
-      onChange={(v) => onChange(v === "inherit" || v == null ? null : (v as Model))}
-    />
-  );
-  const thinkingSelect = (
-    value: Thinking | null,
-    onChange: (t: Thinking | null) => void,
-    allowInherit: boolean,
-    disabled = false,
-  ) => (
-    <Sel
-      options={allowInherit ? [INHERIT, ...THINKING_OPTS] : THINKING_OPTS}
-      value={value ?? (allowInherit ? "inherit" : null)}
-      onChange={(v) => onChange(v === "inherit" || v == null ? null : (v as Thinking))}
-      isDisabled={disabled}
-      width={100}
-    />
-  );
-
   const hourOpts = (from: number) =>
     Array.from({ length: 24 }, (_, h) => ({ value: String(h + from), label: `${h + from}:00` }));
 
@@ -389,9 +319,9 @@ export default function Settings(props: {
                     )}
                     <td>{m.model.replace("claude-", "")}</td>
                     <td>{m.n}</td>
-                    <td>{(m.input / 1000).toFixed(1)}k</td>
-                    <td>{(m.output / 1000).toFixed(1)}k</td>
-                    <td>{(m.cache_read / 1000).toFixed(0)}k</td>
+                    <td>{fmtTokens(m.input)}</td>
+                    <td>{fmtTokens(m.output)}</td>
+                    <td>{fmtTokens(m.cache_read)}</td>
                     <td>{fmtCost(m.cost)}</td>
                   </tr>
                 )),
@@ -401,9 +331,9 @@ export default function Settings(props: {
               <tr>
                 <td colSpan={2}>total</td>
                 <td>{spend.total.n}</td>
-                <td>{(spend.total.input / 1000).toFixed(1)}k</td>
-                <td>{(spend.total.output / 1000).toFixed(1)}k</td>
-                <td>{(spend.total.cache_read / 1000).toFixed(0)}k</td>
+                <td>{fmtTokens(spend.total.input)}</td>
+                <td>{fmtTokens(spend.total.output)}</td>
+                <td>{fmtTokens(spend.total.cache_read)}</td>
                 <td>{fmtCost(spend.total.cost)}</td>
               </tr>
             </tfoot>
@@ -415,48 +345,14 @@ export default function Settings(props: {
       </section>
 
       <section>
-        <h2>Agent defaults</h2>
-        <div className="setting-row">
-          <span>Model</span>
-          {modelSelect(cfg.default.model, (m) => save({ ...cfg, default: { ...cfg.default, model: m ?? "sonnet" } }), false)}
-          <span>Thinking</span>
-          {thinkingSelect(
-            cfg.default.thinking,
-            (t) => save({ ...cfg, default: { ...cfg.default, thinking: t ?? "medium" } }),
-            false,
-            cfg.default.model === "haiku",
-          )}
-        </div>
-        {cfg.default.model === "haiku" && (
-          <p className="hint-left">Haiku doesn't support thinking — it runs off.</p>
-        )}
-      </section>
-
-      <section>
-        <h2>Per-use overrides</h2>
-        {USE_CASES.map(({ key, label }) => {
-          const o = cfg.overrides[key];
-          const effModel = o.model ?? cfg.default.model;
-          return (
-            <div className="setting-row" key={key}>
-              <span className="uc">{label}</span>
-              {modelSelect(o.model, (m) =>
-                save({ ...cfg, overrides: { ...cfg.overrides, [key]: { ...o, model: m } } }),
-                true,
-              )}
-              {thinkingSelect(
-                o.thinking,
-                (t) => save({ ...cfg, overrides: { ...cfg.overrides, [key]: { ...o, thinking: t } } }),
-                true,
-                effModel === "haiku",
-              )}
-            </div>
-          );
-        })}
+        <h2>Models</h2>
         <p className="hint-left">
-          "default" inherits the agent defaults above. Planning chats always think deeply when
-          thinking is on.
+          Pick which model powers each use, and add your own API keys for OpenAI, Kimi, Groq, and
+          more.
         </p>
+        <Link className="push-btn models-link" to="/settings/models">
+          Manage models & keys
+        </Link>
       </section>
 
       {scheduleSection(

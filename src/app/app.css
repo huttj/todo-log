@@ -3677,3 +3677,69 @@ button.back {
   padding: 0.2rem 0.65rem;
   font-size: 0.78rem;
 }
+
+/* --- Models page (Settings → Manage models & keys) --- */
+.settings-back {
+  margin: 0 0 0.25rem;
+}
+.settings-back a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.3rem 0;
+}
+.key-row .key-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 9.5rem;
+}
+.key-row input {
+  flex: 1;
+  min-width: 11rem;
+}
+.key-row .key-err {
+  flex-basis: 100%;
+  margin: 0;
+}
+.key-tail {
+  font-family: monospace;
+  color: var(--muted);
+}
+.key-spend {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+.model-ico {
+  color: var(--muted);
+  width: 1em;
+}
+.model-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  min-width: 0;
+}
+.model-opt .model-tier {
+  color: var(--faint);
+  letter-spacing: 0.08em;
+  margin-left: 0.25em;
+}
+.models-link {
+  display: inline-block;
+  text-decoration: none;
+  margin-top: 0.5rem;
+  color: var(--ink);
+}
+
+/* Send-failure bubble: the placeholder agent bubble carries the mapped error. */
+.bubble.failed {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-ink);
+}

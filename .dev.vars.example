@@ -4,3 +4,6 @@ ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_CLIENT_ID=....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-...
 SESSION_SECRET=any-long-random-string-for-local
+# Optional: dedicated wrapping secret for stored BYOK provider keys.
+# Falls back to SESSION_SECRET when unset.
+# KEY_VAULT_SECRET=another-long-random-string

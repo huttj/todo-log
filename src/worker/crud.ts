@@ -24,6 +24,9 @@ import {
 } from "./db";
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
+import { MODELS, PROVIDERS, costTier, type ProviderId } from "./catalog";
+import { listProviderKeys, saveProviderKey, deleteProviderKey } from "./keys";
+import { checkProviderKey } from "./llm";
 import { listMemories, saveMemory, listDismissals, setDismissal, resolvePlannedSlots, setLogLinks, deleteLogLinks } from "./db";
 import { saveSubscription, pushToUser } from "./push";
 import { hybridSearch } from "./embeddings";
@@ -511,6 +514,64 @@ crud.post("/settings/agent", async (c) => {
     .bind(JSON.stringify(cfg), c.get("user").id)
     .run();
   return c.json(cfg);
+});
+
+// -- BYOK: model catalog + per-provider API keys ----------------------------
+
+crud.get("/settings/models", async (c) => {
+  const userId = c.get("user").id;
+  const builtinAi = parseConfig(c.get("user").agent_config).builtin_ai;
+  const keys = await listProviderKeys(c.env, userId);
+  const byProvider = new Map(keys.map((k) => [k.provider, k]));
+  // Spend attributed to the user's own keys, per provider, all-time.
+  const spendRows = await c.env.DB.prepare(
+    `SELECT provider, SUM(cost_usd) AS cost FROM llm_usage
+     WHERE user_id = ? AND byok = 1 GROUP BY provider`,
+  )
+    .bind(userId)
+    .all<{ provider: string; cost: number }>();
+  const spend = new Map(spendRows.results.map((r) => [r.provider, r.cost]));
+  const providers = Object.values(PROVIDERS).map((p) => {
+    const k = byProvider.get(p.id);
+    return {
+      id: p.id,
+      label: p.label,
+      key_hint: p.keyHint,
+      has_key: !!k,
+      tail: k?.tail ?? null,
+      created_at: k?.created_at ?? null,
+      spend: spend.get(p.id) ?? 0,
+    };
+  });
+  const models = Object.values(MODELS).map((m) => ({
+    slug: m.slug,
+    label: m.label,
+    provider: m.provider,
+    tier: costTier(m),
+    thinking: m.thinking !== "none",
+    available:
+      byProvider.has(m.provider) || (m.provider === "anthropic" && builtinAi),
+  }));
+  return c.json({ builtin_ai: builtinAi, providers, models });
+});
+
+// The key never comes back out: POST validates against the provider's API,
+// encrypts, and stores; GET /settings/models only ever reports the tail.
+crud.post("/settings/keys", async (c) => {
+  const body = await c.req.json<{ provider?: string; key?: string }>();
+  const provider = body.provider as ProviderId;
+  if (!provider || !(provider in PROVIDERS)) return c.json({ error: "unknown provider" }, 400);
+  const key = (body.key ?? "").trim();
+  if (key.length < 8) return c.json({ error: "key required" }, 400);
+  const check = await checkProviderKey(provider, key);
+  if (!check.ok) return c.json({ error: check.error ?? "key rejected" }, 400);
+  const row = await saveProviderKey(c.env, c.get("user").id, provider, key);
+  return c.json({ ok: true, provider, tail: row.tail });
+});
+
+crud.delete("/settings/keys/:provider", async (c) => {
+  await deleteProviderKey(c.env, c.get("user").id, c.req.param("provider"));
+  return c.json({ ok: true });
 });
 
 // Omni search across projects, todos, and logs.

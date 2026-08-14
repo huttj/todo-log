@@ -3,6 +3,8 @@ export interface Env {
   MEDIA: R2Bucket;
   AI: Ai;
   ANTHROPIC_API_KEY: string;
+  /** Wraps stored BYOK provider keys (AES-GCM). Falls back to SESSION_SECRET. */
+  KEY_VAULT_SECRET?: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;

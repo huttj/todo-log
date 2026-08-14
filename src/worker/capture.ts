@@ -248,10 +248,22 @@ capture.post("/messages/:id/send", async (c) => {
   const user = c.get("user");
   const message = await getOwnedMessage(c.env, user.id, Number(c.req.param("id")));
   if (!message) return c.json({ error: "not found" }, 404);
-  if (message.text) return c.json({ error: "already sent" }, 400);
+  // "Sent" = an assistant reply exists. text alone just means an earlier
+  // attempt finalized the transcript before the turn failed — those stay
+  // retryable (the client re-sends after an LLM error).
+  if (message.text) {
+    const replied = await c.env.DB.prepare(
+      `SELECT 1 FROM messages WHERE role = 'assistant' AND reply_to = ? LIMIT 1`,
+    )
+      .bind(message.id)
+      .first();
+    if (replied) return c.json({ error: "already sent" }, 400);
+  }
 
   const body = await c.req.json<{ text?: string }>().catch(() => ({}) as { text?: string });
   let text = body.text?.trim() ?? "";
+  // Retry of a finalized-but-unanswered message: reuse the assembled text.
+  if (!text && message.text) text = message.text;
 
   if (!text) {
     const segments = await messageSegments(c.env, message.id);

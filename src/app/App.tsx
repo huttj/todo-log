@@ -14,6 +14,7 @@ import Search from "./components/Search";
 import Bell from "./components/Bell";
 import Today from "./views/Today";
 import Settings from "./views/Settings";
+import Models from "./views/Models";
 import SearchResults from "./views/SearchResults";
 import Support from "./views/Support";
 import { Terms, Privacy } from "./views/Legal";
@@ -243,6 +244,7 @@ export default function App() {
           <Route path="/sessions" element={<Sessions {...viewProps} />} />
           <Route path="/sessions/:id" element={<SessionView {...viewProps} />} />
           <Route path="/settings" element={<Settings {...viewProps} me={me} />} />
+          <Route path="/settings/models" element={<Models {...viewProps} />} />
           <Route path="/search" element={<SearchResults {...viewProps} />} />
           <Route path="/support" element={<Support {...viewProps} me={me} />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,14 +1,16 @@
 // Per-user agent configuration: top-level defaults with per-use-case
 // overrides (chat / briefing / checkin), plus the briefing refresh schedule.
-// Stored as JSON in users.agent_config.
+// Stored as JSON in users.agent_config. Model values are catalog slugs
+// (catalog.ts); whether a slug is actually usable (provider key on file) is
+// resolved at request time in llm.ts, falling back to the house Anthropic key.
 import type { UserRow } from "./types";
+import { MODELS, PROVIDERS, isModelSlug, type ProviderId, type ThinkingKind, type Wire } from "./catalog";
 
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
-export type ModelChoice = "sonnet" | "opus" | "haiku";
 export type UseCase = "chat" | "briefing" | "checkin" | "distill";
 
 export interface UseCaseSetting {
-  model: ModelChoice | null; // null = inherit default
+  model: string | null; // catalog slug; null = inherit default
   thinking: ThinkingLevel | null;
 }
 
@@ -20,22 +22,19 @@ export interface RefreshSchedule {
 }
 
 export interface AgentConfig {
-  default: { model: ModelChoice; thinking: ThinkingLevel };
+  default: { model: string; thinking: ThinkingLevel };
   overrides: Record<UseCase, UseCaseSetting>;
   briefing_refresh: RefreshSchedule;
   checkin_schedule: RefreshSchedule;
   /** Opt-in: chats may rewrite the overview via the update_briefing tool. */
   chat_briefing_updates: boolean;
+  /** Todo Log's built-in Anthropic key. Off + no user keys = no AI (the agent
+   * auto-replies with a pointer to the Models page). Later this ties to
+   * billing: enabled by adding a card, disabled by removing it. */
+  builtin_ai: boolean;
 }
 
-export const MODEL_IDS: Record<ModelChoice, string> = {
-  sonnet: "claude-sonnet-5",
-  opus: "claude-opus-5",
-  haiku: "claude-haiku-4-5",
-};
-
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "low", "medium", "high"];
-const MODELS: ModelChoice[] = ["sonnet", "opus", "haiku"];
 
 export function defaultConfig(): AgentConfig {
   return {
@@ -51,6 +50,7 @@ export function defaultConfig(): AgentConfig {
     briefing_refresh: { interval_hours: 4, start_hour: 6, end_hour: 23 },
     checkin_schedule: { interval_hours: 3, start_hour: 8, end_hour: 22 },
     chat_briefing_updates: false,
+    builtin_ai: true,
   };
 }
 
@@ -68,7 +68,7 @@ export function parseConfig(raw: string | null): AgentConfig {
     }
     const d = parsed.default as Record<string, unknown> | undefined;
     if (d) {
-      if (MODELS.includes(d.model as ModelChoice)) cfg.default.model = d.model as ModelChoice;
+      if (isModelSlug(d.model)) cfg.default.model = d.model;
       if (THINKING_LEVELS.includes(d.thinking as ThinkingLevel)) {
         cfg.default.thinking = d.thinking as ThinkingLevel;
       }
@@ -77,7 +77,7 @@ export function parseConfig(raw: string | null): AgentConfig {
     for (const uc of ["chat", "briefing", "checkin", "distill"] as UseCase[]) {
       const o = ov?.[uc];
       if (!o) continue;
-      if (MODELS.includes(o.model as ModelChoice)) cfg.overrides[uc].model = o.model as ModelChoice;
+      if (isModelSlug(o.model)) cfg.overrides[uc].model = o.model;
       if (THINKING_LEVELS.includes(o.thinking as ThinkingLevel)) {
         cfg.overrides[uc].thinking = o.thinking as ThinkingLevel;
       }
@@ -97,6 +97,7 @@ export function parseConfig(raw: string | null): AgentConfig {
     if (typeof parsed.chat_briefing_updates === "boolean") {
       cfg.chat_briefing_updates = parsed.chat_briefing_updates;
     }
+    if (typeof parsed.builtin_ai === "boolean") cfg.builtin_ai = parsed.builtin_ai;
     return cfg;
   } catch {
     return cfg;
@@ -104,28 +105,50 @@ export function parseConfig(raw: string | null): AgentConfig {
 }
 
 export interface ResolvedUseCase {
+  /** Catalog slug (stored in config) and the wire-level model string. */
+  slug: string;
   modelId: string;
-  model: ModelChoice;
+  provider: ProviderId;
+  wire: Wire;
   thinking: ThinkingLevel;
+  thinkingKind: ThinkingKind;
+  jsonSchema: boolean;
+}
+
+/** Build a resolution for a specific slug (also the llm.ts fallback path). */
+export function resolveSlug(slug: string, thinking: ThinkingLevel): ResolvedUseCase {
+  const m = MODELS[slug] ?? MODELS.sonnet;
+  return {
+    slug: m.slug,
+    modelId: m.apiId,
+    provider: m.provider,
+    wire: PROVIDERS[m.provider].wire,
+    // Non-thinking models run with thinking off regardless of the setting.
+    thinking: m.thinking === "none" ? "off" : thinking,
+    thinkingKind: m.thinking,
+    jsonSchema: m.jsonSchema,
+  };
 }
 
 export function resolveUseCase(user: UserRow, useCase: UseCase): ResolvedUseCase {
   const cfg = parseConfig(user.agent_config);
   const o = cfg.overrides[useCase];
-  const model = o.model ?? cfg.default.model;
-  // Haiku 4.5 has no adaptive thinking — force off.
-  const thinking = model === "haiku" ? "off" : (o.thinking ?? cfg.default.thinking);
-  return { modelId: MODEL_IDS[model], model, thinking };
+  return resolveSlug(o.model ?? cfg.default.model, o.thinking ?? cfg.default.thinking);
 }
 
-/** Request params for the resolved setting (thinking + effort, model-aware).
- * Haiku: no thinking/effort params at all. Sonnet: disabled, or adaptive with
- * the chosen effort. */
+/** Request params for the resolved setting, wire-aware. Anthropic adaptive
+ * thinking + effort; OpenAI-wire reasoning models get reasoning_effort; plain
+ * models get nothing. */
 export function modelParams(r: ResolvedUseCase): Record<string, unknown> {
-  if (r.model === "haiku") return {};
-  if (r.thinking === "off") return { thinking: { type: "disabled" } };
-  return {
-    thinking: { type: "adaptive", display: "summarized" },
-    output_config: { effort: r.thinking },
-  };
+  if (r.thinkingKind === "adaptive") {
+    if (r.thinking === "off") return { thinking: { type: "disabled" } };
+    return {
+      thinking: { type: "adaptive", display: "summarized" },
+      output_config: { effort: r.thinking },
+    };
+  }
+  if (r.thinkingKind === "effort" && r.thinking !== "off") {
+    return { reasoning_effort: r.thinking };
+  }
+  return {};
 }

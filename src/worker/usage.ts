@@ -1,21 +1,18 @@
 // LLM usage instrumentation: every invocation records its token counts (from
-// response.usage) and a computed cost. Prices are $/MTok from the Anthropic
-// price list; cache reads bill at 0.1x input, cache writes at 1.25x.
+// response.usage) and a computed cost. Prices are $/MTok from the catalog;
+// cache reads bill at 0.1x input (Anthropic and OpenAI alike), cache writes
+// at 1.25x (Anthropic-wire only — the OpenAI wire never reports writes).
 import type { Env } from "./types";
+import { modelByApiId } from "./catalog";
 import { now, insertRow } from "./db";
-
-const PRICES: Record<string, { input: number; output: number }> = {
-  "claude-sonnet-5": { input: 3, output: 15 },
-  "claude-opus-5": { input: 5, output: 25 },
-  "claude-haiku-4-5": { input: 1, output: 5 },
-};
 
 function rates(model: string): { input: number; output: number } {
   // Sonnet 5 introductory pricing ($2/$10) runs through 2026-08-31.
   if (model === "claude-sonnet-5" && Date.now() < Date.parse("2026-09-01T00:00:00Z")) {
     return { input: 2, output: 10 };
   }
-  return PRICES[model] ?? { input: 3, output: 15 };
+  const m = modelByApiId(model);
+  return m ? { input: m.input, output: m.output } : { input: 3, output: 15 };
 }
 
 export interface UsageTotals {
@@ -62,6 +59,9 @@ export async function recordUsage(
     userId: number;
     kind: "turn" | "briefing" | "checkin" | "distill";
     model: string;
+    /** Which provider served it, and whether it billed the user's own key. */
+    provider?: string;
+    byok?: boolean;
     sessionId?: number | null;
     messageId?: number | null;
     usage: UsageTotals;
@@ -72,6 +72,8 @@ export async function recordUsage(
       user_id: args.userId,
       kind: args.kind,
       model: args.model,
+      provider: args.provider ?? "anthropic",
+      byok: args.byok ? 1 : 0,
       session_id: args.sessionId ?? null,
       message_id: args.messageId ?? null,
       input_tokens: args.usage.input,

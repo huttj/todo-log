@@ -18,7 +18,8 @@ import type {
 import { emptyUsage, addUsage, recordUsage, computeCost } from "./usage";
 import { BRIEFING_STYLE, rehiddenEntries, stripInvalidRefs, type Briefing } from "./briefing";
 import { hybridSearch } from "./embeddings";
-import { resolveUseCase, modelParams, parseConfig } from "./config";
+import { modelParams, parseConfig } from "./config";
+import { llmFor, NoAiError, type LlmSelection } from "./llm";
 import {
   now,
   insertRow,
@@ -1425,7 +1426,19 @@ export async function runTurn(
   userText: string,
   onEvent?: (e: TurnEvent) => void,
 ): Promise<TurnResult> {
-  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  let ai: LlmSelection;
+  try {
+    ai = await llmFor(env, user, "chat");
+  } catch (err) {
+    if (err instanceof NoAiError) {
+      const reply =
+        "No AI enabled. Please go to [the models page](/settings/models) in Settings to enable one.";
+      onEvent?.({ type: "delta", text: reply });
+      return { reply, feed: [], parts: [{ t: "text", text: reply }], thinking: "", questions: [], costUsd: 0 };
+    }
+    throw err;
+  }
+  const { client, resolved, provider, byok } = ai;
   const tz = user.timezone ?? env.TIMEZONE;
   const t = now();
 
@@ -1487,10 +1500,9 @@ export async function runTurn(
     i === toolList.length - 1 ? { ...t, cache_control: { type: "ephemeral", ttl: "1h" } } : t,
   );
 
-  // Per-user tuning (Settings page): model + thinking level for chat turns.
+  // Per-user tuning (Models page): model + thinking level for chat turns.
   // Planning sessions get at least "high" thinking when thinking is on.
-  const resolved = resolveUseCase(user, "chat");
-  if (planMode && resolved.thinking !== "off" && resolved.model !== "haiku") {
+  if (planMode && resolved.thinking !== "off" && resolved.thinkingKind !== "none") {
     resolved.thinking = "high";
   }
   const model = resolved.modelId;
@@ -1605,6 +1617,8 @@ export async function runTurn(
     userId: user.id,
     kind: "turn",
     model,
+    provider,
+    byok,
     sessionId: session.id,
     messageId,
     usage,

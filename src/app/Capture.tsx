@@ -58,6 +58,27 @@ interface ChatEntry {
   msgId?: number;
   hasAudio?: boolean;
   showPlayer?: boolean;
+  /** Send-failure placeholder bubble; removed on the next send (retry). */
+  failed?: boolean;
+}
+
+/** "OpenAI API error 429: {json}" → a short human reason. Non-LLM errors
+ * (network, upload) pass through untouched. */
+function friendlyLlmError(raw: string): string {
+  const head = raw.match(/^(.+?) API error (\d+)/);
+  const provider = head?.[1] ?? "the model provider";
+  const status = head ? Number(head[2]) : 0;
+  const inner = raw.match(/"message":\s*"([^"]*)"/)?.[1];
+  if (/credit_balance_exhausted|insufficient_quota|no credits/i.test(raw)) {
+    return `${provider} says the API key is out of credits — top up your account, then send again.`;
+  }
+  if (status === 401 || status === 403 || /invalid_api_key/i.test(raw)) {
+    return `${provider} rejected the API key — check it on the Models page in Settings.`;
+  }
+  if (status === 429) return `${provider} is rate-limiting — wait a moment, then send again.`;
+  if (status >= 500) return `${provider} is having trouble right now — send again in a moment.`;
+  if (inner) return `${provider}: ${inner}`;
+  return raw;
 }
 
 interface QueuedSend {
@@ -124,6 +145,8 @@ export default function Capture(props: {
   const rollTimerRef = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
   const draftRef = useRef<HTMLTextAreaElement | null>(null);
+  // The error bubble from a failed send; the next send (= the retry) drops it.
+  const failedEntryRef = useRef<number | null>(null);
   // Refs mirror the upload/closing counters so the background queue can wait
   // on them without re-rendering.
   const uploadsRef = useRef(0);
@@ -597,7 +620,7 @@ export default function Capture(props: {
     setError(null);
     pinnedRef.current = true;
     setChat((c) => [
-      ...c,
+      ...dropFailed(c),
       { id: item.userEntryId, role: "user", text: item.text, transcribing: item.hadSegments },
       {
         id: item.assistantEntryId,
@@ -612,6 +635,13 @@ export default function Capture(props: {
     ]);
     queueRef.current.push(item);
     void processQueue();
+  }
+
+  /** A retry replaces the previous failure bubble instead of stacking on it. */
+  function dropFailed(c: ChatEntry[]): ChatEntry[] {
+    const fid = failedEntryRef.current;
+    failedEntryRef.current = null;
+    return fid == null ? c : c.filter((en) => en.id !== fid);
   }
 
   /** Send a canned answer (question chip) as its own message. */
@@ -629,7 +659,7 @@ export default function Capture(props: {
     };
     pinnedRef.current = true;
     setChat((c) => [
-      ...c,
+      ...dropFailed(c),
       { id: item.userEntryId, role: "user", text },
       { id: item.assistantEntryId, role: "assistant", text: "", thinking: "", parts: [], feed: [], live: true, pending: true },
     ]);
@@ -772,12 +802,12 @@ export default function Capture(props: {
         }
       }
     } catch (e) {
-      setError(String((e as Error).message ?? e));
-      updateEntry(item.userEntryId, (entry) => ({ ...entry, transcribing: false }));
+      const reason = friendlyLlmError(String((e as Error).message ?? e));
       // Restore the utterance into the composer (if it's free) so the segment
       // pills — and their retry buttons — come back.
       const composerFree = messageIdRef.current === null && recorderRef.current === null;
-      if (item.msgId && composerFree) {
+      const restored = !!item.msgId && composerFree;
+      if (restored) {
         messageIdRef.current = item.msgId;
         setMessageId(item.msgId);
         appendedSegs.current = new Set(item.appended);
@@ -785,24 +815,25 @@ export default function Capture(props: {
         dirtyRef.current = item.dirty;
         setDraft(item.text);
         if (item.hadSegments) setTranscribing(true);
-        updateEntry(item.assistantEntryId, (entry) => ({
-          ...entry,
-          live: false,
-          pending: false,
-          parts: entry.parts?.length
-            ? entry.parts
-            : [{ t: "text", text: "(send failed — restored to the composer below; retry the stuck segment or send again)" }],
-        }));
+        // The message is back in the composer — drop its sent bubble so it
+        // isn't shown twice.
+        setChat((c) => c.filter((en) => en.id !== item.userEntryId));
       } else {
-        updateEntry(item.assistantEntryId, (entry) => ({
-          ...entry,
-          live: false,
-          pending: false,
-          parts: entry.parts?.length
-            ? entry.parts
-            : [{ t: "text", text: "(send failed — the audio is saved server-side)" }],
-        }));
+        updateEntry(item.userEntryId, (entry) => ({ ...entry, transcribing: false }));
       }
+      // The placeholder agent bubble becomes the error message; the next send
+      // (= the retry) clears it via dropFailed.
+      failedEntryRef.current = item.assistantEntryId;
+      const hint = restored
+        ? "It's back in the composer below — send again to retry."
+        : "The audio is saved server-side.";
+      updateEntry(item.assistantEntryId, (entry) => ({
+        ...entry,
+        live: false,
+        pending: false,
+        failed: true,
+        parts: [...(entry.parts ?? []), { t: "text", text: `Send failed: ${reason} ${hint}` }],
+      }));
     }
   }
 
@@ -1027,7 +1058,7 @@ export default function Capture(props: {
             return (
               <div
                 key={entry.id}
-                className={`bubble ${entry.role}${entry.role === "user" && entry.hasAudio ? " has-audio" : ""}`}
+                className={`bubble ${entry.role}${entry.role === "user" && entry.hasAudio ? " has-audio" : ""}${entry.failed ? " failed" : ""}`}
               >
                 {entry.live && entry.thinking && <p className="thinking">{entry.thinking}</p>}
                 {entry.role === "assistant" && !entry.live && entry.thinking && (
