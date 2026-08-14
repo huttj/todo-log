@@ -16,6 +16,9 @@ import {
   setSegmentTranscript,
   insertRow,
   getEntity,
+  attachLogLinks,
+  deleteLogLinks,
+  logMessageIds,
 } from "./db";
 import { transcribe } from "./transcribe";
 import { runTurn } from "./agent";
@@ -346,6 +349,7 @@ capture.get("/segments/:id", async (c) => {
 capture.get("/logs/:id", async (c) => {
   const log = await getEntity<LogRow>(c.env, "log", c.get("user").id, Number(c.req.param("id")));
   if (!log) return c.json({ error: "not found" }, 404);
+  await attachLogLinks(c.env, [log]);
   return c.json(log);
 });
 
@@ -364,6 +368,7 @@ capture.delete("/logs/:id", async (c) => {
   )
     .bind(user.id, log.id)
     .run();
+  await deleteLogLinks(c.env, log.id);
   await c.env.DB.prepare(`DELETE FROM logs WHERE id = ?`).bind(log.id).run();
   return c.json({ ok: true });
 });
@@ -403,12 +408,15 @@ capture.get("/logs/:id/events", async (c) => {
   return c.json(r.results);
 });
 
-// Full transcript of the utterance behind a log (all segments, in order).
+// Full transcript of the utterance(s) behind a log — a log can span several
+// recordings (append_to_log), stitched here oldest-first.
 capture.get("/logs/:id/transcript", async (c) => {
   const log = await getEntity<LogRow>(c.env, "log", c.get("user").id, Number(c.req.param("id")));
   if (!log) return c.json({ error: "not found" }, 404);
-  if (!log.message_id) return c.json({ segments: [] });
-  const segments = await messageSegments(c.env, log.message_id);
+  const messageIds = await logMessageIds(c.env, log.id);
+  if (log.message_id && !messageIds.includes(log.message_id)) messageIds.unshift(log.message_id);
+  const segments = [];
+  for (const mid of messageIds) segments.push(...(await messageSegments(c.env, mid)));
   return c.json({
     segments: segments.map((s) => ({ id: s.id, seq: s.seq, transcript: s.transcript })),
   });

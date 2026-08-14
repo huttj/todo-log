@@ -70,9 +70,10 @@ export interface Log {
   id: number;
   title?: string | null;
   message_id: number | null;
-  todo_id: number | null;
   action_id: number | null;
-  project_id: number | null;
+  /** Every project/todo the log touches (many-to-many). */
+  project_ids?: number[];
+  todo_ids?: number[];
   kind: "log" | "reflection";
   summary: string;
   quotes_json: string | null;

@@ -835,9 +835,11 @@ blockquote audio {
   width: 4.5rem;
   /* Hit box reaches a full 1rem above the dock's top edge (negative margin
      pulls it past the border) and down over the header's center; the visible
-     pill stays put. */
+     pill stays put. The bottom margin swallows nearly all of the handle's
+     flow height so the header rides up level with the pill (they don't
+     overlap horizontally). */
   padding: 1.3rem 0 0.8rem;
-  margin: -1.7rem 0 -0.75rem;
+  margin: -1.7rem 0 -1.6rem;
   display: flex;
   align-items: center;
   justify-content: center;

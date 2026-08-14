@@ -59,6 +59,7 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
 - Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
 - When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?"
 - Only actionable items go in plans; pure status or timing information belongs in coming.
+- PAUSED projects are on hold — the user set that status deliberately. Their todos get NO lines in today/oneoffs/coming (main or _more), and the project gets no main-list line. At most one quiet line in projects_more — "[Name](project:N) — paused." — with no suggested next step. Resurface paused work ONLY when a slot for it is actually scheduled or the user explicitly says they're picking it back up. Completed/abandoned projects are omitted entirely.
 - Order project lines by the user's stated priorities (shown per project when set) — high-priority or urgent-vibe projects go in the main list, back-burner ones in projects_more. Mirror the priority's wording when it shapes the next step.
 - Project lines START with the linked project name — "[Back Taxes](project:3) — moving. Next: ..." — and never repeat the name afterward. The words inside that first link are the project's NAME, nothing else.
   BAD: "[Moving](project:3). Next: ..." (momentum word linked instead of the name — the reader can't tell which project this is)
@@ -143,6 +144,14 @@ export async function generateBriefing(
       ? `${new Date(s.slot_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" })} (any time)`
       : new Date(s.slot_start * 1000).toLocaleString("en-US", { timeZone: tz });
 
+  // A todo on a non-active project must not read as normal open work.
+  const inactive = new Map(projects.filter((p) => p.status !== "active").map((p) => [p.id, p.status]));
+  const projFlag = (projectId: number | null) => {
+    if (!projectId) return "";
+    const st = inactive.get(projectId);
+    return st ? ` [project ${st}]` : "";
+  };
+
   const input = [
     `Current local time: ${new Date(t * 1000).toLocaleString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
     `Active projects:\n${projects
@@ -153,10 +162,16 @@ export async function generateBriefing(
         return `#${p.id} ${p.name} (${age})${p.priority ? ` [priority: ${p.priority}]` : ""}${p.description ? ` — ${p.description}` : ""}`;
       })
       .join("\n") || "(none)"}`,
+    projects.some((p) => p.status === "paused")
+      ? `Paused projects (on hold — see the paused rule):\n${projects
+          .filter((p) => p.status === "paused")
+          .map((p) => `#${p.id} ${p.name}`)
+          .join("\n")}`
+      : "",
     `Open todos:\n${todos
-      .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}${td.details ? ` — ${td.details.slice(0, 120)}` : ""}`)
+      .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}${projFlag(td.project_id)}${td.details ? ` — ${td.details.slice(0, 120)}` : ""}`)
       .join("\n") || "(none)"}`,
-    `Schedule (last 2 days → next 7; a todo can have several slots):\n${scheduled.map((s) => `todo #${s.id} ${s.title} [slot: ${s.slot_status}] ${when(s)}`).join("\n") || "(none)"}`,
+    `Schedule (last 2 days → next 7; a todo can have several slots):\n${scheduled.map((s) => `todo #${s.id} ${s.title} [slot: ${s.slot_status}]${projFlag(s.project_id)} ${when(s)}`).join("\n") || "(none)"}`,
     `Recent logs (last 7 days, newest first — the user's own words about how it's going):\n${logs
       .map((l) => `#${l.id} [${new Date(l.occurred_at * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })}] (${l.kind}) ${l.summary}`)
       .join("\n") || "(none)"}`,

@@ -13,6 +13,9 @@ const DELETE_ORDER = [
   `DELETE FROM audio_segments WHERE message_id IN
      (SELECT id FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?1))`,
   `DELETE FROM llm_usage WHERE user_id = ?1`,
+  `DELETE FROM log_projects WHERE log_id IN (SELECT id FROM logs WHERE user_id = ?1)`,
+  `DELETE FROM log_todos WHERE log_id IN (SELECT id FROM logs WHERE user_id = ?1)`,
+  `DELETE FROM log_messages WHERE log_id IN (SELECT id FROM logs WHERE user_id = ?1)`,
   `DELETE FROM logs WHERE user_id = ?1`,
   `DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE user_id = ?1)`,
   `DELETE FROM support_messages WHERE user_id = ?1`,

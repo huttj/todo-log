@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
-import LogCard from "../components/LogCard";
+import LogCard, { logAttachments } from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
 import { navHistory } from "../nav";
 
@@ -111,7 +111,14 @@ export default function TodoView(props: {
         {logs === null && <p className="empty">Loading…</p>}
         {logs?.length === 0 && <p className="empty">Nothing logged yet — tap Talk while you work on it.</p>}
         {logs?.map((l) => (
-          <LogCard key={l.id} log={l} />
+          <LogCard
+            key={l.id}
+            log={l}
+            attachments={logAttachments(l, {
+              todoTitle: new Map(todos.map((t) => [t.id, t.title])),
+              projectName: new Map(projects.map((p) => [p.id, p.name])),
+            }).filter((a) => a.to !== `/todos/${todoId}`)}
+          />
         ))}
       </section>
     </div>

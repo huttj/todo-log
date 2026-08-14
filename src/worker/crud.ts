@@ -24,7 +24,7 @@ import {
 } from "./db";
 import { generateBriefing } from "./briefing";
 import { parseConfig } from "./config";
-import { listMemories, saveMemory, listDismissals, setDismissal, resolvePlannedSlots } from "./db";
+import { listMemories, saveMemory, listDismissals, setDismissal, resolvePlannedSlots, setLogLinks, deleteLogLinks } from "./db";
 import { saveSubscription, pushToUser } from "./push";
 import { hybridSearch } from "./embeddings";
 import { checkinForUser } from "./sweep";
@@ -308,7 +308,10 @@ async function entityCost(
          WHERE user_id = ?1 AND message_id IS NOT NULL
            AND ((entity_type = 'project' AND entity_id = ?2)
              OR (entity_type = 'todo' AND entity_id IN (SELECT id FROM todos WHERE user_id = ?1 AND project_id = ?2))
-             OR (entity_type = 'log' AND entity_id IN (SELECT id FROM logs WHERE user_id = ?1 AND project_id = ?2)))`;
+             OR (entity_type = 'log' AND entity_id IN (
+               SELECT lp.log_id FROM log_projects lp
+               JOIN logs l ON l.id = lp.log_id
+               WHERE l.user_id = ?1 AND lp.project_id = ?2)))`;
   const row = await c.env.DB.prepare(
     `SELECT COALESCE(SUM(cost_usd), 0) AS cost FROM llm_usage
      WHERE user_id = ?1 AND message_id IN (${touching})`,
@@ -534,7 +537,8 @@ const PATCHABLE: Record<EntityType, string[]> = {
     "ended_at",
     "status",
   ],
-  log: ["summary", "kind", "todo_id", "action_id", "project_id"],
+  // Log links live in log_projects/log_todos (agent re-files via update_log).
+  log: ["summary", "kind", "action_id"],
 };
 
 const TYPE_BY_PATH: Record<string, EntityType> = {
@@ -584,6 +588,7 @@ crud.post("/events/:id/undo", async (c) => {
 
   const table = ENTITY_TABLES[event.entity_type];
   if (event.kind === "created") {
+    if (event.entity_type === "log") await deleteLogLinks(c.env, event.entity_id);
     await c.env.DB.prepare(`DELETE FROM ${table} WHERE id = ? AND user_id = ?`)
       .bind(event.entity_id, user.id)
       .run();
@@ -613,7 +618,18 @@ crud.post("/events/:id/undo", async (c) => {
     } else if (!payload.before || Object.keys(payload.before).length === 0) {
       return c.json({ error: "nothing to restore" }, 400);
     } else {
-      await updateRow(c.env, table, user.id, event.entity_id, payload.before);
+      // Log link arrays aren't columns — restore them via the junctions.
+      const { project_ids, todo_ids, ...cols } = payload.before as {
+        project_ids?: number[];
+        todo_ids?: number[];
+        [k: string]: unknown;
+      };
+      if (event.entity_type === "log" && (project_ids || todo_ids)) {
+        await setLogLinks(c.env, event.entity_id, { projectIds: project_ids, todoIds: todo_ids });
+      }
+      if (Object.keys(cols).length > 0) {
+        await updateRow(c.env, table, user.id, event.entity_id, cols);
+      }
     }
   } else {
     return c.json({ error: `cannot undo ${event.kind}` }, 400);

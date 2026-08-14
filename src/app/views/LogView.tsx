@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrashCan, faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, del, type Log, type Todo, type Project, type EventRecord } from "../api";
-import LogCard from "../components/LogCard";
+import LogCard, { logAttachments } from "../components/LogCard";
 import EventFeed from "../components/EventFeed";
 import type { CaptureContext } from "../Capture";
 
@@ -36,17 +36,10 @@ export default function LogView(props: {
 
   if (!log) return <p className="empty">Loading…</p>;
 
-  const attachment = log.todo_id
-    ? {
-        label: `todo: ${todos.find((t) => t.id === log.todo_id)?.title ?? log.todo_id}`,
-        to: `/todos/${log.todo_id}`,
-      }
-    : log.project_id
-      ? {
-          label: `project: ${projects.find((p) => p.id === log.project_id)?.name ?? log.project_id}`,
-          to: `/projects/${log.project_id}`,
-        }
-      : null;
+  const attachments = logAttachments(log, {
+    todoTitle: new Map(todos.map((t) => [t.id, t.title])),
+    projectName: new Map(projects.map((p) => [p.id, p.name])),
+  });
 
   return (
     <div className="tasks log-page">
@@ -80,7 +73,7 @@ export default function LogView(props: {
         </div>
       </div>
 
-      <LogCard log={log} attachment={attachment} />
+      <LogCard log={log} attachments={attachments} />
 
       <section>
         <h2>What the agent did this turn</h2>

@@ -18,9 +18,27 @@ export interface LogAttachment {
   to: string;
 }
 
+/** Chips for every entity a log touches — logs are many-to-many with both
+ * projects and todos. Pass name maps when you have them; ids degrade to #N. */
+export function logAttachments(
+  log: Log,
+  maps: { todoTitle?: Map<number, string>; projectName?: Map<number, string> } = {},
+): LogAttachment[] {
+  return [
+    ...(log.todo_ids ?? []).map((id) => ({
+      label: `todo: ${maps.todoTitle?.get(id) ?? `#${id}`}`,
+      to: `/todos/${id}`,
+    })),
+    ...(log.project_ids ?? []).map((id) => ({
+      label: `project: ${maps.projectName?.get(id) ?? `#${id}`}`,
+      to: `/projects/${id}`,
+    })),
+  ];
+}
+
 export default function LogCard(props: {
   log: Log;
-  attachment?: LogAttachment | null;
+  attachments?: LogAttachment[];
   onClick?: () => void;
   /** Search query — matches in title/summary get <mark>ed. */
   highlightQuery?: string;
@@ -68,18 +86,14 @@ export default function LogCard(props: {
           <FontAwesomeIcon icon={faArrowsRotate} />
         </button>
       </div>
-      {(log.kind === "reflection" || props.attachment) && (
+      {(log.kind === "reflection" || (props.attachments?.length ?? 0) > 0) && (
         <div className="log-pills">
           {log.kind === "reflection" && <span className="kind">reflection</span>}
-          {props.attachment && (
-            <Link
-              className="attachment"
-              to={props.attachment.to}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {props.attachment.label}
+          {props.attachments?.map((a) => (
+            <Link key={a.to} className="attachment" to={a.to} onClick={(e) => e.stopPropagation()}>
+              {a.label}
             </Link>
-          )}
+          ))}
         </div>
       )}
       {log.title && <p className="log-title">{highlight(log.title, props.highlightQuery)}</p>}

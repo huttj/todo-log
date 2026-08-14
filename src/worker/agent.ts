@@ -33,6 +33,8 @@ import {
   resolvePlannedSlots,
   getSlot,
   listLogs,
+  setLogLinks,
+  attachLogLinks,
   insertEvent,
   fileCorrection,
   getLearnings,
@@ -272,7 +274,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "create_log",
     description:
-      "File THE journal log for this utterance — one log per recording, covering everything said. `summary` is a compact paraphrase of all of it, subjectless or first-person (journal voice, never 'he/the user'); `quotes` are 0-3 verbatim sentences worth preserving exactly. Attach to the single most central todo/project (entity pages also surface logs from turns that touched them, so one attachment is enough).",
+      "File THE journal log for this utterance — one log per recording, covering everything said. `summary` is a compact paraphrase of all of it, subjectless or first-person (journal voice, never 'he/the user'); `quotes` are 0-3 verbatim sentences worth preserving exactly. Logs are free-form and often span topics: link EVERY project and todo the utterance actually touches (`project_ids`/`todo_ids`) — the log then shows on each of their pages.",
     input_schema: {
       type: "object",
       properties: {
@@ -282,8 +284,16 @@ const TOOLS: Anthropic.Tool[] = [
         },
         summary: { type: "string" },
         kind: { type: ["string", "null"], enum: ["log", "reflection", null] },
-        todo_id: ID,
-        project_id: ID,
+        todo_ids: {
+          type: ["array", "null"],
+          items: { type: "integer" },
+          description: "ALL todos this log touches",
+        },
+        project_ids: {
+          type: ["array", "null"],
+          items: { type: "integer" },
+          description: "ALL projects this log touches",
+        },
         quotes: { type: ["array", "null"], items: { type: "string" } },
         delivery_tags: {
           type: ["array", "null"],
@@ -299,7 +309,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_log",
     description:
-      "Update or re-file an existing log: fix the summary/kind, or attach it to the right todo/project (e.g. after the user answers a clarifying question). Only include fields that change.",
+      "Update or re-file an existing log: fix the summary/kind, or set the todos/projects it links to (e.g. after the user answers a clarifying question). `project_ids`/`todo_ids` REPLACE that whole link set — include every link that should remain, not just additions; pass [] (or null) to remove ALL of that kind. Omit a field to leave it untouched.",
     input_schema: {
       type: "object",
       properties: {
@@ -307,10 +317,25 @@ const TOOLS: Anthropic.Tool[] = [
         title: { type: ["string", "null"] },
         summary: { type: ["string", "null"] },
         kind: { type: ["string", "null"], enum: ["log", "reflection", null] },
-        todo_id: ID,
-        project_id: ID,
+        todo_ids: { type: ["array", "null"], items: { type: "integer" } },
+        project_ids: { type: ["array", "null"], items: { type: "integer" } },
       },
       required: ["log_id"],
+    },
+  },
+  {
+    name: "append_to_log",
+    description:
+      "Fold THIS utterance into an existing log instead of filing a new one — for when the user kept talking and this recording clearly continues that log's thread (a follow-on moments later, same topic, no standalone entry warranted). Adds this recording's transcript/audio to that log. `summary` REPLACES the log's summary — rewrite it to cover everything, old and new. New `quotes` append to the existing ones. Do NOT also create_log for this utterance.",
+    input_schema: {
+      type: "object",
+      properties: {
+        log_id: { type: "integer" },
+        summary: { type: "string", description: "The full updated summary (old + new content)" },
+        title: { type: ["string", "null"] },
+        quotes: { type: ["array", "null"], items: { type: "string" } },
+      },
+      required: ["log_id", "summary"],
     },
   },
   {
@@ -594,6 +619,32 @@ function collectUpdates(
   return { cols, before, after };
 }
 
+/** Id array from tool input, folding in a legacy scalar field. */
+function idArr(v: unknown, legacy?: unknown): number[] {
+  const ids = Array.isArray(v) ? v.filter((x): x is number => typeof x === "number") : [];
+  const l = num(legacy);
+  if (l != null && !ids.includes(l)) ids.push(l);
+  return ids;
+}
+
+/** Filter ids to rows that exist for this user — the model can hallucinate. */
+async function validIds(s: TurnState, table: "projects" | "todos", ids: number[]): Promise<number[]> {
+  if (ids.length === 0) return [];
+  const r = await s.env.DB.prepare(
+    `SELECT id FROM ${table} WHERE user_id = ? AND id IN (${ids.map(() => "?").join(",")})`,
+  )
+    .bind(s.user.id, ...ids)
+    .all<{ id: number }>();
+  return r.results.map((x) => x.id);
+}
+
+const sameIds = (a: number[], b: number[]): boolean => {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort((x, y) => x - y);
+  const sb = [...b].sort((x, y) => x - y);
+  return sa.every((v, i) => v === sb[i]);
+};
+
 async function executeTool(s: TurnState, name: string, rawInput: unknown): Promise<string> {
   const input = (rawInput ?? {}) as Record<string, unknown>;
   const t = now();
@@ -758,9 +809,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const row = await insertRow<LogRow>(s.env, "logs", {
         user_id: s.user.id,
         message_id: s.messageId,
-        todo_id: num(input.todo_id),
         action_id: null,
-        project_id: num(input.project_id),
         kind: input.kind === "reflection" ? "reflection" : "log",
         title: str(input.title),
         summary: str(input.summary) ?? "(empty)",
@@ -769,6 +818,17 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         occurred_at: parseWhen(input.occurred_at) ?? t,
         created_at: t,
       });
+      // Links: arrays (plus legacy scalars, in case the model sends them),
+      // filtered to ids that actually exist for this user.
+      await setLogLinks(s.env, row.id, {
+        projectIds: await validIds(s, "projects", idArr(input.project_ids, input.project_id)),
+        todoIds: await validIds(s, "todos", idArr(input.todo_ids, input.todo_id)),
+      });
+      await s.env.DB.prepare(
+        `INSERT OR IGNORE INTO log_messages (log_id, message_id) VALUES (?, ?)`,
+      )
+        .bind(row.id, s.messageId)
+        .run();
       s.createdLogIds.push(row.id);
       await feedEvent(s, "log", row.id, "created", `${row.kind === "reflection" ? "Reflection" : "Logged"}: ${row.title ?? row.summary}`);
       return JSON.stringify({ log_id: row.id });
@@ -777,20 +837,77 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       const id = num(input.log_id);
       const current = id && (await getEntity<LogRow>(s.env, "log", s.user.id, id));
       if (!current) return "error: log not found";
+      await attachLogLinks(s.env, [current]);
       const { cols, before, after } = collectUpdates(input, current as never, [
         { name: "title" },
         { name: "summary" },
         { name: "kind" },
-        { name: "todo_id" },
-        { name: "project_id" },
       ]);
-      if (Object.keys(cols).length === 0) return "no changes";
-      await updateRow(s.env, "logs", s.user.id, current.id, cols);
-      const attachChanged = "todo_id" in cols || "project_id" in cols;
-      const label = attachChanged
+      // Provided link arrays replace that whole set. Field ABSENT = leave
+      // alone; field present as null or [] = CLEAR ("remove the association"
+      // arrives as an explicit null — silently skipping it broke unlinking).
+      const links: { projectIds?: number[]; todoIds?: number[] } = {};
+      if ("project_ids" in input || "project_id" in input) {
+        const want = await validIds(s, "projects", idArr(input.project_ids, input.project_id));
+        if (!sameIds(want, current.project_ids ?? [])) {
+          links.projectIds = want;
+          before.project_ids = current.project_ids;
+          after.project_ids = want;
+        }
+      }
+      if ("todo_ids" in input || "todo_id" in input) {
+        const want = await validIds(s, "todos", idArr(input.todo_ids, input.todo_id));
+        if (!sameIds(want, current.todo_ids ?? [])) {
+          links.todoIds = want;
+          before.todo_ids = current.todo_ids;
+          after.todo_ids = want;
+        }
+      }
+      const linkChanged = links.projectIds !== undefined || links.todoIds !== undefined;
+      if (Object.keys(cols).length === 0 && !linkChanged) return "no changes";
+      if (Object.keys(cols).length > 0) await updateRow(s.env, "logs", s.user.id, current.id, cols);
+      if (linkChanged) await setLogLinks(s.env, current.id, links);
+      const label = linkChanged
         ? `Re-filed: ${(cols.title as string) ?? current.title ?? (cols.summary as string) ?? current.summary}`
         : `Updated (${Object.keys(after).join(", ")})`;
       await feedEvent(s, "log", current.id, "updated", label, { before, after });
+      return "ok";
+    }
+    case "append_to_log": {
+      const id = num(input.log_id);
+      const current = id && (await getEntity<LogRow>(s.env, "log", s.user.id, id));
+      if (!current) return "error: log not found";
+      const quotes = Array.isArray(input.quotes)
+        ? (input.quotes as unknown[]).filter((q): q is string => typeof q === "string")
+        : [];
+      let quotesJson = current.quotes_json;
+      if (quotes.length) {
+        const prev = quotesJson ? (JSON.parse(quotesJson) as unknown[]) : [];
+        // New quotes resolve against THIS turn's recording.
+        quotesJson = JSON.stringify([...prev, ...(await resolveQuotes(s, quotes))]);
+      }
+      const cols: Record<string, unknown> = {
+        summary: str(input.summary) ?? current.summary,
+        quotes_json: quotesJson,
+      };
+      const title = str(input.title);
+      if (title) cols.title = title;
+      await updateRow(s.env, "logs", s.user.id, current.id, cols);
+      await s.env.DB.prepare(
+        `INSERT OR IGNORE INTO log_messages (log_id, message_id) VALUES (?, ?)`,
+      )
+        .bind(current.id, s.messageId)
+        .run();
+      // This turn's status changes should backfill onto the extended log.
+      s.createdLogIds.push(current.id);
+      await feedEvent(
+        s,
+        "log",
+        current.id,
+        "updated",
+        `Extended: ${title ?? current.title ?? current.summary}`,
+        { before: { summary: current.summary }, after: { summary: cols.summary }, via: "append_to_log" },
+      );
       return "ok";
     }
     case "fetch": {
@@ -815,6 +932,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       }
       const entity = await getEntity<Record<string, unknown>>(s.env, type, s.user.id, id);
       if (!entity) return `error: ${type} #${id} not found`;
+      if (type === "log") await attachLogLinks(s.env, [entity as unknown as LogRow]);
       const related: Record<string, unknown> = { [type]: entity };
       if (type === "project") {
         related.todos = (await listTodosForProject(s.env, s.user.id, id)).slice(0, 30);
@@ -870,14 +988,15 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
         entities.push(rec);
       }
       // Logs referenced by several entities appear once, here.
-      const logs = [...logMap.values()].map((l) => ({
+      const allLogs = await attachLogLinks(s.env, [...logMap.values()]);
+      const logs = allLogs.map((l) => ({
         id: l.id,
         date: new Date(l.occurred_at * 1000).toLocaleDateString("en-CA", { timeZone: tz }),
         kind: l.kind,
         title: l.title,
         summary: l.summary.length > 240 ? `${l.summary.slice(0, 240)}…` : l.summary,
-        todo_id: l.todo_id,
-        project_id: l.project_id,
+        todo_ids: l.todo_ids,
+        project_ids: l.project_ids,
       }));
       return JSON.stringify({ entities, logs });
     }
@@ -897,8 +1016,8 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
           kind: l.kind,
           title: l.title,
           summary: l.summary.length > 240 ? `${l.summary.slice(0, 240)}…` : l.summary,
-          todo_id: l.todo_id,
-          project_id: l.project_id,
+          todo_ids: l.todo_ids,
+          project_ids: l.project_ids,
         })),
       });
     }
@@ -1113,13 +1232,13 @@ Ontology: PROJECTS are areas of focus (bounded = has an end state; ongoing = nev
 How you behave:
 - APPLY CHANGES IMMEDIATELY via tools. There is no confirmation step — the user corrects you by talking more. When corrected: apply the fix AND call file_correction.
 - Thinking adds latency and cost. Most utterances are routine filing — one log, a status change, an obvious attachment — handle those directly with minimal deliberation. Reserve longer thinking for genuinely ambiguous restructuring or planning.
-- ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said, with a short title (its gist in 2-6 words) — never split one utterance into multiple topical logs. Attach it to the single most central todo/project (entity pages also surface logs from any turn that touched them, so one attachment covers the rest). Also update statuses to match reality: starting → in_progress, finished → done.
+- ONE LOG PER UTTERANCE: every recording produces exactly ONE log capturing everything said, with a short title (its gist in 2-6 words) — never split one utterance into multiple topical logs. Link it to every project/todo it actually touches. EXCEPTION — continuation: when the recording clearly continues the thread of a log filed earlier in THIS conversation (they paused, then kept going on the same topic), use append_to_log on that log instead of filing a near-duplicate; its transcript joins the log's. Also update statuses to match reality: starting → in_progress, finished → done.
 - Be silent-by-default in spirit: NO advice, opinions, or coaching unless the user directly asks. When asked, answer concisely using the context below.
 - Your reply is a terse confirmation, 1-2 short sentences. The UI already shows a change feed of your tool calls — don't enumerate them again. If nothing needed doing, say so briefly.
 - LINKS IN REPLIES: when your reply mentions a todo/project/log, wrap the words of YOUR sentence markdown-style — "filed it under [the kitchen project](project:3)" — and the app renders them as links. Never bare tokens like [todo:22], never pasted entity titles as citations.
 - NEVER claim an action you didn't take. The reply may only reference changes actually made through tool calls this turn — if you logged something but created no todo, don't say you created a todo.
 - Quotes: preserve 0-3 verbatim sentences worth keeping exactly (feelings, decisions, doubts). Summary is a compact paraphrase written subjectless or first-person, as if the user wrote it in their own journal — NEVER third person. GOOD: "Filled out the card; haven't seen her, so mailing it instead." BAD: "He filled out the card but hasn't given it to her." Never "he/she/they/the user".
-- Use existing IDs from the context. Create a project only when clearly new. BIAS HARD TOWARD LINKING: attach logs/todos to an existing project whenever one plausibly covers the topic. The context lists NAMES ONLY — when a project MIGHT cover the topic but the name alone doesn't settle it, search a keyword (search matches project descriptions and todo details — words can appear anywhere) or fetch_entities the candidates before concluding nothing fits. A thin-but-real connection beats no link; unlinked items get lost. Only leave something unlinked when NO project plausibly relates. If you're torn (two candidate projects, or link-vs-not), attach your best guess AND ask via ask_user with the candidates — silently doing nothing is the worst outcome. REPAIR AS YOU GO: whenever you touch a todo that has no project (attaching a log to it, changing its status) and an existing project plausibly covers it, also set its project_id via update_todo — attaching a log to an orphaned todo strands the log one hop from the project.
+- Use existing IDs from the context. Create a project only when clearly new. BIAS HARD TOWARD LINKING: attach logs/todos to an existing project whenever one plausibly covers the topic. A log is free-form and often spans topics — link it to EVERY project and todo it actually touches (project_ids/todo_ids are arrays), not just the most central one; each link makes the log show on that entity's page. But every link must be grounded in what THIS utterance actually says: an entity being salient in the conversation — linked by an earlier turn, listed in the change feed, named in the session context — is NOT evidence for this log. Each utterance's links start from zero. A reflection that names no tracked work stays unattached; standalone logs are normal and the linking bias never overrides grounding. The context lists NAMES ONLY — when a project MIGHT cover the topic but the name alone doesn't settle it, search a keyword (search matches project descriptions and todo details — words can appear anywhere) or fetch_entities the candidates before concluding nothing fits. A thin-but-real connection beats no link; unlinked items get lost. Only leave something unlinked when NO project plausibly relates. If you're torn (two candidate projects, or link-vs-not), attach your best guess AND ask via ask_user with the candidates — silently doing nothing is the worst outcome. REPAIR AS YOU GO: whenever you touch a todo that has no project (attaching a log to it, changing its status) and an existing project plausibly covers it, also set its project_id via update_todo — attaching a log to an orphaned todo strands the log one hop from the project.
 - A todo does NOT need a project — but the linking bias above applies: if an existing project's name or description plausibly covers the task, set project_id. Only when nothing fits, create the todo with no project_id — never skip the todo for lack of a project, and never invent a project just to hold it. A log alone is not enough for a stated task.
 - The session context is a HINT, not ground truth — the user may be talking about something else entirely. Never force an attachment that doesn't fit.
 - Uncertainty policy: you will often be less than certain, and that never blocks capture. Minor ambiguity (exact wording, which status fits) — pick the sensible reading and act. Real ambiguity (task vs. passing thought, which of two entities, whether to schedule) — act on your best interpretation AND ask via the ask_user tool (with suggested answers when natural options exist); their answer lets you fix the record with the update tools. Only when interpretations diverge so much that acting would create junk records: do the safe minimum (usually an unattached log) and just ask. Asking is always allowed — one brief question beats a wrong guess or a silently dropped task.
@@ -1174,15 +1293,27 @@ function contextBlock(data: {
   const projects = data.projects
     .map((p) => `#${p.id} ${p.name} [${p.status}]${p.priority ? ` [priority: ${p.priority}]` : ""}`)
     .join("\n");
+  // Flag todos of non-active projects inline — "(project #10)" alone lets the
+  // paused status get overlooked at the other end of the list.
+  const inactive = new Map(
+    data.projects.filter((p) => p.status !== "active").map((p) => [p.id, p.status]),
+  );
+  const projTag = (projectId: number | null) => {
+    if (!projectId) return "";
+    const st = inactive.get(projectId);
+    return ` (project #${projectId}${st ? `, ${st}` : ""})`;
+  };
   const todos = data.todos
-    .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}`)
+    .map((td) => `#${td.id} ${td.title} [${td.status}]${projTag(td.project_id)}`)
     .join("\n");
   const scheduled = data.scheduled
     .map((sl) => {
       const when = sl.slot_all_day
         ? `${new Date(sl.slot_start * 1000).toISOString().slice(0, 10)} (any time)`
         : new Date(sl.slot_start * 1000).toISOString();
-      return `slot#${sl.schedule_id} todo#${sl.id} ${sl.title} [slot: ${sl.slot_status}] @ ${when}`;
+      return `slot#${sl.schedule_id} todo#${sl.id} ${sl.title} [slot: ${sl.slot_status}]${
+        sl.project_id && inactive.has(sl.project_id) ? ` [project ${inactive.get(sl.project_id)}]` : ""
+      } @ ${when}`;
     })
     .join("\n");
   const memories = data.memories.map((m) => `[${m.key}] ${m.content}`).join("\n");
@@ -1386,6 +1517,10 @@ export async function runTurn(
   let reply = "";
   let thinking = "";
   const usage = emptyUsage();
+  // Spans ALL iterations: a new iteration's first text block otherwise streams
+  // flush against the previous iteration's text (the client appends deltas to
+  // the same part unless a feed item interleaved).
+  let sawTextBlock = false;
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     onEvent?.({ type: "iteration" });
     if (thinking && !thinking.endsWith("\n\n")) thinking += "\n\n";
@@ -1398,7 +1533,6 @@ export async function runTurn(
       tools,
       messages,
     } as Parameters<typeof client.messages.stream>[0]);
-    let sawTextBlock = false;
     for await (const event of stream) {
       if (event.type === "content_block_start" && event.content_block.type === "text") {
         // A second text block in one response otherwise streams flush against

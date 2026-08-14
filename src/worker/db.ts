@@ -153,6 +153,79 @@ export async function updateRow<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Log links: a log can touch any number of projects and todos (junctions are
+// the source of truth; logs.project_id/todo_id are dead columns).
+// ---------------------------------------------------------------------------
+
+/** Populate project_ids/todo_ids on each log. Ids are code-controlled ints. */
+export async function attachLogLinks<T extends LogRow>(env: Env, logs: T[]): Promise<T[]> {
+  if (logs.length === 0) return logs;
+  const ids = logs.map((l) => Number(l.id)).join(",");
+  const [projects, todos] = await Promise.all([
+    env.DB.prepare(`SELECT log_id, project_id FROM log_projects WHERE log_id IN (${ids})`)
+      .all<{ log_id: number; project_id: number }>(),
+    env.DB.prepare(`SELECT log_id, todo_id FROM log_todos WHERE log_id IN (${ids})`)
+      .all<{ log_id: number; todo_id: number }>(),
+  ]);
+  const byLog = new Map(logs.map((l) => [l.id, l]));
+  for (const l of logs) {
+    l.project_ids = [];
+    l.todo_ids = [];
+  }
+  for (const r of projects.results) byLog.get(r.log_id)?.project_ids!.push(r.project_id);
+  for (const r of todos.results) byLog.get(r.log_id)?.todo_ids!.push(r.todo_id);
+  return logs;
+}
+
+/** Replace a log's link sets. Undefined leaves that set untouched. */
+export async function setLogLinks(
+  env: Env,
+  logId: number,
+  links: { projectIds?: number[]; todoIds?: number[] },
+): Promise<void> {
+  const stmts: D1PreparedStatement[] = [];
+  if (links.projectIds) {
+    stmts.push(env.DB.prepare(`DELETE FROM log_projects WHERE log_id = ?`).bind(logId));
+    for (const pid of new Set(links.projectIds)) {
+      stmts.push(
+        env.DB.prepare(`INSERT OR IGNORE INTO log_projects (log_id, project_id) VALUES (?, ?)`)
+          .bind(logId, pid),
+      );
+    }
+  }
+  if (links.todoIds) {
+    stmts.push(env.DB.prepare(`DELETE FROM log_todos WHERE log_id = ?`).bind(logId));
+    for (const tid of new Set(links.todoIds)) {
+      stmts.push(
+        env.DB.prepare(`INSERT OR IGNORE INTO log_todos (log_id, todo_id) VALUES (?, ?)`)
+          .bind(logId, tid),
+      );
+    }
+  }
+  if (stmts.length > 0) await env.DB.batch(stmts);
+}
+
+/** Delete a log's junction rows (call before deleting the log itself). */
+export async function deleteLogLinks(env: Env, logId: number): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM log_projects WHERE log_id = ?`).bind(logId),
+    env.DB.prepare(`DELETE FROM log_todos WHERE log_id = ?`).bind(logId),
+    env.DB.prepare(`DELETE FROM log_messages WHERE log_id = ?`).bind(logId),
+  ]);
+}
+
+/** All messages behind a log (append_to_log folds follow-on utterances in),
+ * oldest first. */
+export async function logMessageIds(env: Env, logId: number): Promise<number[]> {
+  const r = await env.DB.prepare(
+    `SELECT message_id FROM log_messages WHERE log_id = ? ORDER BY message_id`,
+  )
+    .bind(logId)
+    .all<{ message_id: number }>();
+  return r.results.map((x) => x.message_id);
+}
+
+// ---------------------------------------------------------------------------
 // Queries used by views and the agent's context snapshot
 // ---------------------------------------------------------------------------
 
@@ -300,6 +373,13 @@ export async function searchAll(
   const want = (t: string) => !opts.types || opts.types.length === 0 || opts.types.includes(t);
   const none = { results: [] as never[] };
   const projScope = opts.projectId != null ? ` AND project_id = ${Number(opts.projectId)}` : "";
+  // Logs scope via the junction (direct link, or via a linked todo of the project).
+  const logProjScope =
+    opts.projectId != null
+      ? ` AND (id IN (SELECT log_id FROM log_projects WHERE project_id = ${Number(opts.projectId)})
+          OR id IN (SELECT log_id FROM log_todos WHERE todo_id IN
+            (SELECT id FROM todos WHERE project_id = ${Number(opts.projectId)})))`
+      : "";
   const [projects, todos, logs] = await Promise.all([
     want("project") && opts.projectId == null
       ? env.DB.prepare(
@@ -317,7 +397,7 @@ export async function searchAll(
       : Promise.resolve(none),
     want("log")
       ? env.DB.prepare(
-          `SELECT * FROM logs WHERE user_id = ? AND ${clause(["summary", "title"])}${projScope} ORDER BY occurred_at DESC LIMIT 15`,
+          `SELECT * FROM logs WHERE user_id = ? AND ${clause(["summary", "title"])}${logProjScope} ORDER BY occurred_at DESC LIMIT 15`,
         )
           .bind(userId, ...binds(2))
           .all<LogRow>()
@@ -364,7 +444,8 @@ export async function listLogs(
   // hide the story from every entity but the one the log attached to.
   if (filter.todoId) {
     conds.push(
-      `(todo_id = ? OR (message_id IS NOT NULL AND message_id IN
+      `(id IN (SELECT log_id FROM log_todos WHERE todo_id = ?)
+        OR (message_id IS NOT NULL AND message_id IN
         (SELECT message_id FROM events WHERE entity_type = 'todo' AND entity_id = ? AND message_id IS NOT NULL)))`,
     );
     binds.push(filter.todoId, filter.todoId);
@@ -372,8 +453,9 @@ export async function listLogs(
   if (filter.actionId) (conds.push("action_id = ?"), binds.push(filter.actionId));
   if (filter.projectId) {
     conds.push(
-      `(project_id = ?
-        OR todo_id IN (SELECT id FROM todos WHERE user_id = ? AND project_id = ?)
+      `(id IN (SELECT log_id FROM log_projects WHERE project_id = ?)
+        OR id IN (SELECT log_id FROM log_todos WHERE todo_id IN
+          (SELECT id FROM todos WHERE user_id = ? AND project_id = ?))
         OR (message_id IS NOT NULL AND message_id IN
         (SELECT message_id FROM events WHERE entity_type = 'project' AND entity_id = ? AND message_id IS NOT NULL)))`,
     );
@@ -383,12 +465,13 @@ export async function listLogs(
   if (filter.to) (conds.push("occurred_at < ?"), binds.push(filter.to));
   const r = await env.DB.prepare(
     `SELECT logs.*,
-       (SELECT SUM(lu.cost_usd) FROM llm_usage lu WHERE lu.message_id = logs.message_id) AS cost_usd
+       (SELECT SUM(lu.cost_usd) FROM llm_usage lu WHERE lu.message_id IN
+         (SELECT lm.message_id FROM log_messages lm WHERE lm.log_id = logs.id)) AS cost_usd
      FROM logs WHERE ${conds.join(" AND ")} ORDER BY occurred_at DESC LIMIT ?`,
   )
     .bind(...binds, filter.limit ?? 100)
     .all<LogRow>();
-  return r.results;
+  return attachLogLinks(env, r.results);
 }
 
 // ---------------------------------------------------------------------------

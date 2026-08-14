@@ -3,8 +3,8 @@
 // into the chat as a queued item, and processes in the background — the user
 // can start the next recording right away. Pure voice sends let the server
 // assemble the transcript (correct segment order); edited/typed drafts wait
-// for outstanding transcripts and send the final text. Nothing is lost:
-// segments upload as they close and the draft persists until sent.
+// for outstanding transcripts and send the final text. Segments upload as
+// they close; the draft survives reloads but Close discards it.
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -244,7 +244,7 @@ export default function Capture(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.resume?.id]);
 
-  // Draft survives closes/reloads until it's actually sent.
+  // Draft survives reloads until it's sent — but Close discards it.
   useEffect(() => {
     if (draft) localStorage.setItem(DRAFT_KEY, draft);
     else localStorage.removeItem(DRAFT_KEY);
@@ -422,18 +422,6 @@ export default function Capture(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Coming back to the app: if we think we're recording but the track died
-  // or muted while locked, surface it immediately.
-  useEffect(() => {
-    const check = () => {
-      if (document.visibilityState !== "visible") return;
-      if (recordingRef.current && !streamAlive(streamRef.current)) handleMicLost();
-    };
-    document.addEventListener("visibilitychange", check);
-    return () => document.removeEventListener("visibilitychange", check);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const mimeType = () =>
     typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus"
@@ -517,6 +505,52 @@ export default function Capture(props: {
     recordingRef.current = false;
     setRecording(false);
   }, [stopSegment]);
+
+  // Coming back to the app: if we think we're recording but the OS cut the
+  // mic while backgrounded/locked, surface it immediately. Deliberately NO
+  // auto-resume — words spoken while away are gone, and silently picking the
+  // mic back up would let the user believe they were captured. The alarm and
+  // banner make the gap explicit; continuing is one tap.
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== "visible") return;
+      if (recordingRef.current && !streamAlive(streamRef.current)) handleMicLost();
+    };
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Hold a screen wake lock while recording — auto-lock kills the mic just
+  // like backgrounding does, and this at least keeps the screen-timeout case
+  // from ending a take. Re-acquire on return since the OS releases the lock
+  // whenever the page is hidden.
+  useEffect(() => {
+    if (!recording || !("wakeLock" in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let stopped = false;
+    const acquire = () => {
+      navigator.wakeLock
+        .request("screen")
+        .then((l) => {
+          if (stopped) void l.release().catch(() => {});
+          else lock = l;
+        })
+        .catch(() => {
+          /* low battery / unsupported — recording still works, screen may lock */
+        });
+    };
+    acquire();
+    const revis = () => {
+      if (document.visibilityState === "visible") acquire();
+    };
+    document.addEventListener("visibilitychange", revis);
+    return () => {
+      stopped = true;
+      document.removeEventListener("visibilitychange", revis);
+      void lock?.release().catch(() => {});
+    };
+  }, [recording]);
 
   const autoStarted = useRef(false);
   useEffect(() => {
@@ -846,11 +880,15 @@ export default function Capture(props: {
   }
 
   async function done() {
-    // Close the dock without losing anything: segments are server-side and the
-    // draft stays in localStorage.
+    // Close means done with this thought: recorded segments are already safe
+    // server-side, but the typed draft is discarded — Close doubles as the
+    // quick way to empty the box. (The draft still survives reloads/crashes;
+    // only an explicit Close clears it.)
     stopSegment();
     recordingRef.current = false;
     setRecording(false);
+    setDraft("");
+    localStorage.removeItem(DRAFT_KEY);
     if (sessionRef.current) await post(`/sessions/${sessionRef.current.id}/done`).catch(() => {});
     props.onClose();
   }

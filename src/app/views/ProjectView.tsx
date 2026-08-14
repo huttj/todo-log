@@ -5,7 +5,7 @@ import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import TodoRow from "../components/TodoRow";
-import LogCard from "../components/LogCard";
+import LogCard, { logAttachments } from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
 
 const isClosed = (t: Todo) => t.status === "done" || t.status === "abandoned";
@@ -43,7 +43,8 @@ export default function ProjectView(props: {
 
   const own = todos.filter((t) => t.project_id === projectId);
   const visible = own.filter((t) => showClosed || !isClosed(t));
-  const todoTitle = new Map(own.map((t) => [t.id, t.title]));
+  const todoTitle = new Map(todos.map((t) => [t.id, t.title]));
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
 
   return (
     <div className="tasks project-page">
@@ -104,13 +105,15 @@ export default function ProjectView(props: {
           <LogCard
             key={l.id}
             log={l}
-            attachment={
-              l.todo_id
-                ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
-                : l.action_id
-                  ? { label: `action #${l.action_id}`, to: `/actions/${l.action_id}` }
-                  : null
-            }
+            attachments={[
+              // This page IS the project — its own chip would be noise.
+              ...logAttachments(l, { todoTitle, projectName }).filter(
+                (a) => a.to !== `/projects/${projectId}`,
+              ),
+              ...(l.action_id
+                ? [{ label: `action #${l.action_id}`, to: `/actions/${l.action_id}` }]
+                : []),
+            ]}
           />
         ))}
       </section>

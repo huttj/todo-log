@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Log, type Todo, type Project } from "../api";
-import LogCard from "../components/LogCard";
+import LogCard, { logAttachments } from "../components/LogCard";
 import type { CaptureContext } from "../Capture";
 
 function startOfDay(d: Date): Date {
@@ -39,20 +39,31 @@ export default function Logs(props: {
   const todoTitle = useMemo(() => new Map(todos.map((t) => [t.id, t.title])), [todos]);
   const projectName = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
 
-  // Logs tied to inactive projects (directly or via their todo) hide by default.
+  // Logs hide by default only when EVERY project they touch (the direct link
+  // AND their todo's project) is inactive — a log that also pertains to an
+  // active project stays visible. Computed independently of the toggle so the
+  // checkbox stays on screen while checked.
   const inactiveProjects = useMemo(
     () => new Set(projects.filter((p) => p.status !== "active").map((p) => p.id)),
     [projects],
   );
   const todoProject = useMemo(() => new Map(todos.map((t) => [t.id, t.project_id])), [todos]);
-  const visibleLogs = useMemo(() => {
-    if (showInactive) return logs;
-    return logs.filter((l) => {
-      const projectId = l.project_id ?? (l.todo_id ? todoProject.get(l.todo_id) : null);
-      return !projectId || !inactiveProjects.has(projectId);
-    });
-  }, [logs, showInactive, inactiveProjects, todoProject]);
-  const hiddenCount = logs.length - visibleLogs.length;
+  const hideable = useMemo(() => {
+    const hidden = new Set<number>();
+    for (const l of logs) {
+      const linked = [
+        ...(l.project_ids ?? []),
+        ...(l.todo_ids ?? []).map((id) => todoProject.get(id)),
+      ].filter((id): id is number => id != null);
+      if (linked.length > 0 && linked.every((id) => inactiveProjects.has(id))) hidden.add(l.id);
+    }
+    return hidden;
+  }, [logs, inactiveProjects, todoProject]);
+  const visibleLogs = useMemo(
+    () => (showInactive ? logs : logs.filter((l) => !hideable.has(l.id))),
+    [logs, showInactive, hideable],
+  );
+  const hiddenCount = hideable.size;
 
   const byDay = useMemo(() => {
     const groups = new Map<string, Log[]>();
@@ -133,13 +144,7 @@ export default function Logs(props: {
               onClick={() =>
                 props.onFocus({ type: "log", id: l.id, label: l.summary.slice(0, 40) })
               }
-              attachment={
-                l.todo_id
-                  ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
-                  : l.project_id
-                    ? { label: `project: ${projectName.get(l.project_id) ?? l.project_id}`, to: `/projects/${l.project_id}` }
-                    : null
-              }
+              attachments={logAttachments(l, { todoTitle, projectName })}
             />
           ))}
         </section>

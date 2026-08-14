@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { api, type Project, type Todo, type Log } from "../api";
-import LogCard from "../components/LogCard";
+import LogCard, { logAttachments } from "../components/LogCard";
 import { highlight } from "../highlight";
 import type { CaptureContext } from "../Capture";
 
@@ -160,16 +160,7 @@ export default function SearchResults(props: {
               key={l.id}
               log={l}
               highlightQuery={q}
-              attachment={
-                l.todo_id
-                  ? { label: `todo: ${todoTitle.get(l.todo_id) ?? l.todo_id}`, to: `/todos/${l.todo_id}` }
-                  : l.project_id
-                    ? {
-                        label: `project: ${projectName.get(l.project_id) ?? l.project_id}`,
-                        to: `/projects/${l.project_id}`,
-                      }
-                    : null
-              }
+              attachments={logAttachments(l, { todoTitle, projectName })}
             />
           ))}
         </section>

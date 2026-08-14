@@ -4,7 +4,7 @@
 // filtered queries. Hydration always re-checks D1 with the requester's
 // user_id, so stale or foreign vectors can never leak content.
 import type { Env, ProjectRow, TodoRow, LogRow } from "./types";
-import { now, searchAll } from "./db";
+import { now, searchAll, attachLogLinks } from "./db";
 
 const MODEL = "@cf/baai/bge-base-en-v1.5";
 const SYNC_KEY = "embed_sync_at";
@@ -171,6 +171,6 @@ export async function hybridSearch(
   return {
     projects: order(keyword.projects, "project", (r) => (r as ProjectRow).updated_at),
     todos: order(keyword.todos, "todo", (r) => (r as TodoRow).updated_at),
-    logs: order(keyword.logs, "log", (r) => (r as LogRow).occurred_at),
+    logs: await attachLogLinks(env, order(keyword.logs, "log", (r) => (r as LogRow).occurred_at)),
   };
 }

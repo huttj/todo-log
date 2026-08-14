@@ -110,9 +110,11 @@ export interface LogRow {
   id: number;
   user_id: number;
   message_id: number | null;
-  todo_id: number | null;
   action_id: number | null;
-  project_id: number | null;
+  /** All linked projects/todos (log_projects / log_todos junctions — a log
+   * can touch any number of each). Populated by attachLogLinks. */
+  project_ids?: number[];
+  todo_ids?: number[];
   kind: LogKind;
   title: string | null;
   summary: string;
