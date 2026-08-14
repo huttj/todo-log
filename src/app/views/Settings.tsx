@@ -454,6 +454,20 @@ export default function Settings(props: {
 
       {saved && <p className="hint-left">saved</p>}
 
+      <section>
+        <h2>Account</h2>
+        {props.me?.email && <p className="hint-left">Signed in as {props.me.email}.</p>}
+        <button
+          className="push-btn"
+          onClick={async () => {
+            await post("/auth/signout").catch(() => {});
+            window.location.href = "/";
+          }}
+        >
+          Sign out
+        </button>
+      </section>
+
       {!props.me?.is_admin && <DangerZone />}
 
       <p className="legal-links">
