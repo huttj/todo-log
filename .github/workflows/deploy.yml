@@ -21,6 +21,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # wrangler.jsonc is untracked (account identifiers) — build it from the
+      # template + repo secrets before anything that reads it.
+      - name: Materialize wrangler.jsonc
+        run: |
+          sed -e "s/__D1_DATABASE_ID__/${{ secrets.D1_DATABASE_ID }}/" \
+              -e "s/__R2_BUCKET_NAME__/${{ secrets.R2_BUCKET_NAME }}/" \
+              wrangler.jsonc.example > wrangler.jsonc
       - run: npm run typecheck
       - run: npm run build
       - name: Apply D1 migrations

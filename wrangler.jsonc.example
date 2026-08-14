@@ -1,3 +1,7 @@
+// Template — the real wrangler.jsonc is untracked (it holds account-specific
+// identifiers). Local dev: `cp wrangler.jsonc.example wrangler.jsonc` and fill
+// in the placeholders. CI materializes it from repo secrets (see
+// .github/workflows/deploy.yml).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "todolog",
@@ -35,11 +39,11 @@
   },
   "vars": {
     "TIMEZONE": "America/Los_Angeles",
-    "ALLOWLIST_EMAILS": "beta@todolo.gg",
     "VAPID_PUBLIC_KEY": "BMtV_2dTx1F-T2OwRZjJGx4nUGIZp6miOxzxyqrqG2VZETx2_nwVQOp00uHiA1SahbJUBmqDXPAEi6lDkiq54CQ"
   }
   // Secrets (wrangler secret put / .dev.vars):
   //   ANTHROPIC_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET,
+  //   ALLOWLIST_EMAILS (comma-separated admin emails),
   //   VAPID_PRIVATE_KEY (P-256 JWK JSON for web push),
   //   KEY_VAULT_SECRET (optional — wraps stored BYOK keys; SESSION_SECRET otherwise)
 }

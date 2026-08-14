@@ -7,3 +7,5 @@ SESSION_SECRET=any-long-random-string-for-local
 # Optional: dedicated wrapping secret for stored BYOK provider keys.
 # Falls back to SESSION_SECRET when unset.
 # KEY_VAULT_SECRET=another-long-random-string
+# Comma-separated admin emails (worker secret in prod).
+ALLOWLIST_EMAILS=you@example.com
