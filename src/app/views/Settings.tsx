@@ -363,14 +363,17 @@ export default function Settings(props: {
         cfg.chat_briefing_updates
           ? "Chats can also rewrite the overview when they change the day's picture — plus this schedule and the refresh button on Today."
           : "Chats never touch the overview — outside this schedule, only the refresh button on Today recomputes it.",
-        <label className="setting-row toggle-row">
-          <input
-            type="checkbox"
-            checked={cfg.chat_briefing_updates}
-            onChange={(e) => save({ ...cfg, chat_briefing_updates: e.target.checked })}
-          />
-          <span>Chats may rewrite the overview when they change the day's picture</span>
-        </label>,
+        <>
+          <label className="setting-row toggle-row">
+            <input
+              type="checkbox"
+              checked={cfg.chat_briefing_updates}
+              onChange={(e) => save({ ...cfg, chat_briefing_updates: e.target.checked })}
+            />
+            <span>Chats may rewrite the overview when they change the day's picture</span>
+          </label>
+          <RegenerateBriefingButton />
+        </>,
       )}
 
       {scheduleSection(
@@ -737,6 +740,39 @@ function TestPushButton() {
     >
       {sent ? "sent — check your notifications" : "Send test notification"}
     </button>
+  );
+}
+
+function RegenerateBriefingButton() {
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <div className="setting-row">
+      <button
+        className="push-btn"
+        disabled={result === "…"}
+        onClick={async () => {
+          setResult("…");
+          try {
+            // Same streaming endpoint the Today view's ↻ uses; here we just
+            // wait for the stream to finish and read the final frame.
+            const res = await fetch("/api/briefing/refresh", { method: "POST" });
+            if (!res.ok) throw new Error(res.statusText || "refresh failed");
+            const frames = (await res.text()).split("\n").filter((l) => l.startsWith("data: "));
+            const last = frames.length
+              ? (JSON.parse(frames[frames.length - 1].slice(6)) as { type: string; error?: string })
+              : null;
+            if (last?.type !== "done") throw new Error(last?.error ?? "no result");
+            setResult("overview regenerated — see Today");
+          } catch (e) {
+            setResult(`failed: ${String((e as Error).message || e)}`);
+          }
+        }}
+      >
+        Regenerate now
+      </button>
+      {result && result !== "…" && <span className="hint-left">{result}</span>}
+      {result === "…" && <span className="hint-left">regenerating…</span>}
+    </div>
   );
 }
 

@@ -66,6 +66,7 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more"). Be strict: 3-5 main items per list is the ceiling. For coming, prioritize by imminence and prep-need — the long tail of someday-items always goes in coming_more.
 - Link ids must come from the data above, exactly as shown. NEVER invent or guess an id, and never label a log id as todo:N (or vice versa) — a link to the wrong record is worse than no link.
+- RELATIVE TIME IN LOGS IS FROZEN AT THAT LOG'S DATE. Every log line is stamped with the day it was recorded; words like "today", "tomorrow", "tonight", "this weekend" inside a log point at THAT day's neighbors, not the current date. A log from 2 days ago saying "flying out tomorrow" means the flight was yesterday — it already happened. Re-anchor every relative phrase against its log's stamp before using it, and NEVER copy "today"/"tomorrow" out of a log not stamped today — write the actual day instead ("returning Thursday, Aug 20"). Plans in an older log were plans for THAT day, not today's plans; re-list them only if something current says they're still open. Self-check: any "today"/"tomorrow"/"tonight" in your output must be true against the Current local time line, not against a log's wording.
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
 /** The model sometimes links an id that doesn't exist (or a log id as
@@ -139,6 +140,17 @@ export async function generateBriefing(
     listDismissals(env, user.id, day),
   ]);
 
+  // Log lines carry the full date plus distance from today — a bare weekday
+  // forces the model into calendar arithmetic it reliably gets wrong when
+  // re-anchoring relative phrases ("flying out tomorrow") in summaries.
+  const logDay = (sec: number) => {
+    const label = new Date(sec * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" });
+    const ago = Math.round(
+      (Date.parse(day) - Date.parse(new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(sec * 1000)))) / 86400000,
+    );
+    return ago <= 0 ? `today, ${label}` : ago === 1 ? `yesterday, ${label}` : `${label}, ${ago} days ago`;
+  };
+
   const when = (s: ScheduleRow) =>
     s.slot_all_day
       ? `${new Date(s.slot_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" })} (any time)`
@@ -173,7 +185,7 @@ export async function generateBriefing(
       .join("\n") || "(none)"}`,
     `Schedule (last 2 days → next 7; a todo can have several slots):\n${scheduled.map((s) => `todo #${s.id} ${s.title} [slot: ${s.slot_status}]${projFlag(s.project_id)} ${when(s)}`).join("\n") || "(none)"}`,
     `Recent logs (last 7 days, newest first — the user's own words about how it's going):\n${logs
-      .map((l) => `#${l.id} [${new Date(l.occurred_at * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })}] (${l.kind}) ${l.summary}`)
+      .map((l) => `#${l.id} [${logDay(l.occurred_at)}] (${l.kind}) ${l.summary}`)
       .join("\n") || "(none)"}`,
     memories.length ? `Agent memory notes:\n${memories.map((m) => `[${m.key}] ${m.content}`).join("\n")}` : "",
     notifications.length
