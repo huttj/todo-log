@@ -217,7 +217,7 @@ export async function checkinForUser(
   const tz = user.timezone ?? env.TIMEZONE;
   const line = (s: ScheduleRow) => {
     const when = s.slot_all_day
-      ? `${new Date(s.slot_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })} (any time)`
+      ? `${new Date(s.slot_start * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" })} (any time)`
       : new Date(s.slot_start * 1000).toLocaleString("en-US", { timeZone: tz });
     return `- todo “${s.title}” [${s.status}] ${when}`;
   };
@@ -236,7 +236,11 @@ export async function checkinForUser(
       "hard) or decide none is warranted right now. READ THE RECENT LOGS FIRST: they are the user's own " +
       "words since your last check-in. If they've said they're tired, wrapping up, resting, or done for " +
       "the day, do NOT push tasks — skip, or at most a brief warm sign-off. Never re-ask about something " +
-      "a recent log already answered. Mirror the user's own words and commitment level " +
+      "a recent log already answered. HONOR THE CURRENT SITUATION: when a memory note or recent log says " +
+      "they're traveling, away from home, sick, or otherwise constrained, never check in about a task " +
+      "that isn't doable in that situation (home chores or local errands while they're away) — pick " +
+      "something that IS doable there, or skip. Relative words inside a log (\"tomorrow\", \"tonight\") are " +
+      "anchored to that log's own timestamp, not to now. Mirror the user's own words and commitment level " +
       "(never escalate \"look into\" to \"do\"); when a state is assumed rather than known, ask rather than " +
       "assert; banned register: \"finally\", \"you keep postponing\", \"still hanging\", \"no action yet\". " +
       "If the day's picture has clearly shifted since the briefing would have been computed, you may also " +
@@ -253,7 +257,7 @@ export async function checkinForUser(
             ? `Logs since your last check-in (newest first — weigh their stated state heavily):\n${recentLogs
                 .map(
                   (l) =>
-                    `- [${new Date(l.occurred_at * 1000).toLocaleString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}] ${l.title ?? ""}: ${l.summary.slice(0, 300)}`,
+                    `- [${new Date(l.occurred_at * 1000).toLocaleString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}] ${l.title ?? ""}: ${l.summary.slice(0, 300)}`,
                 )
                 .join("\n")}`
             : "",
