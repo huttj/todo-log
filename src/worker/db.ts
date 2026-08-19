@@ -824,6 +824,28 @@ export async function listDismissals(
   return (await readDismissMap(env, userId))[day] ?? [];
 }
 
+/** Done-marks from every retained day (the map prunes to ~a week). "Done" is
+ * a fact about the work, not a per-day preference like "hide" — the briefing
+ * generator reads the whole window so checked-off items stay gone. */
+export async function listRecentDone(
+  env: Env,
+  userId: number,
+): Promise<{ key: string; label: string | null }[]> {
+  const map = await readDismissMap(env, userId);
+  const seen = new Set<string>();
+  const out: { key: string; label: string | null }[] = [];
+  for (const day of Object.keys(map).sort()) {
+    for (const e of map[day]) {
+      if (e.why !== "done") continue;
+      const id = e.label ?? e.key;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ key: e.key, label: e.label });
+    }
+  }
+  return out;
+}
+
 export async function setDismissal(
   env: Env,
   userId: number,

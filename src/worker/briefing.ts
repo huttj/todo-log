@@ -16,6 +16,7 @@ import {
   listNotifications,
   setBriefing,
   listDismissals,
+  listRecentDone,
   addDismissals,
 } from "./db";
 
@@ -66,6 +67,7 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more"). Be strict: 3-5 main items per list is the ceiling. For coming, prioritize by imminence and prep-need — the long tail of someday-items always goes in coming_more.
 - Link ids must come from the data above, exactly as shown. NEVER invent or guess an id, and never label a log id as todo:N (or vice versa) — a link to the wrong record is worse than no link.
+- HONOR THE USER'S CURRENT SITUATION. When memory notes or recent logs establish a constraint on what's doable right now — traveling, away from home, sick, a visitor in town — today's plans may only hold work that's actually possible in that situation. Location-bound tasks (home chores, local errands, physical items elsewhere) move to coming, anchored to when the constraint lifts ("when you're back Thursday"), without nagging. State the situation once in the headline or coming when it shapes the day.
 - RELATIVE TIME IN LOGS IS FROZEN AT THAT LOG'S DATE. Every log line is stamped with the day it was recorded; words like "today", "tomorrow", "tonight", "this weekend" inside a log point at THAT day's neighbors, not the current date. A log from 2 days ago saying "flying out tomorrow" means the flight was yesterday — it already happened. Re-anchor every relative phrase against its log's stamp before using it, and NEVER copy "today"/"tomorrow" out of a log not stamped today — write the actual day instead ("returning Thursday, Aug 20"). Plans in an older log were plans for THAT day, not today's plans; re-list them only if something current says they're still open. Self-check: any "today"/"tomorrow"/"tonight" in your output must be true against the Current local time line, not against a log's wording.
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
@@ -130,7 +132,7 @@ export async function generateBriefing(
   const tz = user.timezone ?? env.TIMEZONE;
   // Today's date string in the user's timezone — dismissals are keyed by it.
   const day = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date(t * 1000));
-  const [projects, todos, scheduled, logs, memories, notifications, dismissed] = await Promise.all([
+  const [projects, todos, scheduled, logs, memories, notifications, dismissed, recentDone] = await Promise.all([
     listProjects(env, user.id),
     listTodos(env, user.id),
     listSchedule(env, user.id, { from: t - 2 * DAY, to: t + 7 * DAY }),
@@ -138,6 +140,7 @@ export async function generateBriefing(
     listMemories(env, user.id),
     listNotifications(env, user.id),
     listDismissals(env, user.id, day),
+    listRecentDone(env, user.id),
   ]);
 
   // Log lines carry the full date plus distance from today — a bare weekday
@@ -191,9 +194,8 @@ export async function generateBriefing(
     notifications.length
       ? `Open notifications:\n${notifications.map((n) => `- ${n.title}${n.body ? ` — ${n.body}` : ""}`).join("\n")}`
       : "",
-    dismissed.filter((d) => d.why === "done").length
-      ? `Items the user marked DONE from today's view — treat as completed; never re-list them as open work:\n${dismissed
-          .filter((d) => d.why === "done")
+    recentDone.length
+      ? `Items the user CHECKED OFF as done in the last week — completed facts, not per-day preferences. NEVER re-list any of these (or a rephrasing of the same underlying item) as open work in any list:\n${recentDone
           .map((d) => `- ${d.label ?? d.key}`)
           .join("\n")}`
       : "",
