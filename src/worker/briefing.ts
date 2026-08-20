@@ -66,30 +66,57 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   BAD: "[Moving](project:3). Next: ..." (momentum word linked instead of the name — the reader can't tell which project this is)
   GOOD: "[Back Taxes](project:3) — moving. Next: [feed the statements](todo:22) to Claude." Momentum words stay neutral and factual (moving / quiet / waiting / new), and they must respect elapsed time: a project created in the last few days is "new" or "just started", NEVER "dormant" or "quiet" — those imply meaningful time has passed (use them only after a week or more without movement). A next step is a plain suggestion, never a command.
 - The main lists hold only the few items that deserve attention today; everything else goes in the matching _more list (shown behind "see more"). Be strict: 3-5 main items per list is the ceiling. For coming, prioritize by imminence and prep-need — the long tail of someday-items always goes in coming_more.
-- Link ids must come from the data above, exactly as shown. NEVER invent or guess an id, and never label a log id as todo:N (or vice versa) — a link to the wrong record is worse than no link.
+- Link ids must come from the data above, exactly as shown. NEVER invent or guess an id, and never label a log id as todo:N (or vice versa) — a link to the wrong record is worse than no link: the chat agent treats these links as ground truth and will EDIT the linked record when the user talks about the line. Before emitting any link, re-read the target's own title/name in the data and confirm your bracketed words describe THAT record. A loose thread by definition has no todo — link the log it lives in, or leave the words unlinked; never borrow a nearby todo's id.
 - EXPIRED DAY-BOUND INTENTS ARE STALE. A todo whose own title or details tie it to a specific day that has passed ("...today", "flying out tomorrow" written days ago) is not open work to surface. If recent logs show it happened, treat it as done and give it no line. Only if it plausibly still matters, ask ONE question about whether it happened — and trust the logs over the todo's status when they conflict (a log reporting the gym workout beats an open "ask about the gym" todo).
 - HONOR THE USER'S CURRENT SITUATION. When memory notes or recent logs establish a constraint on what's doable right now — traveling, away from home, sick, a visitor in town — today's plans may only hold work that's actually possible in that situation. Location-bound tasks (home chores, local errands, physical items elsewhere) move to coming, anchored to when the constraint lifts ("when you're back Thursday"), without nagging. State the situation once in the headline or coming when it shapes the day.
 - RELATIVE TIME IN LOGS IS FROZEN AT THAT LOG'S DATE. Every log line is stamped with the day it was recorded; words like "today", "tomorrow", "tonight", "this weekend" inside a log point at THAT day's neighbors, not the current date. A log from 2 days ago saying "flying out tomorrow" means the flight was yesterday — it already happened. Re-anchor every relative phrase against its log's stamp before using it, and NEVER copy "today"/"tomorrow" out of a log not stamped today — write the actual day instead ("returning Thursday, Aug 20"). Plans in an older log were plans for THAT day, not today's plans; re-list them only if something current says they're still open. Self-check: any "today"/"tomorrow"/"tonight" in your output must be true against the Current local time line, not against a log's wording.
 - Ground every line in real data — never invent. Second person, plain, brief.`;
 
-/** The model sometimes links an id that doesn't exist (or a log id as
- * todo:N). Validate every ref against real ids; invalid ones degrade to
- * their words. */
+/** The model sometimes links an id that doesn't exist, a log id as todo:N,
+ * or — worst — a wrong-but-existing id (a "spare key" line linked to an
+ * unemployment todo), which downstream consumers then trust as ground truth.
+ * Validate every ref against real ids AND require the bracketed words to
+ * share at least one content word with the target's own title; failures
+ * degrade to their words. */
 export async function stripInvalidRefs(env: Env, userId: number, briefing: Briefing): Promise<Briefing> {
-  const ids: Record<string, Set<number>> = {};
-  for (const [key, table] of [["todo", "todos"], ["project", "projects"], ["log", "logs"]] as const) {
-    const r = await env.DB.prepare(`SELECT id FROM ${table} WHERE user_id = ?`)
+  const targets: Record<string, Map<number, string>> = {};
+  for (const [key, table, expr] of [
+    ["todo", "todos", "title"],
+    ["project", "projects", "name"],
+    ["log", "logs", "COALESCE(title, '') || ' ' || COALESCE(summary, '')"],
+  ] as const) {
+    const r = await env.DB.prepare(`SELECT id, ${expr} AS words FROM ${table} WHERE user_id = ?`)
       .bind(userId)
-      .all<{ id: number }>();
-    ids[key] = new Set(r.results.map((x) => x.id));
+      .all<{ id: number; words: string }>();
+    targets[key] = new Map(r.results.map((x) => [x.id, x.words]));
   }
+  const STOP = new Set([
+    "the", "and", "for", "with", "that", "this", "from", "into", "about", "your", "you",
+    "them", "they", "she", "her", "him", "his", "its", "will", "when", "what", "did",
+    "have", "has", "are", "was", "were", "get", "got", "out", "not", "now", "one", "more",
+  ]);
+  const contentWords = (s: string) =>
+    new Set(
+      s.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3 && !STOP.has(w)),
+    );
+  const related = (linkWords: string, target: string) => {
+    const lw = contentWords(linkWords);
+    if (lw.size === 0) return true; // nothing to judge by ("do it") — keep
+    const tw = contentWords(target);
+    for (const a of lw)
+      for (const b of tw)
+        if (a === b || (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))))
+          return true;
+    return false;
+  };
   const clean = (text: string) =>
     text
-      .replace(/\[([^\]]+)\]\((todo|project|log):(\d+)\)/g, (m, words: string, type: string, id: string) =>
-        ids[type].has(Number(id)) ? m : words,
-      )
+      .replace(/\[([^\]]+)\]\((todo|project|log):(\d+)\)/g, (m, words: string, type: string, id: string) => {
+        const target = targets[type].get(Number(id));
+        return target !== undefined && related(words, target) ? m : words;
+      })
       .replace(/\[(todo|project|log):(\d+)\]/g, (m, type: string, id: string) =>
-        ids[type].has(Number(id)) ? m : "",
+        targets[type].has(Number(id)) ? m : "",
       );
   return {
     headline: clean(briefing.headline),
