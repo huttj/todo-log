@@ -51,6 +51,10 @@ export default function Markdown(props: { text: string }) {
             } catch {
               /* not a URL — fall through */
             }
+            // The model sometimes emits a link with no usable target ("[]()"
+            // or a malformed entity ref the sanitizer blanked) — render the
+            // words, not a dead new-tab anchor.
+            if (!h) return <>{children}</>;
             return (
               <a href={href} target="_blank" rel="noreferrer">
                 {children}
