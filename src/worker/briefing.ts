@@ -58,7 +58,8 @@ export const BRIEFING_STYLE = `STYLE RULES (follow exactly):
   BAD: "should cut the resistance" → GOOD: "should make it much easier".
 - Don't echo back facts the user just told you as if they were news ("it's filled out, just needs to go out" the day after they said exactly that). Freshly-shared context is known context — use it silently.
 - Mirror the user's own words and commitment level. "Look into" stays "look into" — never escalate to "do"/"apply"/"finish".
-- When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?"
+- When a state is assumed rather than known (returned? delivered? finished?), phrase the line as a QUESTION — especially loose threads: "Did you return the spare key to Reggie?" But NEVER ask "Did you X?" about work whose planned slot or stated date is still in the FUTURE — a plan set for next Friday hasn't happened yet and isn't in question. Future-dated work belongs in coming, stated with its date ("key return is planned for Friday, Aug 28"), and usually only when it's imminent or needs prep.
+- A TRACKED TODO IS NEVER A LOOSE THREAD. Oneoffs hold only commitments that live in logs with no todo — if you can link todo:N in the line, the item is tracked and belongs in today/coming/its project line instead.
 - Only actionable items go in plans; pure status or timing information belongs in coming.
 - PAUSED projects are on hold — the user set that status deliberately. Their todos get NO lines in today/oneoffs/coming (main or _more), and the project gets no main-list line. At most one quiet line in projects_more — "[Name](project:N) — paused." — with no suggested next step. Resurface paused work ONLY when a slot for it is actually scheduled or the user explicitly says they're picking it back up. Completed/abandoned projects are omitted entirely.
 - Order project lines by the user's stated priorities (shown per project when set) — high-priority or urgent-vibe projects go in the main list, back-burner ones in projects_more. Mirror the priority's wording when it shapes the next step.
@@ -212,7 +213,15 @@ export async function generateBriefing(
           .join("\n")}`
       : "",
     `Open todos:\n${todos
-      .map((td) => `#${td.id} ${td.title} [${td.status}]${td.project_id ? ` (project #${td.project_id})` : ""}${projFlag(td.project_id)}${td.details ? ` — ${td.details.slice(0, 120)}` : ""}`)
+      .map((td) => {
+        // Future slots (even past the 7-day schedule window) mark planned
+        // work — without this the model mistakes scheduled todos for
+        // unresolved threads and asks "did you?" about next week's plan.
+        const slot = td.next_planned && td.next_planned > t
+          ? ` [planned: ${new Date(td.next_planned * 1000).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" })}]`
+          : "";
+        return `#${td.id} ${td.title} [${td.status}]${slot}${td.project_id ? ` (project #${td.project_id})` : ""}${projFlag(td.project_id)}${td.details ? ` — ${td.details.slice(0, 120)}` : ""}`;
+      })
       .join("\n") || "(none)"}`,
     `Schedule (last 2 days → next 7; a todo can have several slots):\n${scheduled.map((s) => `todo #${s.id} ${s.title} [slot: ${s.slot_status}]${projFlag(s.project_id)} ${when(s)}`).join("\n") || "(none)"}`,
     `Recent logs (last 7 days, newest first — the user's own words about how it's going):\n${logs

@@ -88,6 +88,8 @@ export interface TodoRow {
   all_day: number;
   created_at: number;
   updated_at: number;
+  /** Derived by listTodos/listTodosForProject: earliest planned slot. */
+  next_planned?: number | null;
 }
 
 export interface ActionRow {
