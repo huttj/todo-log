@@ -6,6 +6,7 @@ import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import TodoRow from "../components/TodoRow";
 import LogCard, { logAttachments } from "../components/LogCard";
+import { linkifyUrls } from "../refs";
 import type { CaptureContext } from "../Capture";
 
 const isClosed = (t: Todo) => t.status === "done" || t.status === "abandoned";
@@ -71,7 +72,7 @@ export default function ProjectView(props: {
         </div>
         <h2 className="page-title">{project.name}</h2>
       </div>
-      {project.description && <p className="description">{project.description}</p>}
+      {project.description && <p className="description">{linkifyUrls(project.description)}</p>}
       {project.priority && (
         <p className="priority-line">
           <span className="pri-label">priority</span> {project.priority}

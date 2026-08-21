@@ -2145,6 +2145,19 @@ header {
   border-bottom-color: var(--ink);
 }
 
+/* External URL detected in filed text (log summary, details, briefing line).
+ * Same accent as entity links but regular weight, and safe to wrap. */
+.url-ref {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-border);
+  overflow-wrap: anywhere;
+}
+
+.url-ref:hover {
+  border-bottom-color: var(--ink);
+}
+
 .see-more {
   padding: 0.35rem 0 0;
   font-size: 0.8rem;
@@ -2350,6 +2363,15 @@ header {
 .md p {
   margin: 0 0 0.45rem;
   white-space: normal;
+}
+
+/* External links in agent-authored markdown (log summaries, chat replies)
+ * share the url-ref look; long URLs wrap instead of overflowing the card. */
+.md a:not(.brief-ref) {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-border);
+  overflow-wrap: anywhere;
 }
 
 .md > *:last-child {

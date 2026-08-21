@@ -5,6 +5,7 @@ import { faChevronLeft } from "@fortawesome/free-solid-svg-icons";
 import { api, patch, type Project, type Todo, type Log } from "../api";
 import { fmtCost } from "../fmt";
 import LogCard, { logAttachments } from "../components/LogCard";
+import { linkifyUrls } from "../refs";
 import type { CaptureContext } from "../Capture";
 import { navHistory } from "../nav";
 
@@ -102,7 +103,7 @@ export default function TodoView(props: {
       )}
       {todo.details && (
         <p className="description">
-          <strong>Details:</strong> {todo.details}
+          <strong>Details:</strong> {linkifyUrls(todo.details)}
         </p>
       )}
 
