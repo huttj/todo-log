@@ -23,6 +23,7 @@ import {
   ENTITY_TABLES,
 } from "./db";
 import { generateBriefing } from "./briefing";
+import { dayStartInZone } from "./agent";
 import { parseConfig } from "./config";
 import { MODELS, PROVIDERS, costTier, type ProviderId } from "./catalog";
 import { listProviderKeys, saveProviderKey, deleteProviderKey } from "./keys";
@@ -361,20 +362,59 @@ crud.post("/dismissals", async (c) => {
     label?: string;
     dismissed?: boolean;
     why?: string;
+    /** Todos linked by the checked briefing line — their due planned slots
+     * get marked done too (the ✓ and the schedule row mean the same thing). */
+    todo_ids?: number[];
   }>();
   if (!body.day || !/^\d{4}-\d{2}-\d{2}$/.test(body.day) || !body.key) {
     return c.json({ error: "day and key required" }, 400);
   }
+  const user = c.get("user");
   await setDismissal(
     c.env,
-    c.get("user").id,
+    user.id,
     body.day,
     body.key.slice(0, 300),
     body.label ? body.label.slice(0, 300) : null,
     body.dismissed !== false,
     body.why === "done" ? "done" : "hide",
   );
-  return c.json({ ok: true });
+  // Checking ✓ on a line that links scheduled todos completes their slots
+  // due that day (or overdue) — same cascade as PATCH /schedule/:id. Future
+  // slots stay planned; unchecking does NOT revert (fix via the schedule row).
+  let slotsDone = 0;
+  if (body.dismissed !== false && body.why === "done" && Array.isArray(body.todo_ids)) {
+    const tz = user.timezone ?? c.env.TIMEZONE;
+    const dayEnd = (dayStartInZone(tz, body.day) ?? now()) + 86400;
+    const ids = [...new Set(body.todo_ids.filter((n) => Number.isInteger(n)))].slice(0, 10);
+    for (const id of ids) {
+      const r = await c.env.DB.prepare(
+        `UPDATE todo_schedules SET status = 'done'
+         WHERE user_id = ? AND todo_id = ? AND status = 'planned' AND scheduled_start < ?`,
+      )
+        .bind(user.id, id, dayEnd)
+        .run();
+      if (!r.meta.changes) continue;
+      slotsDone += r.meta.changes;
+      if ((await otherPlannedSlots(c.env, user.id, id, 0)) === 0) {
+        const t = await c.env.DB.prepare(
+          `UPDATE todos SET status = 'done', updated_at = ? WHERE id = ? AND user_id = ? AND status NOT IN ('done','abandoned')`,
+        )
+          .bind(now(), id, user.id)
+          .run();
+        if (t.meta.changes) {
+          await insertEvent(c.env, {
+            userId: user.id,
+            entityType: "todo",
+            entityId: id,
+            kind: "status_changed",
+            payload: { manual: true, via: "briefing_check", after: { status: "done" } },
+          });
+        }
+      }
+    }
+  }
+  return c.json({ ok: true, slots_done: slotsDone });
 });
 
 // -- Account deletion (scheduled; signing back in cancels) ------------------

@@ -206,9 +206,24 @@ export default function Today(props: {
       else d.delete(k);
       return d;
     });
-    void post("/dismissals", { day: isoDate, key: k, label, dismissed: dismissing, why }).catch(
-      () => {},
-    );
+    // Todos linked in the line: checking ✓ also completes their due slots
+    // server-side, so the overview checkbox and the schedule row agree.
+    const todoIds =
+      dismissing && why === "done" && label
+        ? [...label.matchAll(/\((?:todo):(\d+)\)|\[todo:(\d+)\]/g)].map((m) => Number(m[1] ?? m[2]))
+        : [];
+    void post<{ slots_done?: number }>("/dismissals", {
+      day: isoDate,
+      key: k,
+      label,
+      dismissed: dismissing,
+      why,
+      todo_ids: todoIds,
+    })
+      .then((r) => {
+        if (r.slots_done) load();
+      })
+      .catch(() => {});
   };
 
   const doneBtn = (k: string, label?: string) => (
