@@ -23,7 +23,6 @@ import {
   ENTITY_TABLES,
 } from "./db";
 import { generateBriefing } from "./briefing";
-import { dayStartInZone } from "./agent";
 import { parseConfig } from "./config";
 import { MODELS, PROVIDERS, costTier, type ProviderId } from "./catalog";
 import { listProviderKeys, saveProviderKey, deleteProviderKey } from "./keys";
@@ -379,39 +378,29 @@ crud.post("/dismissals", async (c) => {
     body.dismissed !== false,
     body.why === "done" ? "done" : "hide",
   );
-  // Checking ✓ on a line that links scheduled todos completes their slots
-  // due that day (or overdue) — same cascade as PATCH /schedule/:id. Future
-  // slots stay planned; unchecking does NOT revert (fix via the schedule row).
+  // Checking ✓ on a line that links todos closes those TODOS, and closing a
+  // todo resolves all its planned slots — the ✓, the schedule row, and the
+  // todo's own status mean the same thing. Unchecking does NOT revert (fix
+  // via the todo page or schedule row).
   let slotsDone = 0;
   if (body.dismissed !== false && body.why === "done" && Array.isArray(body.todo_ids)) {
-    const tz = user.timezone ?? c.env.TIMEZONE;
-    const dayEnd = (dayStartInZone(tz, body.day) ?? now()) + 86400;
     const ids = [...new Set(body.todo_ids.filter((n) => Number.isInteger(n)))].slice(0, 10);
     for (const id of ids) {
-      const r = await c.env.DB.prepare(
-        `UPDATE todo_schedules SET status = 'done'
-         WHERE user_id = ? AND todo_id = ? AND status = 'planned' AND scheduled_start < ?`,
+      const t = await c.env.DB.prepare(
+        `UPDATE todos SET status = 'done', updated_at = ? WHERE id = ? AND user_id = ? AND status NOT IN ('done','abandoned')`,
       )
-        .bind(user.id, id, dayEnd)
+        .bind(now(), id, user.id)
         .run();
-      if (!r.meta.changes) continue;
-      slotsDone += r.meta.changes;
-      if ((await otherPlannedSlots(c.env, user.id, id, 0)) === 0) {
-        const t = await c.env.DB.prepare(
-          `UPDATE todos SET status = 'done', updated_at = ? WHERE id = ? AND user_id = ? AND status NOT IN ('done','abandoned')`,
-        )
-          .bind(now(), id, user.id)
-          .run();
-        if (t.meta.changes) {
-          await insertEvent(c.env, {
-            userId: user.id,
-            entityType: "todo",
-            entityId: id,
-            kind: "status_changed",
-            payload: { manual: true, via: "briefing_check", after: { status: "done" } },
-          });
-        }
-      }
+      if (!t.meta.changes) continue;
+      slotsDone += 1;
+      await resolvePlannedSlots(c.env, user.id, id, "done");
+      await insertEvent(c.env, {
+        userId: user.id,
+        entityType: "todo",
+        entityId: id,
+        kind: "status_changed",
+        payload: { manual: true, via: "briefing_check", after: { status: "done" } },
+      });
     }
   }
   return c.json({ ok: true, slots_done: slotsDone });

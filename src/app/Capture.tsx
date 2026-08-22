@@ -292,7 +292,25 @@ export default function Capture(props: {
       if (!chat || chat.scrollHeight <= chat.clientHeight) e.preventDefault();
     };
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    // Touch drags must not reach the page either (iOS chains scroll through
+    // non-scrollable elements — the textarea when short, the header, the
+    // question chips). Allow the drag only when some dock element under the
+    // finger can actually scroll; swallow everything else.
+    const scrollableUnder = (t: HTMLElement | null): boolean => {
+      for (let n = t; n && n !== el; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight + 1) return true;
+      }
+      return false;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!scrollableUnder(e.target as HTMLElement)) e.preventDefault();
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
   }, []);
 
   // Auto-scroll only while the user is at (or near) the bottom — scrolling up
@@ -620,7 +638,10 @@ export default function Capture(props: {
     setError(null);
     pinnedRef.current = true;
     setChat((c) => [
-      ...dropFailed(c),
+      // Sending answers whatever was asked — queued-chip or typed alike.
+      ...dropFailed(c).map((e) =>
+        e.questions?.length && !e.questionsAnswered ? { ...e, questionsAnswered: true } : e,
+      ),
       { id: item.userEntryId, role: "user", text: item.text, transcribing: item.hadSegments },
       {
         id: item.assistantEntryId,
@@ -644,27 +665,13 @@ export default function Capture(props: {
     return fid == null ? c : c.filter((en) => en.id !== fid);
   }
 
-  /** Send a canned answer (question chip) as its own message. */
-  function sendText(text: string, fromEntryId: number) {
-    if (limitReached) return;
-    updateEntry(fromEntryId, (e) => ({ ...e, questionsAnswered: true }));
-    const item: QueuedSend = {
-      msgId: null,
-      hadSegments: false,
-      dirty: true,
-      text,
-      appended: new Set(),
-      userEntryId: ++entrySeq,
-      assistantEntryId: ++entrySeq,
-    };
-    pinnedRef.current = true;
-    setChat((c) => [
-      ...dropFailed(c),
-      { id: item.userEntryId, role: "user", text },
-      { id: item.assistantEntryId, role: "assistant", text: "", thinking: "", parts: [], feed: [], live: true, pending: true },
-    ]);
-    queueRef.current.push(item);
-    void processQueue();
+  /** Question chips queue into the composer — one per line — instead of
+   * sending immediately: tap several, edit freely, then one send spends one
+   * turn. Chips stay tappable until the send. */
+  function queueChoice(text: string) {
+    dirtyRef.current = true;
+    setDraft((d) => (d.trim() ? `${d.replace(/\n$/, "")}\n${text}` : text));
+    draftRef.current?.focus();
   }
 
   async function processQueue() {
@@ -1151,7 +1158,7 @@ export default function Capture(props: {
                                 key={sj}
                                 className="q-chip"
                                 disabled={entry.questionsAnswered}
-                                onClick={() => sendText(sug, entry.id)}
+                                onClick={() => queueChoice(sug)}
                               >
                                 {sug}
                               </button>

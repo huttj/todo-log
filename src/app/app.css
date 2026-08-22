@@ -2115,6 +2115,12 @@ header {
   overscroll-behavior: contain;
 }
 
+/* When the draft box does scroll internally, hitting its end must not chain
+ * the scroll out to the page behind the dock. */
+.draft-area textarea {
+  overscroll-behavior: contain;
+}
+
 /* Today: tools row under the day nav */
 .today-tools.bar {
   justify-content: flex-end;
