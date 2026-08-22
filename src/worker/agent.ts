@@ -226,7 +226,7 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "update_todo",
     description:
-      "Update a todo. Only include fields that change. Status transitions should reflect reality (user started → in_progress, finished → done). For scheduling use schedule_todo / update_schedule.",
+      "Update a todo. Only include fields that change. Pass project_id: null to DETACH the todo from its project (likewise null clears outcome/details). Status transitions should reflect reality (user started → in_progress, finished → done). For scheduling use schedule_todo / update_schedule.",
     input_schema: {
       type: "object",
       properties: {
@@ -600,18 +600,24 @@ async function feedEvent(
   s.onEvent?.({ type: "feed", item });
 }
 
-/** Build {before, after} diff and column map from allowed fields present in input. */
+/** Build {before, after} diff and column map from allowed fields present in
+ * input. Absent field = leave alone. Explicit null CLEARS nullable fields —
+ * "detach from the project" arrives as project_id: null, and silently
+ * skipping it made unlinking a no-op the model then misreported as "already
+ * unattached". */
 function collectUpdates(
   input: Record<string, unknown>,
   current: Record<string, unknown>,
-  fields: { name: string; parse?: (v: unknown) => unknown }[],
+  fields: { name: string; parse?: (v: unknown) => unknown; nullable?: boolean }[],
 ): { cols: Record<string, unknown>; before: Record<string, unknown>; after: Record<string, unknown> } {
   const cols: Record<string, unknown> = {};
   const before: Record<string, unknown> = {};
   const after: Record<string, unknown> = {};
   for (const f of fields) {
-    if (!(f.name in input) || input[f.name] == null) continue;
-    const value = f.parse ? f.parse(input[f.name]) : input[f.name];
+    if (!(f.name in input)) continue;
+    const raw = input[f.name];
+    if (raw == null && (!f.nullable || current[f.name] == null)) continue;
+    const value = raw == null ? null : f.parse ? f.parse(raw) : raw;
     if (value === current[f.name]) continue;
     cols[f.name] = value;
     before[f.name] = current[f.name];
@@ -670,10 +676,10 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!current) return "error: project not found";
       const { cols, before, after } = collectUpdates(input, current as never, [
         { name: "name" },
-        { name: "description" },
+        { name: "description", nullable: true },
         { name: "kind" },
         { name: "status" },
-        { name: "priority" },
+        { name: "priority", nullable: true },
       ]);
       if (Object.keys(cols).length === 0) return "no changes";
       cols.updated_at = t;
@@ -724,9 +730,9 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!current) return "error: todo not found";
       const { cols, before, after } = collectUpdates(input, current as never, [
         { name: "title" },
-        { name: "outcome" },
-        { name: "details" },
-        { name: "project_id" },
+        { name: "outcome", nullable: true },
+        { name: "details", nullable: true },
+        { name: "project_id", nullable: true },
         { name: "status" },
       ]);
       if (Object.keys(cols).length === 0) return "no changes";
@@ -840,7 +846,7 @@ async function executeTool(s: TurnState, name: string, rawInput: unknown): Promi
       if (!current) return "error: log not found";
       await attachLogLinks(s.env, [current]);
       const { cols, before, after } = collectUpdates(input, current as never, [
-        { name: "title" },
+        { name: "title", nullable: true },
         { name: "summary" },
         { name: "kind" },
       ]);
